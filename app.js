@@ -11,6 +11,403 @@ const PROJECT_HEALTH_FLAGS = ["active", "blocked", "at_risk", "complete", "on_ho
 const ARM_TYPES = ["calendar", "meeting", "ai", "codex", "notes", "email", "file", "manual", "other"];
 const INTAKE_STATUSES = ["pending", "approved", "rejected", "archived"];
 const APPROVED_CORE_ORIGINS = ["human_ui", "migration"];
+const ACTOR_ROLES = ["owner", "contributor", "reviewer", "viewer", "ai_tool"];
+const ACTOR_STATUSES = ["active", "archived"];
+const DEFAULT_LANGUAGE = "en";
+const LANGUAGES = {
+  en: {
+    languageName: "English",
+    appTitle: "Project State",
+    appKicker: "Local-first project record",
+    openingTitle: "Opening Project State",
+    openingSubtitle: "Loading the storage spine and checking local project records.",
+    search: "Search",
+    searchPlaceholder: "Search projects and records",
+    projects: "Projects",
+    archivedProjects: "Archived Projects",
+    intake: "Intake",
+    backup: "Backup",
+    restore: "Restore",
+    exportJson: "Export JSON",
+    addIntake: "Add Intake",
+    createProject: "Create Project",
+    backToProjects: "Back to Projects",
+    saved: "Saved",
+    setupTitle: "Set Up Project State",
+    setupSubtitle: "This configures local use, backup guidance, and the primary actor for approved changes.",
+    primaryActor: "Primary Actor",
+    backupLocation: "Backup Location",
+    backupLocationPlaceholder: "Example: iCloud Drive / Project State Backups",
+    backupReminder: "Backup Reminder",
+    language: "Language",
+    localModeConfirm: "I understand this is single-user local mode and backups are controlled by the user.",
+    recoveryWarnings: "Show storage and recovery warnings.",
+    saveSetup: "Save Setup",
+    manual: "Manual",
+    weekly: "Weekly",
+    monthly: "Monthly",
+    active: "Active",
+    blocked: "Blocked",
+    atRisk: "At Risk",
+    complete: "Complete",
+    onHold: "On Hold",
+    pending: "Pending",
+    approved: "Approved",
+    rejected: "Rejected",
+    archived: "Archived",
+    withApproval: "With approval",
+    aiSuggested: "AI suggested",
+    settings: "Settings",
+    settingsSubtitle: "Local app configuration for language, actors, storage, backup, recovery, and safety policy.",
+    coreSettings: "Core Settings",
+    defaultLanguage: "Default Language",
+    defaultActor: "Default Actor",
+    saveCoreSettings: "Save Core Settings",
+    usersActors: "Users / Actors",
+    noActorsRecorded: "No actors recorded.",
+    newActorName: "New Actor Name",
+    role: "Role",
+    addActor: "Add Actor",
+    storageSystem: "Storage System",
+    primaryStorage: "Primary Storage",
+    localBrowserStorageSpine: "Local browser storage spine",
+    currentMode: "Current Mode",
+    currentSize: "Current Size",
+    storageOverrideAcknowledged: "Record that a storage override or migration exception has been acknowledged.",
+    storageOverrideReason: "Storage Override Reason",
+    saveStorageSettings: "Save Storage Settings",
+    backupSystem: "Backup System",
+    backupLocationWarning: "Primary storage and backup should not be the same location unless this becomes a server-backed deployment.",
+    backupOverrideAcknowledged: "Allow a backup-location override with warning recorded.",
+    backupOverrideReason: "Backup Override Reason",
+    exportFullBackup: "Export Full Backup",
+    restoreBackup: "Restore Backup",
+    saveBackupSettings: "Save Backup Settings",
+    recovery: "Recovery",
+    recoveryControlsNotice: "Recovery controls are local-only. Export before reset.",
+    exportRawCurrentData: "Export Raw Current Data",
+    resetLocalData: "Reset Local Data",
+    approvalAirlock: "Approval / Airlock",
+    lockedOn: "Locked On",
+    approvalPolicyHuman: "Human approval is required before intake reaches the core.",
+    approvalPolicyAudit: "Project and object changes require actor, timestamp, reason, and changed object details.",
+    approvalPolicyArms: "Outside arms write to intake first, not directly to Project State or the storage spine.",
+    diagnostics: "Diagnostics",
+    actorName: "Actor Name",
+    actorId: "Actor ID",
+    defaultActorPill: "Default Actor",
+    saveActor: "Save Actor",
+    owner: "Owner",
+    contributor: "Contributor",
+    reviewer: "Reviewer",
+    viewer: "Viewer",
+    aiTool: "AI / Tool",
+    reason: "Reason",
+    status: "Status",
+    storageMigrationNotice: "Primary storage is built into this local app. Changing storage systems later should be treated as a migration, not a casual setting.",
+    settingsReasonPlaceholder: "Why are these settings changing?",
+    storageReasonPlaceholder: "Why are storage settings changing?",
+    backupReasonPlaceholder: "Why are backup settings changing?",
+    actorReasonPlaceholder: "Why is this actor changing?",
+    addActorReasonPlaceholder: "Why is this actor being added?",
+    restoredBy: "Restored By",
+    restoreReason: "Restore Reason"
+  },
+  fr: {
+    languageName: "Français",
+    appTitle: "Project State",
+    appKicker: "Dossier de projet local d’abord",
+    openingTitle: "Ouverture de Project State",
+    openingSubtitle: "Chargement de l’axe de stockage et vérification des dossiers de projet locaux.",
+    search: "Rechercher",
+    searchPlaceholder: "Rechercher des projets et des enregistrements",
+    projects: "Projets",
+    archivedProjects: "Projets archivés",
+    intake: "Entrée",
+    backup: "Sauvegarde",
+    restore: "Restaurer",
+    exportJson: "Exporter JSON",
+    addIntake: "Ajouter une entrée",
+    createProject: "Créer un projet",
+    backToProjects: "Retour aux projets",
+    saved: "Enregistré",
+    setupTitle: "Configurer Project State",
+    setupSubtitle: "Ceci configure l’utilisation locale, les indications de sauvegarde et l’acteur principal pour les changements approuvés.",
+    primaryActor: "Acteur principal",
+    backupLocation: "Emplacement de sauvegarde",
+    backupLocationPlaceholder: "Exemple : iCloud Drive / Sauvegardes Project State",
+    backupReminder: "Rappel de sauvegarde",
+    language: "Langue",
+    localModeConfirm: "Je comprends qu’il s’agit d’un mode local mono-utilisateur et que les sauvegardes sont contrôlées par l’utilisateur.",
+    recoveryWarnings: "Afficher les avertissements de stockage et de récupération.",
+    saveSetup: "Enregistrer la configuration",
+    manual: "Manuel",
+    weekly: "Hebdomadaire",
+    monthly: "Mensuel",
+    active: "Actif",
+    blocked: "Bloqué",
+    atRisk: "À risque",
+    complete: "Terminé",
+    onHold: "En attente",
+    pending: "En attente",
+    approved: "Approuvé",
+    rejected: "Rejeté",
+    archived: "Archivé",
+    withApproval: "Avec approbation",
+    aiSuggested: "Suggérée par l’IA",
+    settings: "Paramètres",
+    settingsSubtitle: "Configuration locale de l’application pour la langue, les acteurs, le stockage, la sauvegarde, la récupération et la politique de sécurité.",
+    coreSettings: "Paramètres principaux",
+    defaultLanguage: "Langue par défaut",
+    defaultActor: "Acteur par défaut",
+    saveCoreSettings: "Enregistrer les paramètres principaux",
+    usersActors: "Utilisateurs / Acteurs",
+    noActorsRecorded: "Aucun acteur enregistré.",
+    newActorName: "Nom du nouvel acteur",
+    role: "Rôle",
+    addActor: "Ajouter un acteur",
+    storageSystem: "Système de stockage",
+    primaryStorage: "Stockage principal",
+    localBrowserStorageSpine: "Axe de stockage local du navigateur",
+    currentMode: "Mode actuel",
+    currentSize: "Taille actuelle",
+    storageOverrideAcknowledged: "Enregistrer qu’une exception de stockage ou de migration a été reconnue.",
+    storageOverrideReason: "Raison de l’exception de stockage",
+    saveStorageSettings: "Enregistrer les paramètres de stockage",
+    backupSystem: "Système de sauvegarde",
+    backupLocationWarning: "Le stockage principal et la sauvegarde ne doivent pas être au même emplacement, sauf dans un déploiement avec serveur.",
+    backupOverrideAcknowledged: "Autoriser une exception d’emplacement de sauvegarde avec avertissement enregistré.",
+    backupOverrideReason: "Raison de l’exception de sauvegarde",
+    exportFullBackup: "Exporter la sauvegarde complète",
+    restoreBackup: "Restaurer une sauvegarde",
+    saveBackupSettings: "Enregistrer les paramètres de sauvegarde",
+    recovery: "Récupération",
+    recoveryControlsNotice: "Les contrôles de récupération sont uniquement locaux. Exportez avant de réinitialiser.",
+    exportRawCurrentData: "Exporter les données brutes actuelles",
+    resetLocalData: "Réinitialiser les données locales",
+    approvalAirlock: "Approbation / Airlock",
+    lockedOn: "Verrouillé",
+    approvalPolicyHuman: "Une approbation humaine est requise avant que l’entrée atteigne le noyau.",
+    approvalPolicyAudit: "Les changements de projet et d’objet exigent acteur, horodatage, raison et détails de l’objet modifié.",
+    approvalPolicyArms: "Les bras externes écrivent d’abord dans l’entrée, pas directement dans Project State ni dans l’axe de stockage.",
+    diagnostics: "Diagnostics",
+    actorName: "Nom de l’acteur",
+    actorId: "ID de l’acteur",
+    defaultActorPill: "Acteur par défaut",
+    saveActor: "Enregistrer l’acteur",
+    owner: "Propriétaire",
+    contributor: "Contributeur",
+    reviewer: "Réviseur",
+    viewer: "Lecteur",
+    aiTool: "IA / Outil",
+    reason: "Raison",
+    status: "Statut",
+    storageMigrationNotice: "Le stockage principal est intégré à cette application locale. Changer de système de stockage plus tard doit être traité comme une migration, pas comme un simple paramètre.",
+    settingsReasonPlaceholder: "Pourquoi ces paramètres changent-ils ?",
+    storageReasonPlaceholder: "Pourquoi les paramètres de stockage changent-ils ?",
+    backupReasonPlaceholder: "Pourquoi les paramètres de sauvegarde changent-ils ?",
+    actorReasonPlaceholder: "Pourquoi cet acteur change-t-il ?",
+    addActorReasonPlaceholder: "Pourquoi cet acteur est-il ajouté ?",
+    restoredBy: "Restauré par",
+    restoreReason: "Raison de la restauration"
+  },
+  de: {
+    languageName: "Deutsch",
+    appTitle: "Project State",
+    appKicker: "Lokaler Projektstand",
+    openingTitle: "Project State wird geöffnet",
+    openingSubtitle: "Speicher-Spine wird geladen und lokale Projektdaten werden geprüft.",
+    search: "Suchen",
+    searchPlaceholder: "Projekte und Einträge suchen",
+    projects: "Projekte",
+    archivedProjects: "Archivierte Projekte",
+    intake: "Eingang",
+    backup: "Sicherung",
+    restore: "Wiederherstellen",
+    exportJson: "JSON exportieren",
+    addIntake: "Eingang hinzufügen",
+    createProject: "Projekt erstellen",
+    backToProjects: "Zurück zu Projekten",
+    saved: "Gespeichert",
+    setupTitle: "Project State einrichten",
+    setupSubtitle: "Dies konfiguriert lokale Nutzung, Sicherungshinweise und den primären Akteur für genehmigte Änderungen.",
+    primaryActor: "Primärer Akteur",
+    backupLocation: "Sicherungsort",
+    backupLocationPlaceholder: "Beispiel: iCloud Drive / Project State Sicherungen",
+    backupReminder: "Sicherungserinnerung",
+    language: "Sprache",
+    localModeConfirm: "Ich verstehe, dass dies ein lokaler Einzelbenutzermodus ist und Sicherungen vom Benutzer verwaltet werden.",
+    recoveryWarnings: "Speicher- und Wiederherstellungswarnungen anzeigen.",
+    saveSetup: "Einrichtung speichern",
+    manual: "Manuell",
+    weekly: "Wöchentlich",
+    monthly: "Monatlich",
+    active: "Aktiv",
+    blocked: "Blockiert",
+    atRisk: "Gefährdet",
+    complete: "Abgeschlossen",
+    onHold: "Angehalten",
+    pending: "Ausstehend",
+    approved: "Genehmigt",
+    rejected: "Abgelehnt",
+    archived: "Archiviert",
+    withApproval: "Mit Genehmigung",
+    aiSuggested: "Von KI vorgeschlagen",
+    settings: "Einstellungen",
+    settingsSubtitle: "Lokale App-Konfiguration für Sprache, Akteure, Speicher, Sicherung, Wiederherstellung und Sicherheitsrichtlinien.",
+    coreSettings: "Grundeinstellungen",
+    defaultLanguage: "Standardsprache",
+    defaultActor: "Standardakteur",
+    saveCoreSettings: "Grundeinstellungen speichern",
+    usersActors: "Benutzer / Akteure",
+    noActorsRecorded: "Keine Akteure erfasst.",
+    newActorName: "Neuer Akteursname",
+    role: "Rolle",
+    addActor: "Akteur hinzufügen",
+    storageSystem: "Speichersystem",
+    primaryStorage: "Primärspeicher",
+    localBrowserStorageSpine: "Lokaler Browser-Speicher-Spine",
+    currentMode: "Aktueller Modus",
+    currentSize: "Aktuelle Größe",
+    storageOverrideAcknowledged: "Speicher-Override oder Migrationsausnahme als bestätigt erfassen.",
+    storageOverrideReason: "Grund für Speicher-Override",
+    saveStorageSettings: "Speichereinstellungen speichern",
+    backupSystem: "Sicherungssystem",
+    backupLocationWarning: "Primärspeicher und Sicherung sollten nicht am selben Ort liegen, außer bei einer servergestützten Bereitstellung.",
+    backupOverrideAcknowledged: "Sicherungsort-Override mit aufgezeichneter Warnung erlauben.",
+    backupOverrideReason: "Grund für Sicherungs-Override",
+    exportFullBackup: "Vollständige Sicherung exportieren",
+    restoreBackup: "Sicherung wiederherstellen",
+    saveBackupSettings: "Sicherungseinstellungen speichern",
+    recovery: "Wiederherstellung",
+    recoveryControlsNotice: "Wiederherstellungsfunktionen sind nur lokal. Vor dem Zurücksetzen exportieren.",
+    exportRawCurrentData: "Aktuelle Rohdaten exportieren",
+    resetLocalData: "Lokale Daten zurücksetzen",
+    approvalAirlock: "Genehmigung / Airlock",
+    lockedOn: "Fest aktiviert",
+    approvalPolicyHuman: "Menschliche Genehmigung ist erforderlich, bevor Eingangsdaten den Kern erreichen.",
+    approvalPolicyAudit: "Projekt- und Objektänderungen erfordern Akteur, Zeitstempel, Grund und Details zum geänderten Objekt.",
+    approvalPolicyArms: "Externe Arme schreiben zuerst in den Eingang, nicht direkt in Project State oder den Speicher-Spine.",
+    diagnostics: "Diagnose",
+    actorName: "Akteursname",
+    actorId: "Akteur-ID",
+    defaultActorPill: "Standardakteur",
+    saveActor: "Akteur speichern",
+    owner: "Eigentümer",
+    contributor: "Mitwirkender",
+    reviewer: "Prüfer",
+    viewer: "Betrachter",
+    aiTool: "KI / Tool",
+    reason: "Grund",
+    status: "Status",
+    storageMigrationNotice: "Der Primärspeicher ist in diese lokale App eingebaut. Ein späterer Wechsel des Speichersystems sollte als Migration behandelt werden, nicht als einfache Einstellung.",
+    settingsReasonPlaceholder: "Warum ändern sich diese Einstellungen?",
+    storageReasonPlaceholder: "Warum ändern sich die Speichereinstellungen?",
+    backupReasonPlaceholder: "Warum ändern sich die Sicherungseinstellungen?",
+    actorReasonPlaceholder: "Warum ändert sich dieser Akteur?",
+    addActorReasonPlaceholder: "Warum wird dieser Akteur hinzugefügt?",
+    restoredBy: "Wiederhergestellt von",
+    restoreReason: "Grund der Wiederherstellung"
+  },
+  es: {
+    languageName: "Español",
+    appTitle: "Project State",
+    appKicker: "Registro de proyecto local primero",
+    openingTitle: "Abriendo Project State",
+    openingSubtitle: "Cargando la columna de almacenamiento y revisando los registros locales del proyecto.",
+    search: "Buscar",
+    searchPlaceholder: "Buscar proyectos y registros",
+    projects: "Proyectos",
+    archivedProjects: "Proyectos archivados",
+    intake: "Entrada",
+    backup: "Copia de seguridad",
+    restore: "Restaurar",
+    exportJson: "Exportar JSON",
+    addIntake: "Agregar entrada",
+    createProject: "Crear proyecto",
+    backToProjects: "Volver a proyectos",
+    saved: "Guardado",
+    setupTitle: "Configurar Project State",
+    setupSubtitle: "Esto configura el uso local, la guía de copias de seguridad y el actor principal para cambios aprobados.",
+    primaryActor: "Actor principal",
+    backupLocation: "Ubicación de copia de seguridad",
+    backupLocationPlaceholder: "Ejemplo: iCloud Drive / Copias de Project State",
+    backupReminder: "Recordatorio de copia",
+    language: "Idioma",
+    localModeConfirm: "Entiendo que este es un modo local de un solo usuario y que las copias de seguridad las controla el usuario.",
+    recoveryWarnings: "Mostrar advertencias de almacenamiento y recuperación.",
+    saveSetup: "Guardar configuración",
+    manual: "Manual",
+    weekly: "Semanal",
+    monthly: "Mensual",
+    active: "Activo",
+    blocked: "Bloqueado",
+    atRisk: "En riesgo",
+    complete: "Completo",
+    onHold: "En pausa",
+    pending: "Pendiente",
+    approved: "Aprobado",
+    rejected: "Rechazado",
+    archived: "Archivado",
+    withApproval: "Con aprobación",
+    aiSuggested: "Sugerido por IA",
+    settings: "Configuración",
+    settingsSubtitle: "Configuración local de la app para idioma, actores, almacenamiento, copias de seguridad, recuperación y política de seguridad.",
+    coreSettings: "Configuración principal",
+    defaultLanguage: "Idioma predeterminado",
+    defaultActor: "Actor predeterminado",
+    saveCoreSettings: "Guardar configuración principal",
+    usersActors: "Usuarios / Actores",
+    noActorsRecorded: "No hay actores registrados.",
+    newActorName: "Nombre del nuevo actor",
+    role: "Rol",
+    addActor: "Agregar actor",
+    storageSystem: "Sistema de almacenamiento",
+    primaryStorage: "Almacenamiento principal",
+    localBrowserStorageSpine: "Columna de almacenamiento local del navegador",
+    currentMode: "Modo actual",
+    currentSize: "Tamaño actual",
+    storageOverrideAcknowledged: "Registrar que se reconoció una excepción de almacenamiento o migración.",
+    storageOverrideReason: "Razón de excepción de almacenamiento",
+    saveStorageSettings: "Guardar configuración de almacenamiento",
+    backupSystem: "Sistema de copia de seguridad",
+    backupLocationWarning: "El almacenamiento principal y la copia de seguridad no deben estar en la misma ubicación salvo en una implementación con servidor.",
+    backupOverrideAcknowledged: "Permitir una excepción de ubicación de copia con advertencia registrada.",
+    backupOverrideReason: "Razón de excepción de copia",
+    exportFullBackup: "Exportar copia completa",
+    restoreBackup: "Restaurar copia",
+    saveBackupSettings: "Guardar configuración de copia",
+    recovery: "Recuperación",
+    recoveryControlsNotice: "Los controles de recuperación son solo locales. Exporta antes de restablecer.",
+    exportRawCurrentData: "Exportar datos brutos actuales",
+    resetLocalData: "Restablecer datos locales",
+    approvalAirlock: "Aprobación / Airlock",
+    lockedOn: "Bloqueado",
+    approvalPolicyHuman: "Se requiere aprobación humana antes de que una entrada llegue al núcleo.",
+    approvalPolicyAudit: "Los cambios de proyecto y objeto requieren actor, marca de tiempo, razón y detalles del objeto cambiado.",
+    approvalPolicyArms: "Los brazos externos escriben primero en la entrada, no directamente en Project State ni en la columna de almacenamiento.",
+    diagnostics: "Diagnósticos",
+    actorName: "Nombre del actor",
+    actorId: "ID del actor",
+    defaultActorPill: "Actor predeterminado",
+    saveActor: "Guardar actor",
+    owner: "Propietario",
+    contributor: "Colaborador",
+    reviewer: "Revisor",
+    viewer: "Lector",
+    aiTool: "IA / Herramienta",
+    reason: "Razón",
+    status: "Estado",
+    storageMigrationNotice: "El almacenamiento principal está integrado en esta app local. Cambiar el sistema de almacenamiento más adelante debe tratarse como una migración, no como un ajuste casual.",
+    settingsReasonPlaceholder: "¿Por qué cambian estos ajustes?",
+    storageReasonPlaceholder: "¿Por qué cambian los ajustes de almacenamiento?",
+    backupReasonPlaceholder: "¿Por qué cambian los ajustes de copia de seguridad?",
+    actorReasonPlaceholder: "¿Por qué cambia este actor?",
+    addActorReasonPlaceholder: "¿Por qué se agrega este actor?",
+    restoredBy: "Restaurado por",
+    restoreReason: "Razón de restauración"
+  }
+};
 const DRAFT_REVIEW_FLAGS = [
   "factsReviewed",
   "decisionsReviewed",
@@ -21,6 +418,7 @@ const DRAFT_REVIEW_FLAGS = [
 ];
 const INPUT_LIMITS = {
   actorName: 120,
+  backupLocationHint: 500,
   name: 160,
   title: 180,
   currentStatus: 500,
@@ -36,7 +434,9 @@ const INPUT_LIMITS = {
   location: 500,
   summary: 2500,
   tags: 500,
-  caption: 1200,
+    caption: 1200,
+  backupOverrideReason: 1200,
+  storageOverrideReason: 1200,
   target: 240,
   relationshipType: 120,
   notes: 2500,
@@ -48,8 +448,34 @@ const INPUT_LIMITS = {
   suggestedBy: 120
 };
 
+const defaultSettings = () => ({
+  setupCompletedAt: "",
+  primaryActorId: "",
+  backupLocationHint: "",
+  backupReminder: "manual",
+  language: DEFAULT_LANGUAGE,
+  localMode: "single_user_local",
+  recoveryWarnings: true,
+  storageSystem: "local_browser_spine",
+  storageOverrideAcknowledged: false,
+  storageOverrideReason: "",
+  backupSystem: "user_json_export",
+  backupOverrideAcknowledged: false,
+  backupOverrideReason: "",
+  settingsUpdatedAt: "",
+  settingsUpdatedBy: "",
+  settingsUpdateReason: "",
+  lastBackupExportedAt: "",
+  lastBackupExportedBy: "",
+  lastRestoreAt: "",
+  lastRestoreBy: "",
+  lastRestoreReason: "",
+  lastRestoreSourceFile: ""
+});
+
 const emptyStore = () => ({
   schemaVersion: "0.1.0",
+  settings: defaultSettings(),
   actors: [],
   intakeItems: [],
   projects: []
@@ -70,7 +496,7 @@ let activeHistoryEventType = "all";
 let searchQuery = "";
 let saveState = {
   status: "saved",
-  message: "Saved"
+  message: ""
 };
 
 const app = document.querySelector("#app");
@@ -225,13 +651,51 @@ function normalizeStore(parsed) {
     const key = nameKey(project.name);
     if (key && !context.projectNameToId.has(key)) context.projectNameToId.set(key, project.id);
   });
+  if (!parsed.settings) migrationNeeded = true;
   return {
     ...emptyStore(),
     ...parsed,
+    settings: normalizeSettings(parsed.settings),
     actors,
     intakeItems: Array.isArray(parsed.intakeItems) ? parsed.intakeItems.map((item) => normalizeIntakeItem(item, context)) : [],
     projects: projects.map((project) => normalizeProject(project, context))
   };
+}
+
+function normalizeSettings(settings = {}) {
+  const defaults = defaultSettings();
+  const normalized = {
+    ...defaults,
+    ...settings,
+    backupReminder: ["manual", "weekly", "monthly"].includes(settings.backupReminder) ? settings.backupReminder : defaults.backupReminder,
+    language: normalizeLanguage(settings.language),
+    localMode: settings.localMode || defaults.localMode,
+    recoveryWarnings: settings.recoveryWarnings !== false,
+    storageSystem: settings.storageSystem || defaults.storageSystem,
+    storageOverrideAcknowledged: Boolean(settings.storageOverrideAcknowledged),
+    storageOverrideReason: settings.storageOverrideReason || "",
+    backupSystem: settings.backupSystem || defaults.backupSystem,
+    backupOverrideAcknowledged: Boolean(settings.backupOverrideAcknowledged),
+    backupOverrideReason: settings.backupOverrideReason || "",
+    settingsUpdatedAt: settings.settingsUpdatedAt || "",
+    settingsUpdatedBy: settings.settingsUpdatedBy || "",
+    settingsUpdateReason: settings.settingsUpdateReason || "",
+    lastBackupExportedAt: settings.lastBackupExportedAt || "",
+    lastBackupExportedBy: settings.lastBackupExportedBy || "",
+    lastRestoreAt: settings.lastRestoreAt || "",
+    lastRestoreBy: settings.lastRestoreBy || "",
+    lastRestoreReason: settings.lastRestoreReason || "",
+    lastRestoreSourceFile: settings.lastRestoreSourceFile || ""
+  };
+  if (
+    !settings ||
+    settings.backupReminder !== normalized.backupReminder ||
+    settings.language !== normalized.language ||
+    settings.recoveryWarnings !== normalized.recoveryWarnings ||
+    settings.storageSystem !== normalized.storageSystem ||
+    settings.backupSystem !== normalized.backupSystem
+  ) migrationNeeded = true;
+  return normalized;
 }
 
 function safeStringify(value) {
@@ -266,10 +730,15 @@ function ensureId(object, prefix, context) {
 }
 
 function normalizeActor(actor, context) {
+  const role = normalizeActorRole(actor.role, actor.type);
+  const status = normalizeActorStatus(actor.status);
+  if (actor.role !== role || actor.status !== status) migrationNeeded = true;
   return {
     type: "Human",
     ...actor,
-    id: ensureId(actor, "actor", context)
+    id: ensureId(actor, "actor", context),
+    role,
+    status
   };
 }
 
@@ -282,7 +751,9 @@ function ensureActorIdByName(name, context) {
   const actor = {
     id: ensureId({}, "actor", context),
     name: String(name).trim(),
-    type: "Human"
+    type: "Human",
+    role: "contributor",
+    status: "active"
   };
   context.actors.push(actor);
   context.actorNameToId.set(key, actor.id);
@@ -598,6 +1069,7 @@ function renderStorageWarning() {
 }
 
 function storageWarningHtml(raw) {
+  if (arguments.length === 0 && store.settings?.recoveryWarnings === false) return "";
   const info = storageSizeInfo(raw);
   if (info.level === "ok") return "";
   const message = info.level === "danger"
@@ -626,7 +1098,7 @@ window.addEventListener("beforeunload", (event) => {
 
 function actorDisplay(actorId, fallbackName = "") {
   const actor = getActor(actorId);
-  if (actor) return `${actor.name} (${actor.type || "Human"})`;
+  if (actor) return `${actor.name} (${actorRoleLabel(actor.role, actor.type)})`;
   return fallbackName ? `${fallbackName} (Recorded)` : "Unknown actor";
 }
 
@@ -689,6 +1161,26 @@ function tagsToText(tags = []) {
 
 function nameKey(value = "") {
   return String(value).trim().toLowerCase();
+}
+
+function normalizeLanguage(language = DEFAULT_LANGUAGE) {
+  const code = String(language || "").trim();
+  return LANGUAGES[code] ? code : DEFAULT_LANGUAGE;
+}
+
+function currentLanguage() {
+  return normalizeLanguage(store?.settings?.language);
+}
+
+function t(key) {
+  return LANGUAGES[currentLanguage()]?.[key] || LANGUAGES[DEFAULT_LANGUAGE][key] || key;
+}
+
+function languageOptions(selected = currentLanguage()) {
+  const selectedLanguage = normalizeLanguage(selected);
+  return Object.entries(LANGUAGES)
+    .map(([code, labels]) => `<option value="${code}" ${selectedLanguage === code ? "selected" : ""}>${escapeHtml(labels.languageName || code)}</option>`)
+    .join("");
 }
 
 function resolveProjectIdByName(name, currentProjectId = "", context = null) {
@@ -947,7 +1439,9 @@ function getOrCreateActor(name, type = "Human") {
   const actor = {
     id: uid("actor"),
     name: normalized,
-    type
+    type,
+    role: normalizeActorRole("", type),
+    status: "active"
   };
   store.actors.push(actor);
   return actor;
@@ -984,6 +1478,46 @@ function normalizeActionStatus(status = "open") {
   return ["open", "completed", "archived"].includes(status) ? status : "open";
 }
 
+function normalizeActorRole(role = "", type = "Human") {
+  if (ACTOR_ROLES.includes(role)) return role;
+  const actorType = String(type || "").toLowerCase();
+  if (actorType.includes("ai") || actorType.includes("tool") || actorType.includes("codex")) return "ai_tool";
+  return "contributor";
+}
+
+function normalizeActorStatus(status = "active") {
+  return ACTOR_STATUSES.includes(status) ? status : "active";
+}
+
+function actorRoleLabel(role = "contributor", type = "Human") {
+  const labels = {
+    owner: t("owner"),
+    contributor: t("contributor"),
+    reviewer: t("reviewer"),
+    viewer: t("viewer"),
+    ai_tool: t("aiTool")
+  };
+  return labels[normalizeActorRole(role, type)] || t("contributor");
+}
+
+function actorRoleOptions(selected = "contributor") {
+  const safeSelected = normalizeActorRole(selected);
+  return ACTOR_ROLES
+    .map((role) => `<option value="${role}" ${safeSelected === role ? "selected" : ""}>${escapeHtml(actorRoleLabel(role))}</option>`)
+    .join("");
+}
+
+function actorStatusOptions(selected = "active") {
+  const safeSelected = normalizeActorStatus(selected);
+  const labels = {
+    active: t("active"),
+    archived: t("archived")
+  };
+  return ACTOR_STATUSES
+    .map((status) => `<option value="${status}" ${safeSelected === status ? "selected" : ""}>${escapeHtml(labels[status])}</option>`)
+    .join("");
+}
+
 function normalizeHealthFlag(flag = "active") {
   return PROJECT_HEALTH_FLAGS.includes(flag) ? flag : "active";
 }
@@ -998,20 +1532,20 @@ function normalizeProposedObjectType(type = "Decision") {
 }
 
 function extractModeLabel(mode) {
-  if (mode === "with_approval") return "With approval";
-  if (mode === "ai_suggested") return "AI suggested";
-  return "Manual";
+  if (mode === "with_approval") return t("withApproval");
+  if (mode === "ai_suggested") return t("aiSuggested");
+  return t("manual");
 }
 
 function healthFlagLabel(flag = "active") {
   const labels = {
-    active: "Active",
-    blocked: "Blocked",
-    at_risk: "At Risk",
-    complete: "Complete",
-    on_hold: "On Hold"
+    active: t("active"),
+    blocked: t("blocked"),
+    at_risk: t("atRisk"),
+    complete: t("complete"),
+    on_hold: t("onHold")
   };
-  return labels[flag] || "Active";
+  return labels[flag] || t("active");
 }
 
 function healthFlagOptions(selected = "active") {
@@ -1074,6 +1608,11 @@ function render() {
     return;
   }
 
+  if (needsFirstRunSetup()) {
+    renderFirstRunSetup();
+    return;
+  }
+
   if (searchQuery.trim()) {
     renderSearchResults();
     return;
@@ -1082,6 +1621,7 @@ function render() {
   if (!activeProjectId) {
     if (activeRootView === "intake") renderIntakeQueue();
     else if (activeRootView === "archived") renderArchivedProjectList();
+    else if (activeRootView === "settings") renderSettings();
     else renderProjectList();
     return;
   }
@@ -1094,6 +1634,10 @@ function render() {
   }
 
   renderProject(project);
+}
+
+function needsFirstRunSetup() {
+  return !store.settings?.setupCompletedAt || !store.settings?.primaryActorId;
 }
 
 function openProjectNow(projectId, view = "dashboard") {
@@ -1109,8 +1653,8 @@ function renderLoadingScreen() {
   app.innerHTML = `
     <main class="main recovery-screen">
       <section class="panel strong">
-        <h1 class="view-title">Opening Project State</h1>
-        <p class="view-subtitle">Loading the storage spine and checking local project records.</p>
+        <h1 class="view-title">${escapeHtml(t("openingTitle"))}</h1>
+        <p class="view-subtitle">${escapeHtml(t("openingSubtitle"))}</p>
       </section>
     </main>
   `;
@@ -1120,22 +1664,25 @@ function shell(inner) {
   app.innerHTML = `
     <header class="topbar">
       <div class="brand">
-        <div class="brand-title">Project State</div>
-        <div class="brand-kicker">Local-first project record</div>
+        <div class="brand-title">${escapeHtml(t("appTitle"))}</div>
+        <div class="brand-kicker">${escapeHtml(t("appKicker"))}</div>
       </div>
       <label class="search-box">
-        <span>Search</span>
-        <input type="search" data-search-input value="${escapeHtml(searchQuery)}" placeholder="Search projects and records">
+        <span>${escapeHtml(t("search"))}</span>
+        <input type="search" data-search-input value="${escapeHtml(searchQuery)}" placeholder="${escapeHtml(t("searchPlaceholder"))}">
       </label>
       <div class="button-row">
-        ${activeProjectId ? '<button class="btn secondary" data-action="back">Back to Projects</button>' : ""}
-        ${!activeProjectId ? '<button class="btn secondary" data-action="show-projects">Projects</button>' : ""}
-        ${!activeProjectId ? `<button class="btn secondary" data-action="show-archived-projects">Archived Projects${archivedProjectCount() ? ` (${archivedProjectCount()})` : ""}</button>` : ""}
-        ${!activeProjectId ? `<button class="btn secondary" data-action="show-intake">Intake${pendingIntakeCount() ? ` (${pendingIntakeCount()})` : ""}</button>` : ""}
-        ${activeProjectId ? '<button class="btn secondary" data-action="export-project">Export JSON</button>' : ""}
-        <span class="save-indicator ${saveState.status}" role="status">${escapeHtml(saveState.message)}</span>
-        ${!activeProjectId ? '<button class="btn secondary" data-action="create-intake">Add Intake</button>' : ""}
-        <button class="btn" data-action="create-project">Create Project</button>
+        ${activeProjectId ? `<button class="btn secondary" data-action="back">${escapeHtml(t("backToProjects"))}</button>` : ""}
+        ${!activeProjectId ? `<button class="btn secondary" data-action="show-projects">${escapeHtml(t("projects"))}</button>` : ""}
+        ${!activeProjectId ? `<button class="btn secondary" data-action="show-archived-projects">${escapeHtml(t("archivedProjects"))}${archivedProjectCount() ? ` (${archivedProjectCount()})` : ""}</button>` : ""}
+        ${!activeProjectId ? `<button class="btn secondary" data-action="show-intake">${escapeHtml(t("intake"))}${pendingIntakeCount() ? ` (${pendingIntakeCount()})` : ""}</button>` : ""}
+        ${!activeProjectId ? `<button class="btn secondary" data-action="show-settings">${escapeHtml(t("settings"))}</button>` : ""}
+        ${!activeProjectId ? `<button class="btn secondary" data-action="backup-storage">${escapeHtml(t("backup"))}</button>` : ""}
+        ${!activeProjectId ? `<button class="btn secondary" data-action="restore-storage">${escapeHtml(t("restore"))}</button>` : ""}
+        ${activeProjectId ? `<button class="btn secondary" data-action="export-project">${escapeHtml(t("exportJson"))}</button>` : ""}
+        <span class="save-indicator ${saveState.status}" role="status">${escapeHtml(saveState.message || t("saved"))}</span>
+        ${!activeProjectId ? `<button class="btn secondary" data-action="create-intake">${escapeHtml(t("addIntake"))}</button>` : ""}
+        <button class="btn" data-action="create-project">${escapeHtml(t("createProject"))}</button>
       </div>
     </header>
     <div data-storage-warning-slot>${storageWarningHtml()}</div>
@@ -1168,6 +1715,69 @@ function renderRecoveryScreen() {
       </section>
     </main>
   `;
+}
+
+function renderFirstRunSetup() {
+  const existingActor = store.settings?.primaryActorId ? getActor(store.settings.primaryActorId) : store.actors[0];
+  app.innerHTML = `
+    <main class="main recovery-screen">
+      <section class="panel strong">
+        <div class="view-head">
+          <div>
+            <h1 class="view-title">${escapeHtml(t("setupTitle"))}</h1>
+            <p class="view-subtitle">${escapeHtml(t("setupSubtitle"))}</p>
+          </div>
+        </div>
+        <form class="form" data-first-run-setup>
+          <div class="field">
+            <label for="setupActorName">${escapeHtml(t("primaryActor"))}</label>
+            <input id="setupActorName" name="actorName" value="${escapeHtml(existingActor?.name || "")}" autocomplete="name" required>
+          </div>
+          <div class="field">
+            <label for="backupLocationHint">${escapeHtml(t("backupLocation"))}</label>
+            <input id="backupLocationHint" name="backupLocationHint" value="${escapeHtml(store.settings?.backupLocationHint || "")}" placeholder="${escapeHtml(t("backupLocationPlaceholder"))}">
+          </div>
+          <div class="two-col">
+            <div class="field">
+              <label for="backupReminder">${escapeHtml(t("backupReminder"))}</label>
+              <select id="backupReminder" name="backupReminder">
+                ${backupReminderOptions(store.settings?.backupReminder || "manual")}
+              </select>
+            </div>
+            <div class="field">
+              <label for="language">${escapeHtml(t("language"))}</label>
+              <select id="language" name="language">
+                ${languageOptions(store.settings?.language || currentLanguage())}
+              </select>
+            </div>
+          </div>
+          <label class="check-field">
+            <input name="confirmLocalMode" type="checkbox" required>
+            <span>${escapeHtml(t("localModeConfirm"))}</span>
+          </label>
+          <label class="check-field">
+            <input name="recoveryWarnings" type="checkbox" ${store.settings?.recoveryWarnings !== false ? "checked" : ""}>
+            <span>${escapeHtml(t("recoveryWarnings"))}</span>
+          </label>
+          <div class="form-footer">
+            <button class="btn" type="submit">${escapeHtml(t("saveSetup"))}</button>
+          </div>
+        </form>
+      </section>
+    </main>
+  `;
+  applyInputLimits(app.querySelector("[data-first-run-setup]"));
+}
+
+function backupReminderOptions(selected = "manual") {
+  const options = {
+    manual: t("manual"),
+    weekly: t("weekly"),
+    monthly: t("monthly")
+  };
+  return Object.entries(options)
+    .map(([value, label]) => `<option value="${value}" ${selected === value ? "selected" : ""}>${escapeHtml(label)}</option>`)
+    .join("");
 }
 
 function readableLoadError(failure) {
@@ -1228,6 +1838,277 @@ function renderArchivedProjectList() {
       </section>
     `}
   `);
+}
+
+function renderSettings() {
+  const info = storageSizeInfo();
+  const diagnostics = settingsDiagnostics();
+  shell(`
+    <section class="view-head">
+      <div>
+        <h1 class="view-title">${escapeHtml(t("settings"))}</h1>
+        <p class="view-subtitle">${escapeHtml(t("settingsSubtitle"))}</p>
+      </div>
+    </section>
+
+    <section class="settings-grid">
+      <section class="panel">
+        <div class="panel-head">
+          <h2 class="panel-title">${escapeHtml(t("coreSettings"))}</h2>
+        </div>
+        <form class="form" data-settings-core>
+          <div class="two-col">
+            <div class="field">
+              <label for="settingsLanguage">${escapeHtml(t("defaultLanguage"))}</label>
+              <select id="settingsLanguage" name="language">
+                ${languageOptions(store.settings?.language || currentLanguage())}
+              </select>
+            </div>
+            <div class="field">
+              <label for="settingsPrimaryActorId">${escapeHtml(t("defaultActor"))}</label>
+              <select id="settingsPrimaryActorId" name="primaryActorId" required>
+                ${actorSelectOptions(store.settings?.primaryActorId)}
+              </select>
+            </div>
+          </div>
+          <label class="check-field">
+            <input name="recoveryWarnings" type="checkbox" ${store.settings?.recoveryWarnings !== false ? "checked" : ""}>
+            <span>Show storage and recovery warnings.</span>
+          </label>
+          <div class="field">
+            <label for="settingsReason">${escapeHtml(t("reason"))}</label>
+            <textarea id="settingsReason" name="reason" required placeholder="${escapeHtml(t("settingsReasonPlaceholder"))}"></textarea>
+          </div>
+          <div class="form-footer">
+            <button class="btn" type="submit">${escapeHtml(t("saveCoreSettings"))}</button>
+          </div>
+        </form>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <h2 class="panel-title">${escapeHtml(t("usersActors"))}</h2>
+        </div>
+        <div class="settings-list">
+          ${store.actors.length ? store.actors.map(renderActorSettingsItem).join("") : emptyText(t("noActorsRecorded"))}
+        </div>
+        <form class="form settings-add-form" data-settings-add-actor>
+          <div class="two-col">
+            <div class="field">
+              <label for="newActorName">${escapeHtml(t("newActorName"))}</label>
+              <input id="newActorName" name="actorName" required>
+            </div>
+            <div class="field">
+              <label for="newActorRole">${escapeHtml(t("role"))}</label>
+              <select id="newActorRole" name="role">${actorRoleOptions("contributor")}</select>
+            </div>
+          </div>
+          <div class="field">
+            <label for="newActorReason">${escapeHtml(t("reason"))}</label>
+            <textarea id="newActorReason" name="reason" required placeholder="${escapeHtml(t("addActorReasonPlaceholder"))}"></textarea>
+          </div>
+          <div class="form-footer">
+            <button class="btn" type="submit">${escapeHtml(t("addActor"))}</button>
+          </div>
+        </form>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <h2 class="panel-title">${escapeHtml(t("storageSystem"))}</h2>
+        </div>
+        <form class="form" data-settings-storage>
+          <div class="meta-grid">
+            <div>
+              <p class="meta-label">${escapeHtml(t("primaryStorage"))}</p>
+              <p>${escapeHtml(t("localBrowserStorageSpine"))}</p>
+            </div>
+            <div>
+              <p class="meta-label">${escapeHtml(t("currentMode"))}</p>
+              <p>${escapeHtml(storageMode)}</p>
+            </div>
+            <div>
+              <p class="meta-label">${escapeHtml(t("currentSize"))}</p>
+              <p>${escapeHtml(info.label)} (${escapeHtml(info.level)})</p>
+            </div>
+          </div>
+          <p class="notice">${escapeHtml(t("storageMigrationNotice"))}</p>
+          <label class="check-field">
+            <input name="storageOverrideAcknowledged" type="checkbox" ${store.settings?.storageOverrideAcknowledged ? "checked" : ""}>
+            <span>${escapeHtml(t("storageOverrideAcknowledged"))}</span>
+          </label>
+          <div class="field">
+            <label for="storageOverrideReason">${escapeHtml(t("storageOverrideReason"))}</label>
+            <textarea id="storageOverrideReason" name="storageOverrideReason">${escapeHtml(store.settings?.storageOverrideReason || "")}</textarea>
+          </div>
+          <div class="field">
+            <label for="storageSettingsReason">${escapeHtml(t("reason"))}</label>
+            <textarea id="storageSettingsReason" name="reason" required placeholder="${escapeHtml(t("storageReasonPlaceholder"))}"></textarea>
+          </div>
+          <div class="form-footer">
+            <button class="btn" type="submit">${escapeHtml(t("saveStorageSettings"))}</button>
+          </div>
+        </form>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <h2 class="panel-title">${escapeHtml(t("backupSystem"))}</h2>
+        </div>
+        <form class="form" data-settings-backup>
+          <div class="two-col">
+            <div class="field">
+              <label for="backupLocationHint">${escapeHtml(t("backupLocation"))}</label>
+              <input id="backupLocationHint" name="backupLocationHint" value="${escapeHtml(store.settings?.backupLocationHint || "")}" placeholder="${escapeHtml(t("backupLocationPlaceholder"))}">
+            </div>
+            <div class="field">
+              <label for="backupReminder">${escapeHtml(t("backupReminder"))}</label>
+              <select id="backupReminder" name="backupReminder">${backupReminderOptions(store.settings?.backupReminder || "manual")}</select>
+            </div>
+          </div>
+          <p class="notice">${escapeHtml(t("backupLocationWarning"))}</p>
+          <label class="check-field">
+            <input name="backupOverrideAcknowledged" type="checkbox" ${store.settings?.backupOverrideAcknowledged ? "checked" : ""}>
+            <span>${escapeHtml(t("backupOverrideAcknowledged"))}</span>
+          </label>
+          <div class="field">
+            <label for="backupOverrideReason">${escapeHtml(t("backupOverrideReason"))}</label>
+            <textarea id="backupOverrideReason" name="backupOverrideReason">${escapeHtml(store.settings?.backupOverrideReason || "")}</textarea>
+          </div>
+          <div class="field">
+            <label for="backupSettingsReason">${escapeHtml(t("reason"))}</label>
+            <textarea id="backupSettingsReason" name="reason" required placeholder="${escapeHtml(t("backupReasonPlaceholder"))}"></textarea>
+          </div>
+          <div class="button-row">
+            <button class="btn secondary" type="button" data-action="backup-storage">${escapeHtml(t("exportFullBackup"))}</button>
+            <button class="btn secondary" type="button" data-action="restore-storage">${escapeHtml(t("restoreBackup"))}</button>
+          </div>
+          <div class="form-footer">
+            <button class="btn" type="submit">${escapeHtml(t("saveBackupSettings"))}</button>
+          </div>
+        </form>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <h2 class="panel-title">${escapeHtml(t("recovery"))}</h2>
+        </div>
+        <div class="form">
+          <p class="notice">${escapeHtml(t("recoveryControlsNotice"))}</p>
+          <div class="button-row">
+            <button class="btn secondary" data-action="export-current-raw-data">${escapeHtml(t("exportRawCurrentData"))}</button>
+            <button class="btn danger" data-action="reset-local-data">${escapeHtml(t("resetLocalData"))}</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <h2 class="panel-title">${escapeHtml(t("approvalAirlock"))}</h2>
+        </div>
+        <div class="form">
+          <p><span class="pill">${escapeHtml(t("lockedOn"))}</span> ${escapeHtml(t("approvalPolicyHuman"))}</p>
+          <p><span class="pill">${escapeHtml(t("lockedOn"))}</span> ${escapeHtml(t("approvalPolicyAudit"))}</p>
+          <p><span class="pill">${escapeHtml(t("lockedOn"))}</span> ${escapeHtml(t("approvalPolicyArms"))}</p>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <h2 class="panel-title">${escapeHtml(t("diagnostics"))}</h2>
+        </div>
+        <div class="meta-grid settings-diagnostics">
+          ${Object.entries(diagnostics).map(([label, value]) => `
+            <div>
+              <p class="meta-label">${escapeHtml(label)}</p>
+              <p>${escapeHtml(value)}</p>
+            </div>
+          `).join("")}
+        </div>
+      </section>
+    </section>
+  `);
+  app.querySelectorAll("form").forEach(applyInputLimits);
+}
+
+function renderActorSettingsItem(actor) {
+  const isPrimary = store.settings?.primaryActorId === actor.id;
+  return `
+    <form class="item actor-settings-item" data-settings-actor data-actor-id="${escapeHtml(actor.id)}">
+      <div class="two-col">
+        <div class="field">
+          <label for="actorName-${escapeHtml(actor.id)}">${escapeHtml(t("actorName"))}</label>
+          <input id="actorName-${escapeHtml(actor.id)}" name="actorName" value="${escapeHtml(actor.name || "")}" required>
+        </div>
+        <div class="field">
+          <label for="actorRole-${escapeHtml(actor.id)}">${escapeHtml(t("role"))}</label>
+          <select id="actorRole-${escapeHtml(actor.id)}" name="role">${actorRoleOptions(actor.role)}</select>
+        </div>
+      </div>
+      <div class="two-col">
+        <div class="field">
+          <label for="actorStatus-${escapeHtml(actor.id)}">${escapeHtml(t("status"))}</label>
+          <select id="actorStatus-${escapeHtml(actor.id)}" name="status">${actorStatusOptions(actor.status)}</select>
+        </div>
+        <div>
+          <p class="meta-label">${escapeHtml(t("actorId"))}</p>
+          <p class="item-meta">${escapeHtml(actor.id)}</p>
+          ${isPrimary ? `<span class="pill">${escapeHtml(t("defaultActorPill"))}</span>` : ""}
+        </div>
+      </div>
+      <div class="field">
+        <label for="actorReason-${escapeHtml(actor.id)}">${escapeHtml(t("reason"))}</label>
+        <textarea id="actorReason-${escapeHtml(actor.id)}" name="reason" required placeholder="${escapeHtml(t("actorReasonPlaceholder"))}"></textarea>
+      </div>
+      <div class="form-footer">
+        <button class="btn secondary" type="submit">${escapeHtml(t("saveActor"))}</button>
+      </div>
+    </form>
+  `;
+}
+
+function actorSelectOptions(selectedActorId = "") {
+  const activeActors = store.actors.filter((actor) => normalizeActorStatus(actor.status) === "active");
+  const actors = activeActors.length ? activeActors : store.actors;
+  return actors
+    .map((actor) => `<option value="${actor.id}" ${selectedActorId === actor.id ? "selected" : ""}>${escapeHtml(actor.name)} (${escapeHtml(actorRoleLabel(actor.role, actor.type))})</option>`)
+    .join("");
+}
+
+function settingsDiagnostics() {
+  const activeProjects = store.projects.filter((project) => !project.archived);
+  const archivedProjects = store.projects.filter((project) => project.archived);
+  const changes = store.projects.reduce((count, project) => count + project.changes.length, 0);
+  const sources = store.projects.reduce((count, project) => count + project.sources.length, 0);
+  const extracts = store.projects.reduce((count, project) => count + project.sources.reduce((inner, source) => inner + source.extracts.length, 0), 0);
+  const images = store.projects.reduce((count, project) => count + countProjectImages(project), 0);
+  const info = storageSizeInfo();
+  return {
+    "Schema Version": store.schemaVersion || "Not recorded",
+    "Storage Mode": storageMode || "Not recorded",
+    "Storage Size": info.label,
+    "Active Projects": String(activeProjects.length),
+    "Archived Projects": String(archivedProjects.length),
+    "Actors": String(store.actors.length),
+    "Changes": String(changes),
+    "Sources": String(sources),
+    "Extracts": String(extracts),
+    "Images": String(images),
+    "Last Settings Update": store.settings?.settingsUpdatedAt ? formatDate(store.settings.settingsUpdatedAt) : "Not recorded",
+    "Last Backup Export": store.settings?.lastBackupExportedAt ? formatDate(store.settings.lastBackupExportedAt) : "Not recorded",
+    "Last Restore": store.settings?.lastRestoreAt ? formatDate(store.settings.lastRestoreAt) : "Not recorded"
+  };
+}
+
+function countProjectImages(project) {
+  let count = Array.isArray(project.imageLinks) ? project.imageLinks.length : 0;
+  const objectLists = [project.decisions, project.facts, project.relationships, project.openQuestions, project.nextActions, project.draftProjects, project.changes];
+  for (const list of objectLists) count += list.reduce((inner, item) => inner + (Array.isArray(item.imageLinks) ? item.imageLinks.length : 0), 0);
+  for (const source of project.sources) {
+    count += Array.isArray(source.imageLinks) ? source.imageLinks.length : 0;
+    count += source.extracts.reduce((inner, extract) => inner + (Array.isArray(extract.imageLinks) ? extract.imageLinks.length : 0), 0);
+  }
+  return count;
 }
 
 function archivedProjectCount() {
@@ -1347,10 +2228,10 @@ function proposedObjectTypeLabel(type = "") {
 }
 
 function intakeStatusLabel(item) {
-  if (item.archived) return "Archived";
-  if (item.status === "approved") return "Approved";
-  if (item.status === "rejected") return "Rejected";
-  return "Pending";
+  if (item.archived) return t("archived");
+  if (item.status === "approved") return t("approved");
+  if (item.status === "rejected") return t("rejected");
+  return t("pending");
 }
 
 function normalizeSearchText(value = "") {
@@ -1969,6 +2850,151 @@ function exportProjectJson(projectId = activeProjectId) {
   downloadTextFile(`${safeFileName(project.name)}.project-state.json`, JSON.stringify(payload, null, 2), "application/json");
 }
 
+function exportStorageBackup() {
+  const timestamp = nowIso();
+  store.settings.lastBackupExportedAt = timestamp;
+  store.settings.lastBackupExportedBy = store.settings.primaryActorId || "";
+  const payload = {
+    exportedAt: timestamp,
+    app: "Project State",
+    backupType: "full-storage-spine",
+    storage: {
+      primary: ProjectStateStorage.supported() ? "IndexedDB" : "Legacy JSON fallback",
+      backup: "User-controlled JSON file",
+      storageMode
+    },
+    schemaVersion: store.schemaVersion,
+    store
+  };
+  const stamp = timestamp.replace(/[:.]/g, "-");
+  downloadTextFile(`project-state-backup-${stamp}.json`, JSON.stringify(payload, null, 2), "application/json");
+  saveStore({ allowWithoutCoreApproval: true, reason: "backup-export" });
+}
+
+function exportCurrentRawData() {
+  const timestamp = nowIso();
+  const payload = {
+    exportedAt: timestamp,
+    app: "Project State",
+    exportType: "raw-current-store",
+    storageKey: STORAGE_KEY,
+    storageMode,
+    store
+  };
+  const stamp = timestamp.replace(/[:.]/g, "-");
+  downloadTextFile(`project-state-raw-current-${stamp}.json`, JSON.stringify(payload, null, 2), "application/json");
+}
+
+function openRestoreStorageModal() {
+  showModal({
+    title: "Restore Project State Backup",
+    submitText: "Restore Backup",
+    body: `
+      <p class="notice">Restore replaces the local storage spine with the selected backup file. This does not use a server.</p>
+      <div class="field">
+        <label for="backupFile">Backup File</label>
+        <input id="backupFile" name="backupFile" type="file" accept=".json,application/json" required>
+      </div>
+      ${confirmationField("confirmRestore", "I understand this will replace the current local Project State storage.")}
+      ${auditFields({ actorLabel: t("restoredBy"), reasonLabel: t("restoreReason") })}
+    `,
+    async onSubmit(data, form) {
+      const confirmField = form.querySelector('[name="confirmRestore"]');
+      if (data.confirmRestore !== "on") {
+        confirmField?.setCustomValidity("Confirm restore before continuing.");
+        confirmField?.reportValidity();
+        confirmField?.setCustomValidity("");
+        return false;
+      }
+      const reasonField = form.querySelector('[name="reason"]');
+      if (!String(data.reason || "").trim()) {
+        reasonField?.setCustomValidity("Restore reason is required.");
+        reasonField?.reportValidity();
+        reasonField?.setCustomValidity("");
+        return false;
+      }
+      const fileField = form.querySelector('[name="backupFile"]');
+      const file = fileField?.files?.[0] || data.backupFile;
+      if (!file) {
+        fileField?.setCustomValidity("Choose a Project State backup JSON file.");
+        fileField?.reportValidity();
+        fileField?.setCustomValidity("");
+        return false;
+      }
+
+      let parsed;
+      try {
+        parsed = JSON.parse(await readFileAsText(file));
+      } catch {
+        fileField?.setCustomValidity("This backup file is not readable JSON.");
+        fileField?.reportValidity();
+        fileField?.setCustomValidity("");
+        return false;
+      }
+
+      let restoredStore;
+      try {
+        restoredStore = normalizeStore(extractStoreFromBackup(parsed));
+      } catch (error) {
+        fileField?.setCustomValidity(error.message || "This is not a valid Project State backup.");
+        fileField?.reportValidity();
+        fileField?.setCustomValidity("");
+        return false;
+      }
+
+      const actorName = data.actorName.trim();
+      let actor = restoredStore.actors.find((item) => nameKey(item.name) === nameKey(actorName));
+      if (!actor) {
+        actor = {
+          id: uid("actor"),
+          name: actorName,
+          type: "Human",
+          role: "owner",
+          status: "active"
+        };
+        restoredStore.actors.unshift(actor);
+      }
+      const restoredAt = nowIso();
+      restoredStore.restoreInfo = {
+        restoredAt,
+        restoredBy: actor.id,
+        restoredByName: actor.name,
+        reason: data.reason.trim(),
+        sourceFile: file.name || "backup file"
+      };
+      restoredStore.settings = {
+        ...defaultSettings(),
+        ...restoredStore.settings,
+        lastRestoreAt: restoredAt,
+        lastRestoreBy: actor.id,
+        lastRestoreReason: data.reason.trim(),
+        lastRestoreSourceFile: file.name || "backup file"
+      };
+      store = restoredStore;
+      storageSnapshotText = JSON.stringify(store);
+      pendingApprovedCoreWrites = 0;
+      loadFailure = null;
+      activeProjectId = null;
+      activeRootView = "projects";
+      activeView = "dashboard";
+      activeHistoryFilter = null;
+      activeHistoryEventType = "all";
+      searchQuery = "";
+      saveStore({ allowWithoutCoreApproval: true, reason: "backup-restore" });
+      return true;
+    }
+  });
+}
+
+function extractStoreFromBackup(parsed) {
+  if (parsed?.app === "Project State" && parsed?.backupType === "full-storage-spine" && parsed.store) return parsed.store;
+  if (parsed?.app === "Project State" && parsed.project) {
+    throw new Error("This is a single-project export, not a full storage backup.");
+  }
+  if (Array.isArray(parsed?.projects)) return parsed;
+  throw new Error("This file does not contain a Project State storage backup.");
+}
+
 function exportFailedData() {
   if (!loadFailure) return;
   const errorReport = {
@@ -2000,6 +3026,27 @@ async function resetFailedData() {
   storageReady = true;
   storageMode = ProjectStateStorage.supported() ? "indexeddb" : "legacy-json-fallback";
   activeProjectId = null;
+  activeView = "dashboard";
+  activeHistoryFilter = null;
+  activeHistoryEventType = "all";
+  searchQuery = "";
+  setSaveStatus("saved", "Reset complete");
+  render();
+}
+
+async function resetLocalDataFromSettings() {
+  const first = confirm("Reset all local Project State data? Export a full backup first. This clears only this app's local saved data.");
+  if (!first) return;
+  const second = confirm("Final confirmation: reset local data and return to first-run setup?");
+  if (!second) return;
+  await ProjectStateStorage.reset();
+  loadFailure = null;
+  migrationNeeded = false;
+  store = emptyStore();
+  storageReady = true;
+  storageMode = ProjectStateStorage.supported() ? "indexeddb" : "legacy-json-fallback";
+  activeProjectId = null;
+  activeRootView = "projects";
   activeView = "dashboard";
   activeHistoryFilter = null;
   activeHistoryEventType = "all";
@@ -2167,6 +3214,7 @@ function showModal({ title, body, submitText, onSubmit }) {
 }
 
 function applyInputLimits(form) {
+  if (!form) return;
   for (const field of form.querySelectorAll("input[name], textarea[name]")) {
     const limit = INPUT_LIMITS[field.name];
     if (!limit || field.type === "date") continue;
@@ -2219,14 +3267,14 @@ function wireLocalFilePickers(form) {
   }
 }
 
-function auditFields() {
+function auditFields({ actorLabel = "Approved By", reasonLabel = "Reason" } = {}) {
   return `
     <div class="field">
-      <label for="actorName">Approved By</label>
+      <label for="actorName">${escapeHtml(actorLabel)}</label>
       <input id="actorName" name="actorName" autocomplete="name" required>
     </div>
     <div class="field">
-      <label for="reason">Reason</label>
+      <label for="reason">${escapeHtml(reasonLabel)}</label>
       <textarea id="reason" name="reason" required></textarea>
     </div>
   `;
@@ -4359,6 +5407,138 @@ function openActionModal() {
   });
 }
 
+function stampSettingsUpdate(actorId, reason) {
+  store.settings.settingsUpdatedAt = nowIso();
+  store.settings.settingsUpdatedBy = actorId || store.settings.primaryActorId || "";
+  store.settings.settingsUpdateReason = String(reason || "").trim();
+}
+
+function validateSettingsReason(form, data) {
+  const reasonField = form.querySelector('[name="reason"]');
+  if (String(data.reason || "").trim()) return true;
+  reasonField?.setCustomValidity("A reason is required.");
+  reasonField?.reportValidity();
+  reasonField?.setCustomValidity("");
+  return false;
+}
+
+function saveSettingsCore(data, form) {
+  if (!validateSettingsReason(form, data)) return;
+  const primaryActor = getActor(data.primaryActorId);
+  const actorField = form.querySelector('[name="primaryActorId"]');
+  if (!primaryActor || normalizeActorStatus(primaryActor.status) !== "active") {
+    actorField?.setCustomValidity("Choose an active default actor.");
+    actorField?.reportValidity();
+    actorField?.setCustomValidity("");
+    return;
+  }
+  store.settings.language = normalizeLanguage(data.language);
+  store.settings.primaryActorId = primaryActor.id;
+  store.settings.recoveryWarnings = data.recoveryWarnings === "on";
+  stampSettingsUpdate(primaryActor.id, data.reason);
+  saveStore({ allowWithoutCoreApproval: true, reason: "settings-core-update" });
+  render();
+}
+
+function saveSettingsStorage(data, form) {
+  if (!validateSettingsReason(form, data)) return;
+  if (data.storageOverrideAcknowledged === "on" && !String(data.storageOverrideReason || "").trim()) {
+    const field = form.querySelector('[name="storageOverrideReason"]');
+    field?.setCustomValidity("Record the storage override reason.");
+    field?.reportValidity();
+    field?.setCustomValidity("");
+    return;
+  }
+  store.settings.storageSystem = "local_browser_spine";
+  store.settings.storageOverrideAcknowledged = data.storageOverrideAcknowledged === "on";
+  store.settings.storageOverrideReason = String(data.storageOverrideReason || "").trim();
+  stampSettingsUpdate(store.settings.primaryActorId, data.reason);
+  saveStore({ allowWithoutCoreApproval: true, reason: "settings-storage-update" });
+  render();
+}
+
+function saveSettingsBackup(data, form) {
+  if (!validateSettingsReason(form, data)) return;
+  if (data.backupOverrideAcknowledged === "on" && !String(data.backupOverrideReason || "").trim()) {
+    const field = form.querySelector('[name="backupOverrideReason"]');
+    field?.setCustomValidity("Record the backup override reason.");
+    field?.reportValidity();
+    field?.setCustomValidity("");
+    return;
+  }
+  store.settings.backupSystem = "user_json_export";
+  store.settings.backupLocationHint = String(data.backupLocationHint || "").trim();
+  store.settings.backupReminder = ["manual", "weekly", "monthly"].includes(data.backupReminder) ? data.backupReminder : "manual";
+  store.settings.backupOverrideAcknowledged = data.backupOverrideAcknowledged === "on";
+  store.settings.backupOverrideReason = String(data.backupOverrideReason || "").trim();
+  stampSettingsUpdate(store.settings.primaryActorId, data.reason);
+  saveStore({ allowWithoutCoreApproval: true, reason: "settings-backup-update" });
+  render();
+}
+
+function saveSettingsActor(data, form) {
+  if (!validateSettingsReason(form, data)) return;
+  const actor = getActor(form.dataset.actorId);
+  if (!actor) return;
+  const nextName = String(data.actorName || "").trim();
+  const nameField = form.querySelector('[name="actorName"]');
+  if (!nextName) {
+    nameField?.setCustomValidity("Actor name is required.");
+    nameField?.reportValidity();
+    nameField?.setCustomValidity("");
+    return;
+  }
+  const nextStatus = normalizeActorStatus(data.status);
+  if (store.settings.primaryActorId === actor.id && nextStatus === "archived") {
+    const statusField = form.querySelector('[name="status"]');
+    statusField?.setCustomValidity("Choose a different default actor before archiving this actor.");
+    statusField?.reportValidity();
+    statusField?.setCustomValidity("");
+    return;
+  }
+  actor.name = nextName;
+  actor.role = normalizeActorRole(data.role, actor.type);
+  actor.status = nextStatus;
+  actor.type = actor.role === "ai_tool" ? "AI / Tool" : "Human";
+  actor.updatedAt = nowIso();
+  actor.updatedReason = String(data.reason || "").trim();
+  stampSettingsUpdate(store.settings.primaryActorId, data.reason);
+  saveStore({ allowWithoutCoreApproval: true, reason: "settings-actor-update" });
+  render();
+}
+
+function addSettingsActor(data, form) {
+  if (!validateSettingsReason(form, data)) return;
+  const name = String(data.actorName || "").trim();
+  const nameField = form.querySelector('[name="actorName"]');
+  if (!name) {
+    nameField?.setCustomValidity("Actor name is required.");
+    nameField?.reportValidity();
+    nameField?.setCustomValidity("");
+    return;
+  }
+  const existing = store.actors.find((actor) => nameKey(actor.name) === nameKey(name));
+  if (existing) {
+    nameField?.setCustomValidity("An actor with this name already exists.");
+    nameField?.reportValidity();
+    nameField?.setCustomValidity("");
+    return;
+  }
+  const role = normalizeActorRole(data.role);
+  store.actors.push({
+    id: uid("actor"),
+    name,
+    type: role === "ai_tool" ? "AI / Tool" : "Human",
+    role,
+    status: "active",
+    createdAt: nowIso(),
+    createdReason: String(data.reason || "").trim()
+  });
+  stampSettingsUpdate(store.settings.primaryActorId, data.reason);
+  saveStore({ allowWithoutCoreApproval: true, reason: "settings-actor-add" });
+  render();
+}
+
 app.addEventListener("click", (event) => {
   const button = event.target.closest("[data-action]");
   if (!button) return;
@@ -4376,6 +5556,10 @@ app.addEventListener("click", (event) => {
 
   if (action === "create-project") openCreateProjectModal();
   if (action === "create-intake") openCreateIntakeModal();
+  if (action === "backup-storage") exportStorageBackup();
+  if (action === "restore-storage") openRestoreStorageModal();
+  if (action === "export-current-raw-data") exportCurrentRawData();
+  if (action === "reset-local-data") resetLocalDataFromSettings();
   if (action === "show-projects") {
     activeRootView = "projects";
     activeProjectId = null;
@@ -4388,6 +5572,11 @@ app.addEventListener("click", (event) => {
   }
   if (action === "show-intake") {
     activeRootView = "intake";
+    activeProjectId = null;
+    render();
+  }
+  if (action === "show-settings") {
+    activeRootView = "settings";
     activeProjectId = null;
     render();
   }
@@ -4495,6 +5684,80 @@ app.addEventListener("click", (event) => {
   if (action === "add-relationship") openRelationshipModal();
   if (action === "add-question") openQuestionModal();
   if (action === "add-action") openActionModal();
+});
+
+app.addEventListener("submit", (event) => {
+  const form = event.target.closest("[data-first-run-setup]");
+  if (form) {
+  event.preventDefault();
+  const data = enforceInputLimitsOnData(Object.fromEntries(new FormData(form).entries()));
+  const actorNameValue = String(data.actorName || "").trim();
+  const actorField = form.querySelector('[name="actorName"]');
+  if (!actorNameValue) {
+    actorField?.setCustomValidity("Primary actor is required.");
+    actorField?.reportValidity();
+    actorField?.setCustomValidity("");
+    return;
+  }
+  const confirmField = form.querySelector('[name="confirmLocalMode"]');
+  if (data.confirmLocalMode !== "on") {
+    confirmField?.setCustomValidity("Confirm local mode before continuing.");
+    confirmField?.reportValidity();
+    confirmField?.setCustomValidity("");
+    return;
+  }
+  const actor = getOrCreateActor(actorNameValue, "Human");
+  actor.role = "owner";
+  actor.status = "active";
+  store.settings = {
+    ...defaultSettings(),
+    ...store.settings,
+    setupCompletedAt: nowIso(),
+    primaryActorId: actor.id,
+    backupLocationHint: String(data.backupLocationHint || "").trim(),
+    backupReminder: ["manual", "weekly", "monthly"].includes(data.backupReminder) ? data.backupReminder : "manual",
+    language: normalizeLanguage(data.language),
+    localMode: "single_user_local",
+    recoveryWarnings: data.recoveryWarnings === "on"
+  };
+  saveStore({ allowWithoutCoreApproval: true, reason: "first-run-setup" });
+  render();
+    return;
+  }
+
+  const settingsCoreForm = event.target.closest("[data-settings-core]");
+  if (settingsCoreForm) {
+    event.preventDefault();
+    saveSettingsCore(enforceInputLimitsOnData(Object.fromEntries(new FormData(settingsCoreForm).entries())), settingsCoreForm);
+    return;
+  }
+
+  const settingsStorageForm = event.target.closest("[data-settings-storage]");
+  if (settingsStorageForm) {
+    event.preventDefault();
+    saveSettingsStorage(enforceInputLimitsOnData(Object.fromEntries(new FormData(settingsStorageForm).entries())), settingsStorageForm);
+    return;
+  }
+
+  const settingsBackupForm = event.target.closest("[data-settings-backup]");
+  if (settingsBackupForm) {
+    event.preventDefault();
+    saveSettingsBackup(enforceInputLimitsOnData(Object.fromEntries(new FormData(settingsBackupForm).entries())), settingsBackupForm);
+    return;
+  }
+
+  const settingsActorForm = event.target.closest("[data-settings-actor]");
+  if (settingsActorForm) {
+    event.preventDefault();
+    saveSettingsActor(enforceInputLimitsOnData(Object.fromEntries(new FormData(settingsActorForm).entries())), settingsActorForm);
+    return;
+  }
+
+  const settingsAddActorForm = event.target.closest("[data-settings-add-actor]");
+  if (settingsAddActorForm) {
+    event.preventDefault();
+    addSettingsActor(enforceInputLimitsOnData(Object.fromEntries(new FormData(settingsAddActorForm).entries())), settingsAddActorForm);
+  }
 });
 
 app.addEventListener("change", (event) => {

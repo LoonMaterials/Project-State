@@ -90,6 +90,46 @@ rather than:
 
 "Another task manager."
 
+Storage and Backup
+
+Project State separates primary storage from backup:
+
+Primary storage: the local browser storage spine, using IndexedDB when available.
+Backup storage: a user-controlled Project State backup JSON file exported from the app.
+
+The backup file should live somewhere outside the browser storage location, such as a local folder, external drive, cloud drive folder, or mobile Files location. Without a server, primary storage and backup must not be treated as the same location.
+
+First-Run Setup
+
+On first open, Project State asks for:
+
+Primary actor
+Backup location guidance
+Backup reminder preference
+Language preference
+Single-user local-mode confirmation
+
+These setup values are stored in the local storage spine and can be used later by packaging or installer workflows.
+
+Language Foundation
+
+Project State has a small language registry in the app code. The current app defaults to English and supports English, French, German, and Spanish. The selected language is stored in local settings. Additional languages can be added by extending that registry without changing stored project records.
+
+Settings
+
+Project State includes a local Settings screen for:
+
+Default language
+Local actors and roles
+Primary storage system status
+Backup location guidance and reminder
+Storage and backup override warnings
+Recovery controls
+Approval and airlock policy visibility
+Basic diagnostics
+
+Actor roles are local metadata only. They are not accounts, logins, cloud permissions, or collaboration controls yet.
+
 Questions I'd Love Feedback On
 Architecture
 Should project state be directly editable or derived from change events?

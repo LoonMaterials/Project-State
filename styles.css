@@ -381,6 +381,29 @@ select:focus {
   gap: 10px;
 }
 
+.settings-grid {
+  display: grid;
+  gap: 18px;
+}
+
+.settings-list {
+  display: grid;
+  gap: 12px;
+  padding: 20px;
+}
+
+.settings-add-form {
+  border-top: 1px solid var(--line);
+}
+
+.actor-settings-item {
+  padding: 16px;
+}
+
+.settings-diagnostics {
+  padding: 20px;
+}
+
 .nested-list {
   margin-top: 12px;
   padding-left: 12px;
