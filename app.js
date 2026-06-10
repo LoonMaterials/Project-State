@@ -1056,6 +1056,7 @@ function render() {
 
   if (!activeProjectId) {
     if (activeRootView === "intake") renderIntakeQueue();
+    else if (activeRootView === "archived") renderArchivedProjectList();
     else renderProjectList();
     return;
   }
@@ -1095,6 +1096,7 @@ function shell(inner) {
       <div class="button-row">
         ${activeProjectId ? '<button class="btn secondary" data-action="back">Back to Projects</button>' : ""}
         ${!activeProjectId ? '<button class="btn secondary" data-action="show-projects">Projects</button>' : ""}
+        ${!activeProjectId ? `<button class="btn secondary" data-action="show-archived-projects">Archived Projects${archivedProjectCount() ? ` (${archivedProjectCount()})` : ""}</button>` : ""}
         ${!activeProjectId ? `<button class="btn secondary" data-action="show-intake">Intake${pendingIntakeCount() ? ` (${pendingIntakeCount()})` : ""}</button>` : ""}
         ${activeProjectId ? '<button class="btn secondary" data-action="export-project">Export JSON</button>' : ""}
         <span class="save-indicator ${saveState.status}" role="status">${escapeHtml(saveState.message)}</span>
@@ -1155,8 +1157,51 @@ function focusSearchInput() {
 }
 
 function renderProjectList() {
-  const projects = sortNewest(store.projects, "updatedAt");
-  const cards = projects.map((project) => `
+  const projects = sortNewest(store.projects.filter((project) => !project.archived), "updatedAt");
+
+  shell(`
+    <section class="view-head">
+      <div>
+        <h1 class="view-title">Projects</h1>
+        <p class="view-subtitle">Choose a project to see its current state and history.</p>
+      </div>
+    </section>
+    ${projects.length ? `<section class="project-grid">${projects.map(renderProjectCard).join("")}</section>` : `
+      <section class="empty-state">
+        <h2>No active projects</h2>
+        <p>Create a project or open Archived Projects to restore one.</p>
+        <button class="btn" data-action="create-project">Create Project</button>
+      </section>
+    `}
+  `);
+}
+
+function renderArchivedProjectList() {
+  const projects = sortNewest(store.projects.filter((project) => project.archived), "updatedAt");
+
+  shell(`
+    <section class="view-head">
+      <div>
+        <h1 class="view-title">Archived Projects</h1>
+        <p class="view-subtitle">Archived projects are kept out of the active project list. Unarchive a project to return it to current use.</p>
+      </div>
+    </section>
+    ${projects.length ? `<section class="project-grid">${projects.map(renderProjectCard).join("")}</section>` : `
+      <section class="empty-state">
+        <h2>No archived projects</h2>
+        <p>Archived projects will appear here.</p>
+        <button class="btn secondary" data-action="show-projects">Back to Projects</button>
+      </section>
+    `}
+  `);
+}
+
+function archivedProjectCount() {
+  return store.projects.filter((project) => project.archived).length;
+}
+
+function renderProjectCard(project) {
+  return `
     <div class="project-card">
       <button class="card-open" data-action="open-project" data-project-id="${project.id}">
         <h2>${escapeDisplay(project.name, DISPLAY_META_LIMIT)}</h2>
@@ -1175,23 +1220,7 @@ function renderProjectList() {
         <button class="btn secondary compact" data-action="delete-project" data-project-id="${project.id}" ${project.deletionStatus ? "disabled" : ""}>Delete Project</button>
       </div>
     </div>
-  `).join("");
-
-  shell(`
-    <section class="view-head">
-      <div>
-        <h1 class="view-title">Projects</h1>
-        <p class="view-subtitle">Choose a project to see its current state and history.</p>
-      </div>
-    </section>
-    ${projects.length ? `<section class="project-grid">${cards}</section>` : `
-      <section class="empty-state">
-        <h2>No projects yet</h2>
-        <p>Create the first Project State record.</p>
-        <button class="btn" data-action="create-project">Create Project</button>
-      </section>
-    `}
-  `);
+  `;
 }
 
 function pendingIntakeCount() {
@@ -2606,6 +2635,8 @@ function openDeleteProjectModal(projectId) {
           newDeletionStatus: project.deletionStatus
         }
       });
+      activeProjectId = null;
+      activeRootView = "projects";
       saveStore();
     }
   });
@@ -2644,6 +2675,8 @@ function openUnarchiveProjectModal(projectId) {
           newDeletionStatus: project.deletionStatus
         }
       });
+      activeProjectId = null;
+      activeRootView = "projects";
       saveStore();
     }
   });
@@ -4284,6 +4317,11 @@ app.addEventListener("click", (event) => {
   if (action === "create-intake") openCreateIntakeModal();
   if (action === "show-projects") {
     activeRootView = "projects";
+    activeProjectId = null;
+    render();
+  }
+  if (action === "show-archived-projects") {
+    activeRootView = "archived";
     activeProjectId = null;
     render();
   }
