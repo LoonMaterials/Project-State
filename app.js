@@ -28,8 +28,10 @@ const INPUT_LIMITS = {
   draft: 8000,
   reason: 2000,
   decision: 2500,
+  confidence: 120,
   statement: 2500,
   source: 500,
+  sourceLabel: 500,
   sourceType: 80,
   location: 500,
   summary: 2500,
@@ -306,7 +308,7 @@ function normalizeProject(project, context) {
     changes: [],
     ...project,
     id: project.id,
-    healthFlag: PROJECT_HEALTH_FLAGS.includes(project.healthFlag) ? project.healthFlag : "active",
+    healthFlag: normalizeHealthFlag(project.healthFlag),
     sourceLinks: normalizeSourceLinksArray(project.sourceLinks, context),
     imageLinks: normalizeImageLinksArray(project.imageLinks, project.id, "Project", project.id, context),
     decisions: Array.isArray(project.decisions) ? project.decisions.map((decision) => normalizeObject(decision, "decision", project.id, context)) : [],
@@ -453,14 +455,14 @@ function normalizeIntakeItem(item, context) {
   if (!INTAKE_STATUSES.includes(item.status)) migrationNeeded = true;
   return {
     id,
-    armType: ARM_TYPES.includes(item.armType) ? item.armType : "other",
+    armType: normalizeArmType(item.armType),
     status,
     title: item.title || "Untitled intake",
     projectId: item.projectId || "",
     createdAt: item.createdAt || nowIso(),
     createdBy: item.createdBy || "",
     sourceLabel: item.sourceLabel || "",
-    proposedObjectType: item.proposedObjectType || "",
+    proposedObjectType: normalizeProposedObjectType(item.proposedObjectType),
     proposedChange: item.proposedChange || {},
     evidence: item.evidence || {},
     approval: item.approval || null,
@@ -471,14 +473,14 @@ function normalizeIntakeItem(item, context) {
 function createIntakeItem(input = {}) {
   const item = {
     id: uid("intake"),
-    armType: ARM_TYPES.includes(input.armType) ? input.armType : "other",
+    armType: normalizeArmType(input.armType),
     status: "pending",
     title: input.title || "Untitled intake",
     projectId: input.projectId || "",
     createdAt: nowIso(),
     createdBy: input.createdBy || "",
     sourceLabel: input.sourceLabel || "",
-    proposedObjectType: input.proposedObjectType || "",
+    proposedObjectType: normalizeProposedObjectType(input.proposedObjectType),
     proposedChange: input.proposedChange || {},
     evidence: input.evidence || {},
     approval: null,
@@ -975,7 +977,24 @@ function getProjectObject(project, objectType, objectId) {
 }
 
 function getActionStatus(action) {
-  return action.status || "open";
+  return normalizeActionStatus(action.status);
+}
+
+function normalizeActionStatus(status = "open") {
+  return ["open", "completed", "archived"].includes(status) ? status : "open";
+}
+
+function normalizeHealthFlag(flag = "active") {
+  return PROJECT_HEALTH_FLAGS.includes(flag) ? flag : "active";
+}
+
+function normalizeArmType(type = "other") {
+  return ARM_TYPES.includes(type) ? type : "other";
+}
+
+function normalizeProposedObjectType(type = "Decision") {
+  const allowed = ["ProjectStatus", "Decision", "Fact", "OpenQuestion", "NextAction", "Source", "Relationship"];
+  return allowed.includes(type) ? type : "Decision";
 }
 
 function extractModeLabel(mode) {
@@ -996,13 +1015,19 @@ function healthFlagLabel(flag = "active") {
 }
 
 function healthFlagOptions(selected = "active") {
+  const safeSelected = normalizeHealthFlag(selected);
   return PROJECT_HEALTH_FLAGS
-    .map((flag) => `<option value="${flag}" ${selected === flag ? "selected" : ""}>${healthFlagLabel(flag)}</option>`)
+    .map((flag) => `<option value="${flag}" ${safeSelected === flag ? "selected" : ""}>${healthFlagLabel(flag)}</option>`)
     .join("");
 }
 
 function sortNewest(items, field = "createdAt") {
-  return [...items].sort((a, b) => new Date(b[field]) - new Date(a[field]));
+  return [...items].sort((a, b) => dateSortValue(b[field]) - dateSortValue(a[field]));
+}
+
+function dateSortValue(value) {
+  const time = new Date(value).getTime();
+  return Number.isNaN(time) ? 0 : time;
 }
 
 function recent(items, count) {
@@ -2081,6 +2106,7 @@ function renderOverviewList(items, renderer, emptyMessage) {
 }
 
 function showModal({ title, body, submitText, onSubmit }) {
+  if (document.querySelector(".modal-backdrop")) return;
   const modal = document.createElement("div");
   modal.className = "modal-backdrop";
   modal.innerHTML = `
@@ -2100,21 +2126,37 @@ function showModal({ title, body, submitText, onSubmit }) {
   `;
 
   const form = modal.querySelector(".form");
+  const submitButton = modal.querySelector('button[type="submit"]');
+  let submitting = false;
   form.id = "modal-form";
   applyInputLimits(form);
   wireLocalFilePickers(form);
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
+    if (submitting) return;
     const formData = new FormData(form);
-    const data = Object.fromEntries(formData.entries());
+    const data = enforceInputLimitsOnData(Object.fromEntries(formData.entries()));
     if (!validateAuditFields(form, data)) return;
-    const shouldClose = await onSubmit(data, form);
-    if (shouldClose === false) return;
-    modal.remove();
-    render();
+    submitting = true;
+    if (submitButton) submitButton.disabled = true;
+    try {
+      const shouldClose = await onSubmit(data, form);
+      if (shouldClose === false) {
+        submitting = false;
+        if (submitButton) submitButton.disabled = false;
+        return;
+      }
+      modal.remove();
+      render();
+    } catch (error) {
+      console.error("Project State modal action failed.", error);
+      submitting = false;
+      if (submitButton) submitButton.disabled = false;
+    }
   });
 
   modal.addEventListener("click", (event) => {
+    if (submitting) return;
     if (event.target === modal || event.target.closest("[data-close-modal]")) {
       modal.remove();
     }
@@ -2131,6 +2173,16 @@ function applyInputLimits(form) {
     field.maxLength = limit;
     if (!field.placeholder) field.placeholder = `Limit ${limit} characters`;
   }
+}
+
+function enforceInputLimitsOnData(data) {
+  const limited = { ...data };
+  for (const [name, value] of Object.entries(limited)) {
+    const limit = INPUT_LIMITS[name];
+    if (!limit || typeof value !== "string") continue;
+    limited[name] = value.slice(0, limit);
+  }
+  return limited;
 }
 
 function validateAuditFields(form, data) {
@@ -2261,12 +2313,12 @@ function openCreateIntakeModal() {
     onSubmit(data) {
       if (!store.projects.length) return false;
       createIntakeItem({
-        armType: data.armType,
+        armType: normalizeArmType(data.armType),
         title: data.title.trim(),
         createdBy: "human",
         sourceLabel: data.sourceLabel.trim(),
         projectId: data.projectId,
-        proposedObjectType: data.proposedObjectType,
+        proposedObjectType: normalizeProposedObjectType(data.proposedObjectType),
         proposedChange: {
           text: data.text.trim(),
           summary: data.summary.trim(),
@@ -2576,7 +2628,7 @@ function openCreateProjectModal() {
         name: data.name.trim(),
         currentStatus: data.currentStatus.trim(),
         currentSummary: data.currentSummary.trim(),
-        healthFlag: data.healthFlag || "active",
+        healthFlag: normalizeHealthFlag(data.healthFlag),
         archived: false,
         deletionStatus: "",
         createdAt: timestamp,
@@ -2724,7 +2776,7 @@ function openEditStatusModal() {
       };
       project.currentStatus = data.currentStatus.trim();
       project.currentSummary = data.currentSummary.trim();
-      project.healthFlag = data.healthFlag || "active";
+      project.healthFlag = normalizeHealthFlag(data.healthFlag);
       recordChange(project, actor, data.reason, "Current status updated", {
         objectType: "Project",
         objectId: project.id,
@@ -2829,7 +2881,7 @@ function openEditProjectModal(project) {
       project.name = data.name.trim();
       project.currentStatus = data.currentStatus.trim();
       project.currentSummary = data.currentSummary.trim();
-      project.healthFlag = data.healthFlag || "active";
+      project.healthFlag = normalizeHealthFlag(data.healthFlag);
       recordChange(project, actor, data.reason, "Project edited", {
         objectType: "Project",
         objectId: project.id,
@@ -3477,8 +3529,8 @@ function openEditActionModal(project, action) {
       action.action = data.action.trim();
       action.owner = data.owner.trim();
       action.dueDate = data.dueDate || "";
-      action.status = data.status;
-      action.completedAt = data.status === "completed" ? (data.completedAt || nowIso()) : "";
+      action.status = normalizeActionStatus(data.status);
+      action.completedAt = action.status === "completed" ? (data.completedAt || nowIso()) : "";
       action.editedAt = nowIso();
       recordChange(project, actor, data.reason, "Next action edited", {
         objectType: "NextAction",
