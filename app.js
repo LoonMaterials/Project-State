@@ -61,6 +61,7 @@ let storageMode = "initializing";
 let storageSnapshotText = "";
 let pendingApprovedCoreWrites = 0;
 let activeProjectId = null;
+let activeRootView = "projects";
 let activeView = "dashboard";
 let activeHistoryFilter = null;
 let activeHistoryEventType = "all";
@@ -455,6 +456,7 @@ function normalizeIntakeItem(item, context) {
     armType: ARM_TYPES.includes(item.armType) ? item.armType : "other",
     status,
     title: item.title || "Untitled intake",
+    projectId: item.projectId || "",
     createdAt: item.createdAt || nowIso(),
     createdBy: item.createdBy || "",
     sourceLabel: item.sourceLabel || "",
@@ -472,6 +474,7 @@ function createIntakeItem(input = {}) {
     armType: ARM_TYPES.includes(input.armType) ? input.armType : "other",
     status: "pending",
     title: input.title || "Untitled intake",
+    projectId: input.projectId || "",
     createdAt: nowIso(),
     createdBy: input.createdBy || "",
     sourceLabel: input.sourceLabel || "",
@@ -491,13 +494,15 @@ function approveIntakeItem(intakeId, actor, reason, applyApprovedChange) {
   const intake = store.intakeItems?.find((item) => item.id === intakeId);
   requireHumanApproval(actor, reason, { origin: "intake" });
   if (!intake || intake.status !== "pending" || typeof applyApprovedChange !== "function") return null;
-  intake.status = "approved";
-  intake.approval = {
+  const approval = {
     approvedAt: nowIso(),
     approvedBy: actor.id,
     reason: reason.trim()
   };
-  const result = applyApprovedChange(intake);
+  const result = applyApprovedChange(intake, approval);
+  if (!result) return null;
+  intake.status = "approved";
+  intake.approval = approval;
   saveStore();
   return result;
 }
@@ -1050,7 +1055,8 @@ function render() {
   }
 
   if (!activeProjectId) {
-    renderProjectList();
+    if (activeRootView === "intake") renderIntakeQueue();
+    else renderProjectList();
     return;
   }
 
@@ -1088,8 +1094,11 @@ function shell(inner) {
       </label>
       <div class="button-row">
         ${activeProjectId ? '<button class="btn secondary" data-action="back">Back to Projects</button>' : ""}
+        ${!activeProjectId ? '<button class="btn secondary" data-action="show-projects">Projects</button>' : ""}
+        ${!activeProjectId ? `<button class="btn secondary" data-action="show-intake">Intake${pendingIntakeCount() ? ` (${pendingIntakeCount()})` : ""}</button>` : ""}
         ${activeProjectId ? '<button class="btn secondary" data-action="export-project">Export JSON</button>' : ""}
         <span class="save-indicator ${saveState.status}" role="status">${escapeHtml(saveState.message)}</span>
+        ${!activeProjectId ? '<button class="btn secondary" data-action="create-intake">Add Intake</button>' : ""}
         <button class="btn" data-action="create-project">Create Project</button>
       </div>
     </header>
@@ -1183,6 +1192,102 @@ function renderProjectList() {
       </section>
     `}
   `);
+}
+
+function pendingIntakeCount() {
+  return (store.intakeItems || []).filter((item) => item.status === "pending" && !item.archived).length;
+}
+
+function renderIntakeQueue() {
+  const intakeItems = sortNewest(store.intakeItems || [], "createdAt");
+  const pending = intakeItems.filter((item) => item.status === "pending" && !item.archived);
+  const reviewed = intakeItems.filter((item) => item.status !== "pending" || item.archived);
+
+  shell(`
+    <section class="view-head">
+      <div>
+        <h1 class="view-title">Intake Airlock</h1>
+        <p class="view-subtitle">Outside arms can propose changes here. Human approval is required before anything reaches Project State.</p>
+      </div>
+      <button class="btn" data-action="create-intake">Add Intake</button>
+    </section>
+
+    <section class="dashboard-grid">
+      <div class="stack">
+        <article class="panel strong">
+          <div class="panel-head">
+            <h2 class="panel-title">Pending Review</h2>
+          </div>
+          ${pending.length ? `<div class="list">${pending.map(renderIntakeItem).join("")}</div>` : emptyText("No pending intake. Future arms should land here before touching the core.")}
+        </article>
+      </div>
+      <aside class="stack">
+        <article class="panel">
+          <div class="panel-head">
+            <h2 class="panel-title">Reviewed Intake</h2>
+          </div>
+          ${reviewed.length ? `<div class="list">${reviewed.map(renderIntakeItem).join("")}</div>` : emptyText("No reviewed intake yet.")}
+        </article>
+      </aside>
+    </section>
+  `);
+}
+
+function renderIntakeItem(item) {
+  const projectName = item.projectId ? projectNameById(item.projectId) || "Missing project" : "No target project";
+  const proposed = item.proposedChange || {};
+  return `
+    <div class="item">
+      <p class="item-title">${escapeDisplay(item.title, DISPLAY_META_LIMIT)}</p>
+      <p class="item-meta">${escapeHtml(armTypeLabel(item.armType))} · ${escapeHtml(proposedObjectTypeLabel(item.proposedObjectType))} · ${escapeHtml(intakeStatusLabel(item))}</p>
+      <p class="item-meta">Target: ${escapeDisplay(projectName, DISPLAY_META_LIMIT)} · Created ${escapeHtml(formatDate(item.createdAt))}</p>
+      ${item.sourceLabel ? `<p class="item-meta">Source: ${escapeDisplay(item.sourceLabel, DISPLAY_META_LIMIT)}</p>` : ""}
+      ${proposed.text ? `<p class="item-body">${escapeDisplay(proposed.text)}</p>` : ""}
+      ${proposed.summary ? `<p class="item-body">Summary: ${escapeDisplay(proposed.summary)}</p>` : ""}
+      ${item.review ? `<p class="item-meta">Reviewed by ${escapeHtml(actorDisplay(item.review.actorId, item.review.actorName))} · ${escapeHtml(formatDate(item.review.reviewedAt))}</p>` : ""}
+      ${item.approval ? `<p class="item-meta">Approved by ${escapeHtml(actorDisplay(item.approval.approvedBy))} · ${escapeHtml(formatDate(item.approval.approvedAt))}</p>` : ""}
+      <div class="item-actions">
+        ${item.status === "pending" && !item.archived ? `<button class="btn secondary compact" data-action="approve-intake" data-intake-id="${item.id}">Approve</button>` : ""}
+        ${item.status === "pending" && !item.archived ? `<button class="btn secondary compact" data-action="reject-intake" data-intake-id="${item.id}">Reject</button>` : ""}
+        ${!item.archived ? `<button class="btn secondary compact" data-action="archive-intake" data-intake-id="${item.id}">Archive</button>` : ""}
+      </div>
+    </div>
+  `;
+}
+
+function armTypeLabel(type = "other") {
+  const labels = {
+    calendar: "Calendar",
+    meeting: "Meeting",
+    ai: "AI",
+    codex: "Codex",
+    notes: "Notes",
+    email: "Email",
+    file: "File",
+    manual: "Manual",
+    other: "Other"
+  };
+  return labels[type] || "Other";
+}
+
+function proposedObjectTypeLabel(type = "") {
+  const labels = {
+    ProjectStatus: "Project Status",
+    Decision: "Decision",
+    Fact: "Fact",
+    OpenQuestion: "Open Question",
+    NextAction: "Next Action",
+    Source: "Source",
+    Relationship: "Relationship"
+  };
+  return labels[type] || "Proposed Change";
+}
+
+function intakeStatusLabel(item) {
+  if (item.archived) return "Archived";
+  if (item.status === "approved") return "Approved";
+  if (item.status === "rejected") return "Rejected";
+  return "Pending";
 }
 
 function normalizeSearchText(value = "") {
@@ -2046,6 +2151,358 @@ function confirmationField(name, label) {
       </label>
     </div>
   `;
+}
+
+function armTypeOptions(selected = "manual") {
+  return ARM_TYPES
+    .map((type) => `<option value="${type}" ${selected === type ? "selected" : ""}>${escapeHtml(armTypeLabel(type))}</option>`)
+    .join("");
+}
+
+function proposedObjectTypeOptions(selected = "Decision") {
+  const types = ["ProjectStatus", "Decision", "Fact", "OpenQuestion", "NextAction", "Source", "Relationship"];
+  return types
+    .map((type) => `<option value="${type}" ${selected === type ? "selected" : ""}>${escapeHtml(proposedObjectTypeLabel(type))}</option>`)
+    .join("");
+}
+
+function projectOptions(selected = "") {
+  return store.projects
+    .filter((project) => !project.archived)
+    .map((project) => `<option value="${project.id}" ${selected === project.id ? "selected" : ""}>${escapeDisplay(project.name, DISPLAY_META_LIMIT)}</option>`)
+    .join("");
+}
+
+function openCreateIntakeModal() {
+  showModal({
+    title: "Add Intake",
+    submitText: "Save to Airlock",
+    body: `
+      <p class="notice">This creates a proposed change only. It will not change Project State until approved.</p>
+      <div class="field">
+        <label for="armType">Arm</label>
+        <select id="armType" name="armType">${armTypeOptions("manual")}</select>
+      </div>
+      <div class="field">
+        <label for="projectId">Target Project</label>
+        <select id="projectId" name="projectId" required>
+          ${projectOptions()}
+        </select>
+      </div>
+      <div class="field">
+        <label for="proposedObjectType">Proposed Change Type</label>
+        <select id="proposedObjectType" name="proposedObjectType">${proposedObjectTypeOptions()}</select>
+      </div>
+      <div class="field">
+        <label for="title">Intake Title</label>
+        <input id="title" name="title" required>
+      </div>
+      <div class="field">
+        <label for="text">Proposed Text</label>
+        <textarea id="text" name="text" required></textarea>
+      </div>
+      <div class="field">
+        <label for="summary">Summary / Context</label>
+        <textarea id="summary" name="summary"></textarea>
+      </div>
+      <div class="field">
+        <label for="sourceLabel">Source / Origin Label</label>
+        <input id="sourceLabel" name="sourceLabel">
+      </div>
+      <div class="two-col">
+        <div class="field">
+          <label for="target">Relationship Target / Owner</label>
+          <input id="target" name="target">
+        </div>
+        <div class="field">
+          <label for="dueDate">Due Date</label>
+          <input id="dueDate" name="dueDate" type="date">
+        </div>
+      </div>
+    `,
+    onSubmit(data) {
+      if (!store.projects.length) return false;
+      createIntakeItem({
+        armType: data.armType,
+        title: data.title.trim(),
+        createdBy: "human",
+        sourceLabel: data.sourceLabel.trim(),
+        projectId: data.projectId,
+        proposedObjectType: data.proposedObjectType,
+        proposedChange: {
+          text: data.text.trim(),
+          summary: data.summary.trim(),
+          target: data.target.trim(),
+          dueDate: data.dueDate || ""
+        },
+        evidence: {
+          enteredAt: nowIso()
+        }
+      });
+      activeRootView = "intake";
+      activeProjectId = null;
+      return true;
+    }
+  });
+}
+
+function openApproveIntakeModal(intakeId) {
+  const intake = findIntakeItem(intakeId);
+  if (!intake || intake.status !== "pending" || intake.archived) return;
+  showModal({
+    title: "Approve Intake",
+    submitText: "Approve to Project State",
+    body: `
+      <p class="notice">Approval applies this proposed change to the selected project and records it in history.</p>
+      ${renderIntakeApprovalPreview(intake)}
+      ${auditFields()}
+    `,
+    onSubmit(data) {
+      const actor = getOrCreateActor(data.actorName, "Human");
+      const result = approveIntakeItem(intake.id, actor, data.reason, (item, approval) => applyApprovedIntakeToCore(item, actor, data.reason, approval));
+      return Boolean(result);
+    }
+  });
+}
+
+function openRejectIntakeModal(intakeId) {
+  const intake = findIntakeItem(intakeId);
+  if (!intake || intake.status !== "pending" || intake.archived) return;
+  showModal({
+    title: "Reject Intake",
+    submitText: "Reject",
+    body: `
+      <p class="notice">Rejecting keeps the intake record but prevents it from reaching Project State.</p>
+      ${auditFields()}
+    `,
+    onSubmit(data) {
+      const actor = getOrCreateActor(data.actorName, "Human");
+      intake.status = "rejected";
+      intake.review = {
+        reviewedAt: nowIso(),
+        actorId: actor.id,
+        actorName: actor.name,
+        reason: data.reason.trim()
+      };
+      saveStore({ allowWithoutCoreApproval: true, reason: "intake-rejected" });
+      return true;
+    }
+  });
+}
+
+function openArchiveIntakeModal(intakeId) {
+  const intake = findIntakeItem(intakeId);
+  if (!intake || intake.archived) return;
+  showModal({
+    title: "Archive Intake",
+    submitText: "Archive",
+    body: `
+      <p class="notice">Archiving removes the intake from active review but keeps the record in the storage spine.</p>
+      ${auditFields()}
+    `,
+    onSubmit(data) {
+      const actor = getOrCreateActor(data.actorName, "Human");
+      intake.archived = true;
+      intake.review = {
+        reviewedAt: nowIso(),
+        actorId: actor.id,
+        actorName: actor.name,
+        reason: data.reason.trim()
+      };
+      saveStore({ allowWithoutCoreApproval: true, reason: "intake-archived" });
+      return true;
+    }
+  });
+}
+
+function findIntakeItem(intakeId) {
+  return (store.intakeItems || []).find((item) => item.id === intakeId) || null;
+}
+
+function renderIntakeApprovalPreview(intake) {
+  const proposed = intake.proposedChange || {};
+  return `
+    <div class="inline-empty">
+      <p><strong>${escapeDisplay(proposedObjectTypeLabel(intake.proposedObjectType), DISPLAY_META_LIMIT)}:</strong> ${escapeDisplay(intake.title, DISPLAY_META_LIMIT)}</p>
+      <p>${escapeDisplay(proposed.text || "No proposed text recorded.")}</p>
+      ${proposed.summary ? `<p>${escapeDisplay(proposed.summary)}</p>` : ""}
+    </div>
+  `;
+}
+
+function applyApprovedIntakeToCore(intake, actor, reason, approval) {
+  const project = getProject(intake.projectId);
+  if (!project) return null;
+  const proposed = intake.proposedChange || {};
+  const text = String(proposed.text || intake.title || "").trim();
+  const summary = String(proposed.summary || "").trim();
+  const timestamp = nowIso();
+  const baseDetails = {
+    origin: "intake",
+    intakeId: intake.id,
+    intakeArmType: intake.armType,
+    intakeTitle: intake.title,
+    intakeApprovedAt: approval.approvedAt
+  };
+
+  if (intake.proposedObjectType === "ProjectStatus") {
+    const previous = {
+      currentStatus: project.currentStatus,
+      currentSummary: project.currentSummary
+    };
+    project.currentStatus = text;
+    project.currentSummary = summary || project.currentSummary || "";
+    recordChange(project, actor, reason, "Intake approved: Current status updated", {
+      ...baseDetails,
+      objectType: "Project",
+      objectId: project.id,
+      objectText: project.name,
+      fields: {
+        previousStatus: previous.currentStatus,
+        newStatus: project.currentStatus,
+        previousSummary: previous.currentSummary,
+        newSummary: project.currentSummary
+      }
+    });
+    return project;
+  }
+
+  if (intake.proposedObjectType === "Decision") {
+    const decision = {
+      id: uid("decision"),
+      projectId: project.id,
+      text,
+      reason: summary || `Approved from ${armTypeLabel(intake.armType)} intake.`,
+      confidence: "Approved intake",
+      actorId: actor.id,
+      date: timestamp
+    };
+    project.decisions.unshift(decision);
+    recordChange(project, actor, reason, "Intake approved: Decision added", {
+      ...baseDetails,
+      objectType: "Decision",
+      objectId: decision.id,
+      objectText: decision.text,
+      fields: { decision: decision.text, reason: decision.reason }
+    });
+    return decision;
+  }
+
+  if (intake.proposedObjectType === "Fact") {
+    const fact = {
+      id: uid("fact"),
+      projectId: project.id,
+      statement: text,
+      source: intake.sourceLabel || summary,
+      confidence: "Approved intake",
+      actorId: actor.id,
+      createdAt: timestamp,
+      status: "active"
+    };
+    project.facts.unshift(fact);
+    recordChange(project, actor, reason, "Intake approved: Fact added", {
+      ...baseDetails,
+      objectType: "Fact",
+      objectId: fact.id,
+      objectText: fact.statement,
+      fields: { fact: fact.statement, source: fact.source }
+    });
+    return fact;
+  }
+
+  if (intake.proposedObjectType === "OpenQuestion") {
+    const question = {
+      id: uid("question"),
+      projectId: project.id,
+      question: text,
+      context: summary,
+      status: "open",
+      actorId: actor.id,
+      createdAt: timestamp
+    };
+    project.openQuestions.unshift(question);
+    recordChange(project, actor, reason, "Intake approved: Open question added", {
+      ...baseDetails,
+      objectType: "OpenQuestion",
+      objectId: question.id,
+      objectText: question.question,
+      fields: { question: question.question, context: question.context }
+    });
+    return question;
+  }
+
+  if (intake.proposedObjectType === "NextAction") {
+    const action = {
+      id: uid("action"),
+      projectId: project.id,
+      action: text,
+      owner: proposed.target || "",
+      dueDate: proposed.dueDate || "",
+      completedAt: "",
+      status: "open",
+      actorId: actor.id,
+      createdAt: timestamp
+    };
+    project.nextActions.unshift(action);
+    recordChange(project, actor, reason, "Intake approved: Next action added", {
+      ...baseDetails,
+      objectType: "NextAction",
+      objectId: action.id,
+      objectText: action.action,
+      fields: { action: action.action, owner: action.owner, dueDate: action.dueDate, status: action.status }
+    });
+    return action;
+  }
+
+  if (intake.proposedObjectType === "Source") {
+    const source = {
+      id: uid("source"),
+      projectId: project.id,
+      title: text || intake.title,
+      sourceType: armTypeLabel(intake.armType),
+      dateAdded: timestamp,
+      actorId: actor.id,
+      location: intake.sourceLabel || "",
+      summary,
+      tags: [],
+      extracts: [],
+      status: "active"
+    };
+    project.sources.unshift(source);
+    recordChange(project, actor, reason, "Intake approved: Source added", {
+      ...baseDetails,
+      objectType: "Source",
+      objectId: source.id,
+      objectText: source.title,
+      fields: { source: source.title, type: source.sourceType, location: source.location, summary: source.summary }
+    });
+    return source;
+  }
+
+  if (intake.proposedObjectType === "Relationship") {
+    const relationship = {
+      id: uid("relationship"),
+      projectId: project.id,
+      target: proposed.target || text,
+      targetProjectId: resolveProjectIdByName(proposed.target || text, project.id),
+      relationshipType: text,
+      notes: summary,
+      actorId: actor.id,
+      createdAt: timestamp,
+      status: "active"
+    };
+    project.relationships.unshift(relationship);
+    recordChange(project, actor, reason, "Intake approved: Relationship added", {
+      ...baseDetails,
+      objectType: "Relationship",
+      objectId: relationship.id,
+      objectText: relationshipTargetLabel(relationship),
+      fields: { target: relationshipTargetLabel(relationship), relationshipType: relationship.relationshipType, notes: relationship.notes }
+    });
+    return relationship;
+  }
+
+  return null;
 }
 
 function openCreateProjectModal() {
@@ -3824,10 +4281,25 @@ app.addEventListener("click", (event) => {
   if (loadFailure) return;
 
   if (action === "create-project") openCreateProjectModal();
+  if (action === "create-intake") openCreateIntakeModal();
+  if (action === "show-projects") {
+    activeRootView = "projects";
+    activeProjectId = null;
+    render();
+  }
+  if (action === "show-intake") {
+    activeRootView = "intake";
+    activeProjectId = null;
+    render();
+  }
+  if (action === "approve-intake") openApproveIntakeModal(button.dataset.intakeId);
+  if (action === "reject-intake") openRejectIntakeModal(button.dataset.intakeId);
+  if (action === "archive-intake") openArchiveIntakeModal(button.dataset.intakeId);
   if (action === "export-project") exportProjectJson();
   if (action === "project-overview") openProjectOverviewModal();
   if (action === "open-project") {
     activeProjectId = button.dataset.projectId;
+    activeRootView = "projects";
     activeView = "dashboard";
     activeHistoryFilter = null;
     activeHistoryEventType = "all";
@@ -3835,6 +4307,7 @@ app.addEventListener("click", (event) => {
   }
   if (action === "back") {
     activeProjectId = null;
+    activeRootView = "projects";
     activeView = "dashboard";
     activeHistoryFilter = null;
     activeHistoryEventType = "all";

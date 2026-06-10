@@ -136,3 +136,14 @@ Search
 Knowledge ingestion
 Multi-user architecture
 AI-assisted extraction
+
+Current Architecture Note
+
+Project State now uses an octopus-style architecture:
+
+Core: approved Project State records
+Spine: local storage and retrieval
+Airlock: intake/proposed changes awaiting human review
+Arms: future inputs such as AI, Codex, notes, email, meetings, calendars, and files
+
+Arms do not write directly to the core. They create intake items. A human must approve intake before it becomes a Decision, Fact, Open Question, Next Action, Source, Relationship, or Project Status change. Rejected and archived intake remains outside the core.
