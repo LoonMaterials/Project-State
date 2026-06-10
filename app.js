@@ -1071,6 +1071,15 @@ function render() {
   renderProject(project);
 }
 
+function openProjectNow(projectId, view = "dashboard") {
+  activeProjectId = projectId;
+  activeRootView = "projects";
+  activeView = view;
+  activeHistoryFilter = null;
+  activeHistoryEventType = "all";
+  searchQuery = "";
+}
+
 function renderLoadingScreen() {
   app.innerHTML = `
     <main class="main recovery-screen">
@@ -2573,9 +2582,12 @@ function openCreateProjectModal() {
         createdAt: timestamp,
         updatedAt: timestamp,
         updatedBy: actor.id,
+        sourceLinks: [],
+        imageLinks: [],
         decisions: [],
         facts: [],
         sources: [],
+        draftProjects: [],
         relationships: [],
         openQuestions: [],
         nextActions: [],
@@ -2592,8 +2604,7 @@ function openCreateProjectModal() {
         }
       });
       store.projects.unshift(project);
-      activeProjectId = project.id;
-      activeView = "dashboard";
+      openProjectNow(project.id);
       saveStore();
     }
   });
@@ -3375,9 +3386,7 @@ function openApproveDraftProjectModal(draftProjectId) {
         }
       });
       store.projects.unshift(approvedProject);
-      activeProjectId = approvedProject.id;
-      activeView = "dashboard";
-      activeHistoryFilter = null;
+      openProjectNow(approvedProject.id);
       saveStore();
     }
   });
