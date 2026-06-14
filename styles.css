@@ -404,6 +404,69 @@ select:focus {
   padding: 20px;
 }
 
+.role-definitions {
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+
+.role-definition {
+  display: grid;
+  gap: 10px;
+}
+
+.role-definition-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.definition-list ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  color: var(--muted);
+}
+
+.definition-list li {
+  margin: 3px 0;
+}
+
+.matrix-wrap {
+  overflow-x: auto;
+}
+
+.permission-matrix {
+  width: 100%;
+  min-width: 620px;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.permission-matrix th,
+.permission-matrix td {
+  border: 1px solid var(--line);
+  padding: 8px 10px;
+  text-align: center;
+}
+
+.permission-matrix th:first-child {
+  text-align: left;
+}
+
+.matrix-yes {
+  color: #2f5f3a;
+  font-weight: 800;
+}
+
+.matrix-no {
+  color: var(--muted);
+}
+
+.history-policy-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .nested-list {
   margin-top: 12px;
   padding-left: 12px;

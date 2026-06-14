@@ -11,8 +11,147 @@ const PROJECT_HEALTH_FLAGS = ["active", "blocked", "at_risk", "complete", "on_ho
 const ARM_TYPES = ["calendar", "meeting", "ai", "codex", "notes", "email", "file", "manual", "other"];
 const INTAKE_STATUSES = ["pending", "approved", "rejected", "archived"];
 const APPROVED_CORE_ORIGINS = ["human_ui", "migration"];
-const ACTOR_ROLES = ["owner", "contributor", "reviewer", "viewer", "ai_tool"];
+const ACTOR_ROLES = ["owner", "admin", "project_lead", "approver", "editor", "contributor", "reviewer", "auditor", "viewer", "ai_tool"];
 const ACTOR_STATUSES = ["active", "archived"];
+const ROLE_DEFINITIONS_VERSION = "0.1";
+const ROLE_DEFINITIONS = {
+  owner: {
+    purpose: "Ultimate authority over Project State.",
+    permissions: [
+      "Create projects",
+      "Edit projects",
+      "Approve changes",
+      "Manage users",
+      "Manage roles",
+      "Manage integrations",
+      "Manage storage",
+      "Export data",
+      "Import data",
+      "Archive projects",
+      "Delete projects",
+      "Reset system",
+      "Transfer ownership"
+    ],
+    restrictions: ["None"]
+  },
+  admin: {
+    purpose: "System administrator.",
+    permissions: [
+      "Create projects",
+      "Edit projects",
+      "Manage users",
+      "Assign roles",
+      "Manage integrations",
+      "Manage storage",
+      "Export data",
+      "Import data",
+      "Archive projects"
+    ],
+    restrictions: ["Cannot transfer ownership", "Cannot override Owner authority"]
+  },
+  project_lead: {
+    purpose: "Responsible for one or more assigned projects.",
+    permissions: [
+      "Create project content",
+      "Edit project content",
+      "Approve changes within assigned projects",
+      "Manage contributors within assigned projects",
+      "Archive assigned projects"
+    ],
+    restrictions: ["Cannot manage system-wide settings", "Cannot manage global roles"]
+  },
+  approver: {
+    purpose: "Authority to approve proposed state changes.",
+    permissions: [
+      "Review drafts",
+      "Approve drafts",
+      "Approve facts",
+      "Approve decisions",
+      "Approve questions",
+      "Approve actions",
+      "Approve relationships"
+    ],
+    restrictions: ["Cannot manage users", "Cannot manage permissions", "Cannot manage system settings"]
+  },
+  editor: {
+    purpose: "Maintain approved project content.",
+    permissions: [
+      "Create content",
+      "Edit content",
+      "Update approved records",
+      "Attach sources",
+      "Create extracts",
+      "Generate draft projects"
+    ],
+    restrictions: ["Cannot approve changes", "Cannot manage permissions"]
+  },
+  contributor: {
+    purpose: "Submit information and proposals.",
+    permissions: [
+      "Create drafts",
+      "Create facts",
+      "Create questions",
+      "Create actions",
+      "Attach sources",
+      "Create extracts",
+      "Generate suggestions"
+    ],
+    restrictions: ["Cannot approve changes", "Cannot edit approved records without permission"]
+  },
+  reviewer: {
+    purpose: "Review proposed content before approval.",
+    permissions: ["Review drafts", "Add comments", "Add feedback", "Request revisions"],
+    restrictions: ["Cannot approve changes", "Cannot modify approved records"]
+  },
+  auditor: {
+    purpose: "Independent oversight and traceability.",
+    permissions: ["View all projects", "View history", "View change logs", "View approvals", "Export audit reports"],
+    restrictions: ["Cannot create content", "Cannot edit content", "Cannot approve changes"]
+  },
+  viewer: {
+    purpose: "Read-only access.",
+    permissions: ["View projects", "View current state", "Search content"],
+    restrictions: ["Cannot create content", "Cannot edit content", "Cannot approve changes"]
+  },
+  ai_tool: {
+    purpose: "Non-human contributor.",
+    permissions: [
+      "Search content",
+      "Summarize content",
+      "Create extracts",
+      "Generate facts",
+      "Generate questions",
+      "Generate actions",
+      "Generate relationships",
+      "Generate draft projects",
+      "Generate reports",
+      "Generate handoffs"
+    ],
+    restrictions: [
+      "Cannot approve changes",
+      "Cannot modify permissions",
+      "Cannot delete history",
+      "Cannot delete projects",
+      "Cannot become source of truth"
+    ],
+    rule: "AI and tools may propose changes. Humans must approve changes before they become Project State."
+  }
+};
+const ROLE_PERMISSION_COLUMNS = ["create", "edit", "approve", "audit", "admin"];
+const ROLE_PERMISSION_MATRIX = {
+  owner: { create: true, edit: true, approve: true, audit: true, admin: true },
+  admin: { create: true, edit: true, approve: false, audit: true, admin: true },
+  project_lead: { create: true, edit: true, approve: true, audit: true, admin: false },
+  approver: { create: false, edit: false, approve: true, audit: true, admin: false },
+  editor: { create: true, edit: true, approve: false, audit: false, admin: false },
+  contributor: { create: true, edit: false, approve: false, audit: false, admin: false },
+  reviewer: { create: false, edit: false, approve: false, audit: false, admin: false },
+  auditor: { create: false, edit: false, approve: false, audit: true, admin: false },
+  viewer: { create: false, edit: false, approve: false, audit: false, admin: false },
+  ai_tool: { create: true, edit: false, approve: false, audit: false, admin: false }
+};
+const HISTORY_POLICY_VERSION = "0.1";
+const MANDATORY_HISTORY_FIELDS = ["actor", "timestamp", "reason", "changedObject", "howChanged", "language"];
 const DEFAULT_LANGUAGE = "en";
 const LANGUAGES = {
   en: {
@@ -98,8 +237,13 @@ const LANGUAGES = {
     defaultActorPill: "Default Actor",
     saveActor: "Save Actor",
     owner: "Owner",
+    admin: "Admin",
+    projectLead: "Project Lead",
+    approver: "Approver",
+    editor: "Editor",
     contributor: "Contributor",
     reviewer: "Reviewer",
+    auditor: "Auditor",
     viewer: "Viewer",
     aiTool: "AI / Tool",
     reason: "Reason",
@@ -112,6 +256,25 @@ const LANGUAGES = {
     addActorReasonPlaceholder: "Why is this actor being added?",
     restoredBy: "Restored By",
     restoreReason: "Restore Reason",
+    permissionMatrix: "Permission Matrix",
+    permissionMatrixNote: "Role permissions are policy definitions for the future multi-user model. They are visible now but not yet enforced as login permissions.",
+    createPermission: "Create",
+    editPermission: "Edit",
+    approvePermission: "Approve",
+    auditPermission: "Audit",
+    adminPermission: "Admin",
+    yes: "Y",
+    no: "N",
+    mandatoryHistory: "Mandatory History",
+    mandatoryHistoryNote: "Every approved Project State change must record who changed it, when it changed, why it changed, what changed, how it entered the core, and the active UI language.",
+    historyFieldActor: "Actor",
+    historyFieldTimestamp: "Timestamp",
+    historyFieldReason: "Reason",
+    historyFieldObject: "Changed object",
+    historyFieldHow: "How changed",
+    historyFieldLanguage: "Language",
+    howChanged: "How",
+    languageAtChange: "Language",
     addDecision: "Add Decision",
     addExtract: "Add Extract",
     addFact: "Add Fact",
@@ -249,8 +412,13 @@ const LANGUAGES = {
     defaultActorPill: "Acteur par défaut",
     saveActor: "Enregistrer l’acteur",
     owner: "Propriétaire",
+    admin: "Administrateur",
+    projectLead: "Responsable de projet",
+    approver: "Approbateur",
+    editor: "Éditeur",
     contributor: "Contributeur",
     reviewer: "Réviseur",
+    auditor: "Auditeur",
     viewer: "Lecteur",
     aiTool: "IA / Outil",
     reason: "Raison",
@@ -263,6 +431,25 @@ const LANGUAGES = {
     addActorReasonPlaceholder: "Pourquoi cet acteur est-il ajouté ?",
     restoredBy: "Restauré par",
     restoreReason: "Raison de la restauration",
+    permissionMatrix: "Matrice des permissions",
+    permissionMatrixNote: "Les permissions de rôle sont des définitions de politique pour le futur modèle multi-utilisateur. Elles sont visibles maintenant mais ne sont pas encore appliquées comme permissions de connexion.",
+    createPermission: "Créer",
+    editPermission: "Modifier",
+    approvePermission: "Approuver",
+    auditPermission: "Auditer",
+    adminPermission: "Admin",
+    yes: "O",
+    no: "N",
+    mandatoryHistory: "Historique obligatoire",
+    mandatoryHistoryNote: "Chaque changement approuvé de Project State doit enregistrer qui l’a fait, quand, pourquoi, ce qui a changé, comment il est entré dans le noyau et la langue active de l’interface.",
+    historyFieldActor: "Acteur",
+    historyFieldTimestamp: "Horodatage",
+    historyFieldReason: "Raison",
+    historyFieldObject: "Objet modifié",
+    historyFieldHow: "Mode de changement",
+    historyFieldLanguage: "Langue",
+    howChanged: "Mode",
+    languageAtChange: "Langue",
     addDecision: "Ajouter une décision",
     addExtract: "Ajouter un extrait",
     addFact: "Ajouter un fait",
@@ -400,8 +587,13 @@ const LANGUAGES = {
     defaultActorPill: "Standardakteur",
     saveActor: "Akteur speichern",
     owner: "Eigentümer",
+    admin: "Administrator",
+    projectLead: "Projektleitung",
+    approver: "Genehmiger",
+    editor: "Bearbeiter",
     contributor: "Mitwirkender",
     reviewer: "Prüfer",
+    auditor: "Auditor",
     viewer: "Betrachter",
     aiTool: "KI / Tool",
     reason: "Grund",
@@ -414,6 +606,25 @@ const LANGUAGES = {
     addActorReasonPlaceholder: "Warum wird dieser Akteur hinzugefügt?",
     restoredBy: "Wiederhergestellt von",
     restoreReason: "Grund der Wiederherstellung",
+    permissionMatrix: "Berechtigungsmatrix",
+    permissionMatrixNote: "Rollenberechtigungen sind Richtliniendefinitionen für das zukünftige Mehrbenutzermodell. Sie sind jetzt sichtbar, werden aber noch nicht als Login-Berechtigungen erzwungen.",
+    createPermission: "Erstellen",
+    editPermission: "Bearbeiten",
+    approvePermission: "Genehmigen",
+    auditPermission: "Audit",
+    adminPermission: "Admin",
+    yes: "J",
+    no: "N",
+    mandatoryHistory: "Pflichtverlauf",
+    mandatoryHistoryNote: "Jede genehmigte Project-State-Änderung muss erfassen, wer sie vorgenommen hat, wann sie erfolgte, warum, was geändert wurde, wie sie in den Kern gelangte und welche UI-Sprache aktiv war.",
+    historyFieldActor: "Akteur",
+    historyFieldTimestamp: "Zeitstempel",
+    historyFieldReason: "Grund",
+    historyFieldObject: "Geändertes Objekt",
+    historyFieldHow: "Änderungsweg",
+    historyFieldLanguage: "Sprache",
+    howChanged: "Weg",
+    languageAtChange: "Sprache",
     addDecision: "Entscheidung hinzufügen",
     addExtract: "Auszug hinzufügen",
     addFact: "Fakt hinzufügen",
@@ -551,8 +762,13 @@ const LANGUAGES = {
     defaultActorPill: "Actor predeterminado",
     saveActor: "Guardar actor",
     owner: "Propietario",
+    admin: "Administrador",
+    projectLead: "Responsable del proyecto",
+    approver: "Aprobador",
+    editor: "Editor",
     contributor: "Colaborador",
     reviewer: "Revisor",
+    auditor: "Auditor",
     viewer: "Lector",
     aiTool: "IA / Herramienta",
     reason: "Razón",
@@ -565,6 +781,25 @@ const LANGUAGES = {
     addActorReasonPlaceholder: "¿Por qué se agrega este actor?",
     restoredBy: "Restaurado por",
     restoreReason: "Razón de restauración",
+    permissionMatrix: "Matriz de permisos",
+    permissionMatrixNote: "Los permisos de rol son definiciones de política para el futuro modelo multiusuario. Están visibles ahora pero aún no se aplican como permisos de inicio de sesión.",
+    createPermission: "Crear",
+    editPermission: "Editar",
+    approvePermission: "Aprobar",
+    auditPermission: "Auditar",
+    adminPermission: "Admin",
+    yes: "S",
+    no: "N",
+    mandatoryHistory: "Historial obligatorio",
+    mandatoryHistoryNote: "Cada cambio aprobado de Project State debe registrar quién lo cambió, cuándo cambió, por qué cambió, qué cambió, cómo entró al núcleo y el idioma activo de la interfaz.",
+    historyFieldActor: "Actor",
+    historyFieldTimestamp: "Marca de tiempo",
+    historyFieldReason: "Razón",
+    historyFieldObject: "Objeto cambiado",
+    historyFieldHow: "Cómo cambió",
+    historyFieldLanguage: "Idioma",
+    howChanged: "Cómo",
+    languageAtChange: "Idioma",
     addDecision: "Agregar decisión",
     addExtract: "Agregar extracto",
     addFact: "Agregar hecho",
@@ -682,7 +917,10 @@ const defaultSettings = () => ({
   lastRestoreAt: "",
   lastRestoreBy: "",
   lastRestoreReason: "",
-  lastRestoreSourceFile: ""
+  lastRestoreSourceFile: "",
+  historyPolicyVersion: HISTORY_POLICY_VERSION,
+  mandatoryHistory: true,
+  mandatoryHistoryFields: [...MANDATORY_HISTORY_FIELDS]
 });
 
 const emptyStore = () => ({
@@ -897,7 +1135,12 @@ function normalizeSettings(settings = {}) {
     lastRestoreAt: settings.lastRestoreAt || "",
     lastRestoreBy: settings.lastRestoreBy || "",
     lastRestoreReason: settings.lastRestoreReason || "",
-    lastRestoreSourceFile: settings.lastRestoreSourceFile || ""
+    lastRestoreSourceFile: settings.lastRestoreSourceFile || "",
+    historyPolicyVersion: settings.historyPolicyVersion || defaults.historyPolicyVersion,
+    mandatoryHistory: settings.mandatoryHistory !== false,
+    mandatoryHistoryFields: Array.isArray(settings.mandatoryHistoryFields) && settings.mandatoryHistoryFields.length
+      ? settings.mandatoryHistoryFields
+      : [...defaults.mandatoryHistoryFields]
   };
   if (
     !settings ||
@@ -905,7 +1148,10 @@ function normalizeSettings(settings = {}) {
     settings.language !== normalized.language ||
     settings.recoveryWarnings !== normalized.recoveryWarnings ||
     settings.storageSystem !== normalized.storageSystem ||
-    settings.backupSystem !== normalized.backupSystem
+    settings.backupSystem !== normalized.backupSystem ||
+    settings.historyPolicyVersion !== normalized.historyPolicyVersion ||
+    settings.mandatoryHistory !== normalized.mandatoryHistory ||
+    !Array.isArray(settings.mandatoryHistoryFields)
   ) migrationNeeded = true;
   return normalized;
 }
@@ -1206,16 +1452,27 @@ function requireHumanApproval(actor, reason, details = {}) {
 function normalizeChange(change, project, context) {
   const actorId = change.actorId || ensureActorIdByName(change.actorName, context);
   const changeId = ensureId(change, "change", context);
+  const details = normalizeChangeDetails(change.details || {}, project);
+  const language = normalizeLanguage(change.language || change.uiLanguage || details.language || DEFAULT_LANGUAGE);
+  const howChanged = change.howChanged || details.origin || "human_ui";
   const normalized = {
     ...change,
     id: changeId,
     projectId: change.projectId || project.id,
     actorId,
+    language,
+    howChanged,
     imageLinks: normalizeImageLinksArray(change.imageLinks, project.id, "Change", changeId, context),
-    details: normalizeChangeDetails(change.details || {}, project)
+    details: {
+      ...details,
+      language: details.language || language,
+      origin: details.origin || howChanged
+    }
   };
   if (!change.projectId) migrationNeeded = true;
   if (!change.actorId && actorId) migrationNeeded = true;
+  if (!change.language && !change.uiLanguage) migrationNeeded = true;
+  if (!change.howChanged) migrationNeeded = true;
   return normalized;
 }
 
@@ -1393,6 +1650,11 @@ function languageOptions(selected = currentLanguage()) {
   return Object.entries(LANGUAGES)
     .map(([code, labels]) => `<option value="${code}" ${selectedLanguage === code ? "selected" : ""}>${escapeHtml(labels.languageName || code)}</option>`)
     .join("");
+}
+
+function languageDisplayName(language = DEFAULT_LANGUAGE) {
+  const code = normalizeLanguage(language);
+  return `${LANGUAGES[code]?.languageName || code} (${code})`;
 }
 
 function resolveProjectIdByName(name, currentProjectId = "", context = null) {
@@ -1704,8 +1966,13 @@ function normalizeActorStatus(status = "active") {
 function actorRoleLabel(role = "contributor", type = "Human") {
   const labels = {
     owner: t("owner"),
+    admin: t("admin"),
+    project_lead: t("projectLead"),
+    approver: t("approver"),
+    editor: t("editor"),
     contributor: t("contributor"),
     reviewer: t("reviewer"),
+    auditor: t("auditor"),
     viewer: t("viewer"),
     ai_tool: t("aiTool")
   };
@@ -1798,9 +2065,14 @@ function recordChange(project, actor, reason, summary, details = {}) {
     actorId: actor.id,
     actorName: actor.name,
     timestamp,
+    language: currentLanguage(),
+    howChanged: normalizedDetails.origin,
     reason: reason.trim(),
     summary,
-    details: normalizedDetails
+    details: {
+      ...normalizedDetails,
+      language: currentLanguage()
+    }
   };
 
   project.changes.unshift(change);
@@ -2127,6 +2399,35 @@ function renderSettings() {
 
       <section class="panel">
         <div class="panel-head">
+          <h2 class="panel-title">Role Definitions v${escapeHtml(ROLE_DEFINITIONS_VERSION)}</h2>
+        </div>
+        <div class="settings-list role-definitions">
+          ${renderRoleDefinitions()}
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <h2 class="panel-title">${escapeHtml(t("permissionMatrix"))}</h2>
+        </div>
+        <div class="form">
+          <p class="notice">${escapeHtml(t("permissionMatrixNote"))}</p>
+          ${renderPermissionMatrix()}
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <h2 class="panel-title">${escapeHtml(t("mandatoryHistory"))} v${escapeHtml(HISTORY_POLICY_VERSION)}</h2>
+        </div>
+        <div class="form">
+          <p class="notice">${escapeHtml(t("mandatoryHistoryNote"))}</p>
+          ${renderMandatoryHistoryPolicy()}
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
           <h2 class="panel-title">${escapeHtml(t("storageSystem"))}</h2>
         </div>
         <form class="form" data-settings-storage>
@@ -2241,6 +2542,88 @@ function renderSettings() {
     </section>
   `);
   app.querySelectorAll("form").forEach(applyInputLimits);
+}
+
+function renderRoleDefinitions() {
+  return ACTOR_ROLES
+    .map((role) => {
+      const definition = ROLE_DEFINITIONS[role];
+      if (!definition) return "";
+      return `
+        <article class="item role-definition">
+          <div class="role-definition-head">
+            <h3 class="item-title">${escapeHtml(actorRoleLabel(role))}</h3>
+            <span class="pill">${escapeHtml(role)}</span>
+          </div>
+          <p class="item-body">${escapeDisplay(definition.purpose, DISPLAY_META_LIMIT)}</p>
+          ${renderDefinitionList("Permissions", definition.permissions)}
+          ${renderDefinitionList("Restrictions", definition.restrictions)}
+          ${definition.rule ? `<p class="notice">${escapeDisplay(definition.rule, DISPLAY_META_LIMIT)}</p>` : ""}
+        </article>
+      `;
+    })
+    .join("");
+}
+
+function renderPermissionMatrix() {
+  const columnLabels = {
+    create: t("createPermission"),
+    edit: t("editPermission"),
+    approve: t("approvePermission"),
+    audit: t("auditPermission"),
+    admin: t("adminPermission")
+  };
+  return `
+    <div class="matrix-wrap">
+      <table class="permission-matrix">
+        <thead>
+          <tr>
+            <th>${escapeHtml(t("role"))}</th>
+            ${ROLE_PERMISSION_COLUMNS.map((column) => `<th>${escapeHtml(columnLabels[column])}</th>`).join("")}
+          </tr>
+        </thead>
+        <tbody>
+          ${ACTOR_ROLES.map((role) => `
+            <tr>
+              <th>${escapeHtml(actorRoleLabel(role))}</th>
+              ${ROLE_PERMISSION_COLUMNS.map((column) => {
+                const allowed = Boolean(ROLE_PERMISSION_MATRIX[role]?.[column]);
+                return `<td class="${allowed ? "matrix-yes" : "matrix-no"}">${escapeHtml(allowed ? t("yes") : t("no"))}</td>`;
+              }).join("")}
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function renderMandatoryHistoryPolicy() {
+  const labels = {
+    actor: t("historyFieldActor"),
+    timestamp: t("historyFieldTimestamp"),
+    reason: t("historyFieldReason"),
+    changedObject: t("historyFieldObject"),
+    howChanged: t("historyFieldHow"),
+    language: t("historyFieldLanguage")
+  };
+  return `
+    <div class="history-policy-list">
+      ${MANDATORY_HISTORY_FIELDS.map((field) => `<span class="pill">${escapeHtml(labels[field] || field)}</span>`).join("")}
+    </div>
+  `;
+}
+
+function renderDefinitionList(label, items = []) {
+  if (!items.length) return "";
+  return `
+    <div class="definition-list">
+      <p class="meta-label">${escapeHtml(label)}</p>
+      <ul>
+        ${items.map((item) => `<li>${escapeDisplay(item, DISPLAY_META_LIMIT)}</li>`).join("")}
+      </ul>
+    </div>
+  `;
 }
 
 function renderActorSettingsItem(actor) {
@@ -2994,6 +3377,8 @@ function renderHistoryItem(change) {
         <p class="history-title">${escapeDisplay(change.summary, DISPLAY_META_LIMIT)}</p>
         <p class="history-detail">Reason: ${escapeDisplay(change.reason)}</p>
         <p class="history-detail">Changed: ${escapeDisplay(describeDetails(change.details))}</p>
+        <p class="history-detail">${escapeHtml(t("howChanged"))}: ${escapeHtml(change.howChanged || change.details?.origin || "human_ui")}</p>
+        <p class="history-detail">${escapeHtml(t("languageAtChange"))}: ${escapeHtml(languageDisplayName(change.language || change.details?.language || DEFAULT_LANGUAGE))}</p>
         ${renderAttachedImages(change)}
         <div class="item-actions">
           <button class="btn secondary compact" data-action="attach-image" data-object-type="Change" data-object-id="${change.id}">${escapeHtml(t("attachImage"))}</button>

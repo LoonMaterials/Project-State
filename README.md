@@ -130,6 +130,118 @@ Basic diagnostics
 
 Actor roles are local metadata only. They are not accounts, logins, cloud permissions, or collaboration controls yet.
 
+Current local actor roles and definitions:
+
+Owner
+
+Purpose: Ultimate authority over Project State.
+
+Permissions: create projects, edit projects, approve changes, manage users, manage roles, manage integrations, manage storage, export data, import data, archive projects, delete projects, reset system, transfer ownership.
+
+Restrictions: none.
+
+Admin
+
+Purpose: system administrator.
+
+Permissions: create projects, edit projects, manage users, assign roles, manage integrations, manage storage, export data, import data, archive projects.
+
+Restrictions: cannot transfer ownership; cannot override Owner authority.
+
+Project Lead
+
+Purpose: responsible for one or more assigned projects.
+
+Permissions: create project content, edit project content, approve changes within assigned projects, manage contributors within assigned projects, archive assigned projects.
+
+Restrictions: cannot manage system-wide settings; cannot manage global roles.
+
+Approver
+
+Purpose: authority to approve proposed state changes.
+
+Permissions: review drafts, approve drafts, approve facts, approve decisions, approve questions, approve actions, approve relationships.
+
+Restrictions: cannot manage users, manage permissions, or manage system settings.
+
+Editor
+
+Purpose: maintain approved project content.
+
+Permissions: create content, edit content, update approved records, attach sources, create extracts, generate draft projects.
+
+Restrictions: cannot approve changes; cannot manage permissions.
+
+Contributor
+
+Purpose: submit information and proposals.
+
+Permissions: create drafts, create facts, create questions, create actions, attach sources, create extracts, generate suggestions.
+
+Restrictions: cannot approve changes; cannot edit approved records without permission.
+
+Reviewer
+
+Purpose: review proposed content before approval.
+
+Permissions: review drafts, add comments, add feedback, request revisions.
+
+Restrictions: cannot approve changes; cannot modify approved records.
+
+Auditor
+
+Purpose: independent oversight and traceability.
+
+Permissions: view all projects, view history, view change logs, view approvals, export audit reports.
+
+Restrictions: cannot create content, edit content, or approve changes.
+
+Viewer
+
+Purpose: read-only access.
+
+Permissions: view projects, view current state, search content.
+
+Restrictions: cannot create content, edit content, or approve changes.
+
+AI / Tool
+
+Purpose: non-human contributor.
+
+Permissions: search content, summarize content, create extracts, generate facts, generate questions, generate actions, generate relationships, generate draft projects, generate reports, generate handoffs.
+
+Restrictions: cannot approve changes, modify permissions, delete history, delete projects, or become source of truth.
+
+Rule: AI and tools may propose changes. Humans must approve changes before they become Project State.
+
+Permission Matrix v0.1
+
+| Role | Create | Edit | Approve | Audit | Admin |
+| --- | --- | --- | --- | --- | --- |
+| Owner | Y | Y | Y | Y | Y |
+| Admin | Y | Y | N | Y | Y |
+| Project Lead | Y | Y | Y | Y | N |
+| Approver | N | N | Y | Y | N |
+| Editor | Y | Y | N | N | N |
+| Contributor | Y | N | N | N | N |
+| Reviewer | N | N | N | N | N |
+| Auditor | N | N | N | Y | N |
+| Viewer | N | N | N | N | N |
+| AI / Tool | Y | N | N | N | N |
+
+The matrix is currently policy/reference for the future multi-user model. It is not yet enforced as login or collaboration permissions.
+
+Mandatory History Policy v0.1
+
+Every approved Project State change must record:
+
+Actor
+Timestamp
+Reason
+Changed object
+How the change entered the core
+Active UI language
+
 Questions I'd Love Feedback On
 Architecture
 Should project state be directly editable or derived from change events?
