@@ -111,7 +111,60 @@ const LANGUAGES = {
     actorReasonPlaceholder: "Why is this actor changing?",
     addActorReasonPlaceholder: "Why is this actor being added?",
     restoredBy: "Restored By",
-    restoreReason: "Restore Reason"
+    restoreReason: "Restore Reason",
+    addDecision: "Add Decision",
+    addExtract: "Add Extract",
+    addFact: "Add Fact",
+    addNextAction: "Add Next Action",
+    addOpenQuestion: "Add Open Question",
+    addRelationship: "Add Relationship",
+    addSource: "Add Source",
+    approve: "Approve",
+    approveDraft: "Approve Draft",
+    approveExtract: "Approve Extract",
+    archive: "Archive",
+    attachImage: "Attach Image",
+    attachSource: "Attach Source",
+    cancel: "Cancel",
+    clearSearch: "Clear Search",
+    createDraftProject: "Create Draft Project",
+    dashboard: "Dashboard",
+    deleteProject: "Delete Project",
+    edit: "Edit",
+    editStatus: "Edit Status",
+    exportFailedData: "Export Failed Data",
+    markComplete: "Mark Complete",
+    onePageOverview: "One Page Overview",
+    open: "Open",
+    readFileExtract: "Read File Extract",
+    reject: "Reject",
+    review: "Review",
+    suggestExtract: "Suggest Extract",
+    unarchiveProject: "Unarchive Project",
+    viewFullHistory: "View Full History",
+    viewHistory: "View History",
+    close: "Close",
+    saveToAirlock: "Save to Airlock",
+    approveToProjectState: "Approve to Project State",
+    approveProject: "Approve Project",
+    requestDeletion: "Request Deletion",
+    approveUnarchive: "Approve Unarchive",
+    approveChange: "Approve Change",
+    approveEdit: "Approve Edit",
+    createDraft: "Create Draft",
+    saveReview: "Save Review",
+    approveToProject: "Approve to Project",
+    approveCompletion: "Approve Completion",
+    recordSuggestion: "Record Suggestion",
+    approveAttachment: "Approve Attachment",
+    approveImage: "Approve Image",
+    approveArchive: "Approve Archive",
+    approveDecision: "Approve Decision",
+    approveFact: "Approve Fact",
+    approveSource: "Approve Source",
+    approveRelationship: "Approve Relationship",
+    approveQuestion: "Approve Question",
+    approveAction: "Approve Action"
   },
   fr: {
     languageName: "Français",
@@ -209,7 +262,60 @@ const LANGUAGES = {
     actorReasonPlaceholder: "Pourquoi cet acteur change-t-il ?",
     addActorReasonPlaceholder: "Pourquoi cet acteur est-il ajouté ?",
     restoredBy: "Restauré par",
-    restoreReason: "Raison de la restauration"
+    restoreReason: "Raison de la restauration",
+    addDecision: "Ajouter une décision",
+    addExtract: "Ajouter un extrait",
+    addFact: "Ajouter un fait",
+    addNextAction: "Ajouter une prochaine action",
+    addOpenQuestion: "Ajouter une question ouverte",
+    addRelationship: "Ajouter une relation",
+    addSource: "Ajouter une source",
+    approve: "Approuver",
+    approveDraft: "Approuver le brouillon",
+    approveExtract: "Approuver l’extrait",
+    archive: "Archiver",
+    attachImage: "Joindre une image",
+    attachSource: "Joindre une source",
+    cancel: "Annuler",
+    clearSearch: "Effacer la recherche",
+    createDraftProject: "Créer un projet brouillon",
+    dashboard: "Tableau de bord",
+    deleteProject: "Supprimer le projet",
+    edit: "Modifier",
+    editStatus: "Modifier le statut",
+    exportFailedData: "Exporter les données en échec",
+    markComplete: "Marquer terminé",
+    onePageOverview: "Vue d’ensemble d’une page",
+    open: "Ouvrir",
+    readFileExtract: "Lire un extrait de fichier",
+    reject: "Rejeter",
+    review: "Réviser",
+    suggestExtract: "Suggérer un extrait",
+    unarchiveProject: "Désarchiver le projet",
+    viewFullHistory: "Voir tout l’historique",
+    viewHistory: "Voir l’historique",
+    close: "Fermer",
+    saveToAirlock: "Enregistrer dans l’airlock",
+    approveToProjectState: "Approuver vers Project State",
+    approveProject: "Approuver le projet",
+    requestDeletion: "Demander la suppression",
+    approveUnarchive: "Approuver le désarchivage",
+    approveChange: "Approuver le changement",
+    approveEdit: "Approuver la modification",
+    createDraft: "Créer un brouillon",
+    saveReview: "Enregistrer la révision",
+    approveToProject: "Approuver vers le projet",
+    approveCompletion: "Approuver l’achèvement",
+    recordSuggestion: "Enregistrer la suggestion",
+    approveAttachment: "Approuver la pièce jointe",
+    approveImage: "Approuver l’image",
+    approveArchive: "Approuver l’archivage",
+    approveDecision: "Approuver la décision",
+    approveFact: "Approuver le fait",
+    approveSource: "Approuver la source",
+    approveRelationship: "Approuver la relation",
+    approveQuestion: "Approuver la question",
+    approveAction: "Approuver l’action"
   },
   de: {
     languageName: "Deutsch",
@@ -307,7 +413,60 @@ const LANGUAGES = {
     actorReasonPlaceholder: "Warum ändert sich dieser Akteur?",
     addActorReasonPlaceholder: "Warum wird dieser Akteur hinzugefügt?",
     restoredBy: "Wiederhergestellt von",
-    restoreReason: "Grund der Wiederherstellung"
+    restoreReason: "Grund der Wiederherstellung",
+    addDecision: "Entscheidung hinzufügen",
+    addExtract: "Auszug hinzufügen",
+    addFact: "Fakt hinzufügen",
+    addNextAction: "Nächste Aktion hinzufügen",
+    addOpenQuestion: "Offene Frage hinzufügen",
+    addRelationship: "Beziehung hinzufügen",
+    addSource: "Quelle hinzufügen",
+    approve: "Genehmigen",
+    approveDraft: "Entwurf genehmigen",
+    approveExtract: "Auszug genehmigen",
+    archive: "Archivieren",
+    attachImage: "Bild anhängen",
+    attachSource: "Quelle anhängen",
+    cancel: "Abbrechen",
+    clearSearch: "Suche löschen",
+    createDraftProject: "Entwurfsprojekt erstellen",
+    dashboard: "Dashboard",
+    deleteProject: "Projekt löschen",
+    edit: "Bearbeiten",
+    editStatus: "Status bearbeiten",
+    exportFailedData: "Fehlerdaten exportieren",
+    markComplete: "Als erledigt markieren",
+    onePageOverview: "Einseitenübersicht",
+    open: "Öffnen",
+    readFileExtract: "Dateiauszug lesen",
+    reject: "Ablehnen",
+    review: "Prüfen",
+    suggestExtract: "Auszug vorschlagen",
+    unarchiveProject: "Projekt dearchivieren",
+    viewFullHistory: "Vollständigen Verlauf anzeigen",
+    viewHistory: "Verlauf anzeigen",
+    close: "Schließen",
+    saveToAirlock: "In Airlock speichern",
+    approveToProjectState: "Für Project State genehmigen",
+    approveProject: "Projekt genehmigen",
+    requestDeletion: "Löschung anfordern",
+    approveUnarchive: "Dearchivierung genehmigen",
+    approveChange: "Änderung genehmigen",
+    approveEdit: "Bearbeitung genehmigen",
+    createDraft: "Entwurf erstellen",
+    saveReview: "Prüfung speichern",
+    approveToProject: "Für Projekt genehmigen",
+    approveCompletion: "Abschluss genehmigen",
+    recordSuggestion: "Vorschlag erfassen",
+    approveAttachment: "Anhang genehmigen",
+    approveImage: "Bild genehmigen",
+    approveArchive: "Archivierung genehmigen",
+    approveDecision: "Entscheidung genehmigen",
+    approveFact: "Fakt genehmigen",
+    approveSource: "Quelle genehmigen",
+    approveRelationship: "Beziehung genehmigen",
+    approveQuestion: "Frage genehmigen",
+    approveAction: "Aktion genehmigen"
   },
   es: {
     languageName: "Español",
@@ -405,7 +564,60 @@ const LANGUAGES = {
     actorReasonPlaceholder: "¿Por qué cambia este actor?",
     addActorReasonPlaceholder: "¿Por qué se agrega este actor?",
     restoredBy: "Restaurado por",
-    restoreReason: "Razón de restauración"
+    restoreReason: "Razón de restauración",
+    addDecision: "Agregar decisión",
+    addExtract: "Agregar extracto",
+    addFact: "Agregar hecho",
+    addNextAction: "Agregar próxima acción",
+    addOpenQuestion: "Agregar pregunta abierta",
+    addRelationship: "Agregar relación",
+    addSource: "Agregar fuente",
+    approve: "Aprobar",
+    approveDraft: "Aprobar borrador",
+    approveExtract: "Aprobar extracto",
+    archive: "Archivar",
+    attachImage: "Adjuntar imagen",
+    attachSource: "Adjuntar fuente",
+    cancel: "Cancelar",
+    clearSearch: "Borrar búsqueda",
+    createDraftProject: "Crear proyecto borrador",
+    dashboard: "Panel",
+    deleteProject: "Eliminar proyecto",
+    edit: "Editar",
+    editStatus: "Editar estado",
+    exportFailedData: "Exportar datos fallidos",
+    markComplete: "Marcar completo",
+    onePageOverview: "Resumen de una página",
+    open: "Abrir",
+    readFileExtract: "Leer extracto de archivo",
+    reject: "Rechazar",
+    review: "Revisar",
+    suggestExtract: "Sugerir extracto",
+    unarchiveProject: "Desarchivar proyecto",
+    viewFullHistory: "Ver historial completo",
+    viewHistory: "Ver historial",
+    close: "Cerrar",
+    saveToAirlock: "Guardar en airlock",
+    approveToProjectState: "Aprobar a Project State",
+    approveProject: "Aprobar proyecto",
+    requestDeletion: "Solicitar eliminación",
+    approveUnarchive: "Aprobar desarchivado",
+    approveChange: "Aprobar cambio",
+    approveEdit: "Aprobar edición",
+    createDraft: "Crear borrador",
+    saveReview: "Guardar revisión",
+    approveToProject: "Aprobar al proyecto",
+    approveCompletion: "Aprobar finalización",
+    recordSuggestion: "Registrar sugerencia",
+    approveAttachment: "Aprobar adjunto",
+    approveImage: "Aprobar imagen",
+    approveArchive: "Aprobar archivado",
+    approveDecision: "Aprobar decisión",
+    approveFact: "Aprobar hecho",
+    approveSource: "Aprobar fuente",
+    approveRelationship: "Aprobar relación",
+    approveQuestion: "Aprobar pregunta",
+    approveAction: "Aprobar acción"
   }
 };
 const DRAFT_REVIEW_FLAGS = [
@@ -1704,8 +1916,8 @@ function renderRecoveryScreen() {
         <div class="stack">
           <p class="notice">Export the raw saved data before resetting. Reset should only be used after the failed data is backed up.</p>
           <div class="button-row">
-            <button class="btn" data-action="export-failed-data">Export Failed Data</button>
-            <button class="btn danger" data-action="reset-failed-data">Reset Local Data</button>
+            <button class="btn" data-action="export-failed-data">${escapeHtml(t("exportFailedData"))}</button>
+            <button class="btn danger" data-action="reset-failed-data">${escapeHtml(t("resetLocalData"))}</button>
           </div>
           <div class="recovery-details">
             <p class="meta-label">Error Details</p>
@@ -1814,7 +2026,7 @@ function renderProjectList() {
       <section class="empty-state">
         <h2>No active projects</h2>
         <p>Create a project or open Archived Projects to restore one.</p>
-        <button class="btn" data-action="create-project">Create Project</button>
+        <button class="btn" data-action="create-project">${escapeHtml(t("createProject"))}</button>
       </section>
     `}
   `);
@@ -1834,7 +2046,7 @@ function renderArchivedProjectList() {
       <section class="empty-state">
         <h2>No archived projects</h2>
         <p>Archived projects will appear here.</p>
-        <button class="btn secondary" data-action="show-projects">Back to Projects</button>
+        <button class="btn secondary" data-action="show-projects">${escapeHtml(t("backToProjects"))}</button>
       </section>
     `}
   `);
@@ -2131,8 +2343,8 @@ function renderProjectCard(project) {
       </div>
       ${renderObjectActions("Project", project.id, project.archived)}
       <div class="item-actions">
-        ${project.archived ? `<button class="btn secondary compact" data-action="unarchive-project" data-project-id="${project.id}">Unarchive Project</button>` : ""}
-        <button class="btn secondary compact" data-action="delete-project" data-project-id="${project.id}" ${project.deletionStatus ? "disabled" : ""}>Delete Project</button>
+        ${project.archived ? `<button class="btn secondary compact" data-action="unarchive-project" data-project-id="${project.id}">${escapeHtml(t("unarchiveProject"))}</button>` : ""}
+        <button class="btn secondary compact" data-action="delete-project" data-project-id="${project.id}" ${project.deletionStatus ? "disabled" : ""}>${escapeHtml(t("deleteProject"))}</button>
       </div>
     </div>
   `;
@@ -2153,7 +2365,7 @@ function renderIntakeQueue() {
         <h1 class="view-title">Intake Airlock</h1>
         <p class="view-subtitle">Outside arms can propose changes here. Human approval is required before anything reaches Project State.</p>
       </div>
-      <button class="btn" data-action="create-intake">Add Intake</button>
+      <button class="btn" data-action="create-intake">${escapeHtml(t("addIntake"))}</button>
     </section>
 
     <section class="dashboard-grid">
@@ -2191,9 +2403,9 @@ function renderIntakeItem(item) {
       ${item.review ? `<p class="item-meta">Reviewed by ${escapeHtml(actorDisplay(item.review.actorId, item.review.actorName))} · ${escapeHtml(formatDate(item.review.reviewedAt))}</p>` : ""}
       ${item.approval ? `<p class="item-meta">Approved by ${escapeHtml(actorDisplay(item.approval.approvedBy))} · ${escapeHtml(formatDate(item.approval.approvedAt))}</p>` : ""}
       <div class="item-actions">
-        ${item.status === "pending" && !item.archived ? `<button class="btn secondary compact" data-action="approve-intake" data-intake-id="${item.id}">Approve</button>` : ""}
-        ${item.status === "pending" && !item.archived ? `<button class="btn secondary compact" data-action="reject-intake" data-intake-id="${item.id}">Reject</button>` : ""}
-        ${!item.archived ? `<button class="btn secondary compact" data-action="archive-intake" data-intake-id="${item.id}">Archive</button>` : ""}
+        ${item.status === "pending" && !item.archived ? `<button class="btn secondary compact" data-action="approve-intake" data-intake-id="${item.id}">${escapeHtml(t("approve"))}</button>` : ""}
+        ${item.status === "pending" && !item.archived ? `<button class="btn secondary compact" data-action="reject-intake" data-intake-id="${item.id}">${escapeHtml(t("reject"))}</button>` : ""}
+        ${!item.archived ? `<button class="btn secondary compact" data-action="archive-intake" data-intake-id="${item.id}">${escapeHtml(t("archive"))}</button>` : ""}
       </div>
     </div>
   `;
@@ -2337,7 +2549,7 @@ function renderSearchResults() {
         <h1 class="view-title">Search</h1>
         <p class="view-subtitle">${results.length ? `${results.length} results for "${escapeDisplay(query, DISPLAY_META_LIMIT)}"` : `No results for "${escapeDisplay(query, DISPLAY_META_LIMIT)}"`}</p>
       </div>
-      <button class="btn secondary" data-action="clear-search">Clear Search</button>
+      <button class="btn secondary" data-action="clear-search">${escapeHtml(t("clearSearch"))}</button>
     </section>
     ${results.length ? `<section class="search-results">${results.map(renderSearchResult).join("")}</section>` : emptyText("Try a project name, decision, fact, source, action, relationship, image caption, or history reason.")}
   `);
@@ -2355,7 +2567,7 @@ function renderSearchResult(result) {
         <p class="item-meta">${escapeHtml(result.objectType)} · ${escapeDisplay(result.projectName, DISPLAY_META_LIMIT)}</p>
         ${result.description ? `<p class="item-body">${escapeDisplay(result.description)}</p>` : ""}
       </div>
-      <button class="btn secondary compact" data-action="${action}" ${data}>Open</button>
+      <button class="btn secondary compact" data-action="${action}" ${data}>${escapeHtml(t("open"))}</button>
     </article>
   `;
 }
@@ -2400,7 +2612,7 @@ function renderProject(project) {
         <article class="panel strong">
           <div class="panel-head">
             <h2 class="panel-title">Current Status</h2>
-            <button class="btn secondary" data-action="edit-status">Edit Status</button>
+            <button class="btn secondary" data-action="edit-status">${escapeHtml(t("editStatus"))}</button>
           </div>
           <p class="status-text">${escapeDisplay(project.currentStatus || "No status recorded.")}</p>
           <p class="summary-text">${escapeDisplay(project.currentSummary || "No current summary recorded.")}</p>
@@ -2411,7 +2623,7 @@ function renderProject(project) {
         <article class="panel">
           <div class="panel-head">
             <h2 class="panel-title">Next Action</h2>
-            <button class="btn secondary" data-action="add-action">Add Next Action</button>
+            <button class="btn secondary" data-action="add-action">${escapeHtml(t("addNextAction"))}</button>
           </div>
           ${renderActionList(recent(actions, 3))}
         </article>
@@ -2419,7 +2631,7 @@ function renderProject(project) {
         <article class="panel">
           <div class="panel-head">
             <h2 class="panel-title">Open Questions</h2>
-            <button class="btn secondary" data-action="add-question">Add Open Question</button>
+            <button class="btn secondary" data-action="add-question">${escapeHtml(t("addOpenQuestion"))}</button>
           </div>
           ${renderQuestionList(recent(questions, 5))}
         </article>
@@ -2427,7 +2639,7 @@ function renderProject(project) {
         <article class="panel">
           <div class="panel-head">
             <h2 class="panel-title">Facts</h2>
-            <button class="btn secondary" data-action="add-fact">Add Fact</button>
+            <button class="btn secondary" data-action="add-fact">${escapeHtml(t("addFact"))}</button>
           </div>
           ${renderFactList(recent(facts, 5))}
         </article>
@@ -2435,7 +2647,7 @@ function renderProject(project) {
         <article class="panel">
           <div class="panel-head">
             <h2 class="panel-title">Sources</h2>
-            <button class="btn secondary" data-action="add-source">Add Source</button>
+            <button class="btn secondary" data-action="add-source">${escapeHtml(t("addSource"))}</button>
           </div>
           ${renderSourceList(recent(sources, 5), project)}
         </article>
@@ -2445,7 +2657,7 @@ function renderProject(project) {
         <article class="panel">
           <div class="panel-head">
             <h2 class="panel-title">Recent Decisions</h2>
-            <button class="btn secondary" data-action="add-decision">Add Decision</button>
+            <button class="btn secondary" data-action="add-decision">${escapeHtml(t("addDecision"))}</button>
           </div>
           ${renderDecisionList(recent(decisions, 5))}
         </article>
@@ -2453,7 +2665,7 @@ function renderProject(project) {
         <article class="panel">
           <div class="panel-head">
             <h2 class="panel-title">Relationships</h2>
-            <button class="btn secondary" data-action="add-relationship">Add Relationship</button>
+            <button class="btn secondary" data-action="add-relationship">${escapeHtml(t("addRelationship"))}</button>
           </div>
           ${renderRelationshipList(recent(relationships, 5))}
         </article>
@@ -2468,7 +2680,7 @@ function renderProject(project) {
         <article class="panel">
           <div class="panel-head">
             <h2 class="panel-title">Recent Activity</h2>
-            <button class="btn secondary" data-action="view-history">View History</button>
+            <button class="btn secondary" data-action="view-history">${escapeHtml(t("viewHistory"))}</button>
           </div>
           ${renderActivityList(recent(changes, 5))}
         </article>
@@ -2479,7 +2691,7 @@ function renderProject(project) {
   const history = `
     <section class="history-list">
       <div class="history-controls">
-        ${activeHistoryFilter ? '<button class="btn secondary" data-action="clear-history-filter">View Full History</button>' : ""}
+        ${activeHistoryFilter ? `<button class="btn secondary" data-action="clear-history-filter">${escapeHtml(t("viewFullHistory"))}</button>` : ""}
         <label class="filter-label">
           Event Type
           <select data-history-event-filter>
@@ -2499,23 +2711,23 @@ function renderProject(project) {
         <p class="view-subtitle">Current state and historical record are kept in separate views.</p>
       </div>
       <div class="button-row">
-        <button class="btn secondary" data-action="edit-object" data-object-type="Project" data-object-id="${project.id}">Edit</button>
-        <button class="btn secondary" data-action="archive-object" data-object-type="Project" data-object-id="${project.id}" ${project.archived ? "disabled" : ""}>Archive</button>
-        ${project.archived ? `<button class="btn secondary" data-action="unarchive-project" data-project-id="${project.id}">Unarchive Project</button>` : ""}
-        <button class="btn secondary" data-action="delete-project" data-project-id="${project.id}" ${project.deletionStatus ? "disabled" : ""}>Delete Project</button>
-        <button class="btn secondary" data-action="project-overview">One Page Overview</button>
-        <button class="btn secondary" data-action="view-object-history" data-object-type="Project" data-object-id="${project.id}">View History</button>
-        <button class="btn secondary" data-action="add-decision">Add Decision</button>
-        <button class="btn secondary" data-action="add-fact">Add Fact</button>
-        <button class="btn secondary" data-action="add-source">Add Source</button>
-        <button class="btn secondary" data-action="add-relationship">Add Relationship</button>
-        <button class="btn secondary" data-action="add-question">Add Open Question</button>
-        <button class="btn secondary" data-action="add-action">Add Next Action</button>
+        <button class="btn secondary" data-action="edit-object" data-object-type="Project" data-object-id="${project.id}">${escapeHtml(t("edit"))}</button>
+        <button class="btn secondary" data-action="archive-object" data-object-type="Project" data-object-id="${project.id}" ${project.archived ? "disabled" : ""}>${escapeHtml(t("archive"))}</button>
+        ${project.archived ? `<button class="btn secondary" data-action="unarchive-project" data-project-id="${project.id}">${escapeHtml(t("unarchiveProject"))}</button>` : ""}
+        <button class="btn secondary" data-action="delete-project" data-project-id="${project.id}" ${project.deletionStatus ? "disabled" : ""}>${escapeHtml(t("deleteProject"))}</button>
+        <button class="btn secondary" data-action="project-overview">${escapeHtml(t("onePageOverview"))}</button>
+        <button class="btn secondary" data-action="view-object-history" data-object-type="Project" data-object-id="${project.id}">${escapeHtml(t("viewHistory"))}</button>
+        <button class="btn secondary" data-action="add-decision">${escapeHtml(t("addDecision"))}</button>
+        <button class="btn secondary" data-action="add-fact">${escapeHtml(t("addFact"))}</button>
+        <button class="btn secondary" data-action="add-source">${escapeHtml(t("addSource"))}</button>
+        <button class="btn secondary" data-action="add-relationship">${escapeHtml(t("addRelationship"))}</button>
+        <button class="btn secondary" data-action="add-question">${escapeHtml(t("addOpenQuestion"))}</button>
+        <button class="btn secondary" data-action="add-action">${escapeHtml(t("addNextAction"))}</button>
       </div>
     </section>
 
     <nav class="tabs" aria-label="Project views">
-      <button class="tab ${activeView === "dashboard" ? "active" : ""}" data-action="show-dashboard">Dashboard</button>
+      <button class="tab ${activeView === "dashboard" ? "active" : ""}" data-action="show-dashboard">${escapeHtml(t("dashboard"))}</button>
       <button class="tab ${activeView === "history" ? "active" : ""}" data-action="show-history">${escapeDisplay(historyTitle, DISPLAY_META_LIMIT)}</button>
     </nav>
 
@@ -2567,9 +2779,9 @@ function renderSourceList(sources, project) {
         ${source.summary ? `<p class="item-body">${escapeDisplay(source.summary)}</p>` : ""}
         ${source.tags?.length ? `<p class="item-meta">Tags: ${escapeDisplay(tagsToText(source.tags), DISPLAY_META_LIMIT)}</p>` : ""}
         <div class="item-actions">
-          <button class="btn secondary compact" data-action="add-extract" data-source-id="${source.id}">Add Extract</button>
-          <button class="btn secondary compact" data-action="read-file-extract" data-source-id="${source.id}">Read File Extract</button>
-          <button class="btn secondary compact" data-action="suggest-extract" data-source-id="${source.id}">Suggest Extract</button>
+          <button class="btn secondary compact" data-action="add-extract" data-source-id="${source.id}">${escapeHtml(t("addExtract"))}</button>
+          <button class="btn secondary compact" data-action="read-file-extract" data-source-id="${source.id}">${escapeHtml(t("readFileExtract"))}</button>
+          <button class="btn secondary compact" data-action="suggest-extract" data-source-id="${source.id}">${escapeHtml(t("suggestExtract"))}</button>
         </div>
         ${renderObjectActions("Source", source.id, source.status === "archived")}
         ${renderExtractList(recent(extracts, 3))}
@@ -2592,8 +2804,8 @@ function renderExtractList(extracts) {
       <p class="item-meta">${escapeHtml(actorDisplay(extract.actorId))} · ${escapeHtml(formatDate(extract.dateAdded))}</p>
       ${extract.tags?.length ? `<p class="item-meta">Tags: ${escapeDisplay(tagsToText(extract.tags), DISPLAY_META_LIMIT)}</p>` : ""}
       ${renderAttachedSources(extract)}
-      <div class="item-actions"><button class="btn secondary compact" data-action="create-draft-project" data-object-id="${extract.id}">Create Draft Project</button></div>
-      ${extract.extractMode === "ai_suggested" && extract.suggestionStatus === "pending_approval" ? `<div class="item-actions"><button class="btn secondary compact" data-action="approve-extract" data-object-id="${extract.id}">Approve Extract</button></div>` : ""}
+      <div class="item-actions"><button class="btn secondary compact" data-action="create-draft-project" data-object-id="${extract.id}">${escapeHtml(t("createDraftProject"))}</button></div>
+      ${extract.extractMode === "ai_suggested" && extract.suggestionStatus === "pending_approval" ? `<div class="item-actions"><button class="btn secondary compact" data-action="approve-extract" data-object-id="${extract.id}">${escapeHtml(t("approveExtract"))}</button></div>` : ""}
       ${renderObjectActions("Extract", extract.id, extract.status === "archived")}
     </div>
   `).join("")}</div>`;
@@ -2625,10 +2837,10 @@ function renderDraftProjectList(draftProjects) {
       ${renderAttachedSources(draftProject)}
       ${renderAttachedImages(draftProject)}
       <div class="item-actions">
-        <button class="btn secondary compact" data-action="edit-object" data-object-type="DraftProject" data-object-id="${draftProject.id}">Review</button>
-        <button class="btn secondary compact" data-action="approve-draft-project" data-object-id="${draftProject.id}" ${draftProject.status === "approved" || !draftProject.reviewFlags?.readyForApproval ? "disabled" : ""}>Approve Draft</button>
-        <button class="btn secondary compact" data-action="archive-object" data-object-type="DraftProject" data-object-id="${draftProject.id}" ${draftProject.status === "archived" ? "disabled" : ""}>Archive</button>
-        <button class="btn secondary compact" data-action="view-object-history" data-object-type="DraftProject" data-object-id="${draftProject.id}">View History</button>
+        <button class="btn secondary compact" data-action="edit-object" data-object-type="DraftProject" data-object-id="${draftProject.id}">${escapeHtml(t("review"))}</button>
+        <button class="btn secondary compact" data-action="approve-draft-project" data-object-id="${draftProject.id}" ${draftProject.status === "approved" || !draftProject.reviewFlags?.readyForApproval ? "disabled" : ""}>${escapeHtml(t("approveDraft"))}</button>
+        <button class="btn secondary compact" data-action="archive-object" data-object-type="DraftProject" data-object-id="${draftProject.id}" ${draftProject.status === "archived" ? "disabled" : ""}>${escapeHtml(t("archive"))}</button>
+        <button class="btn secondary compact" data-action="view-object-history" data-object-type="DraftProject" data-object-id="${draftProject.id}">${escapeHtml(t("viewHistory"))}</button>
       </div>
     </div>
   `).join("")}</div>`;
@@ -2677,7 +2889,7 @@ function renderActionList(actions) {
       <p class="item-meta">${action.owner ? `${escapeDisplay(action.owner, DISPLAY_META_LIMIT)} · ` : ""}${escapeHtml(actorDisplay(action.actorId))}</p>
       ${renderAttachedSources(action)}
       ${renderAttachedImages(action)}
-      ${getActionStatus(action) === "open" ? `<div class="item-actions"><button class="btn secondary compact" data-action="mark-complete" data-object-id="${action.id}">Mark Complete</button></div>` : ""}
+      ${getActionStatus(action) === "open" ? `<div class="item-actions"><button class="btn secondary compact" data-action="mark-complete" data-object-id="${action.id}">${escapeHtml(t("markComplete"))}</button></div>` : ""}
       ${renderObjectActions("NextAction", action.id, action.status === "archived")}
     </div>
   `).join("")}</div>`;
@@ -2685,18 +2897,18 @@ function renderActionList(actions) {
 
 function renderObjectActions(objectType, objectId, archived = false) {
   const attachSource = canAttachSource(objectType)
-    ? `<button class="btn secondary compact" data-action="attach-source" data-object-type="${objectType}" data-object-id="${objectId}">Attach Source</button>`
+    ? `<button class="btn secondary compact" data-action="attach-source" data-object-type="${objectType}" data-object-id="${objectId}">${escapeHtml(t("attachSource"))}</button>`
     : "";
   const attachImage = canAttachImage(objectType)
-    ? `<button class="btn secondary compact" data-action="attach-image" data-object-type="${objectType}" data-object-id="${objectId}">Attach Image</button>`
+    ? `<button class="btn secondary compact" data-action="attach-image" data-object-type="${objectType}" data-object-id="${objectId}">${escapeHtml(t("attachImage"))}</button>`
     : "";
   return `
     <div class="item-actions">
-      <button class="btn secondary compact" data-action="edit-object" data-object-type="${objectType}" data-object-id="${objectId}">Edit</button>
+      <button class="btn secondary compact" data-action="edit-object" data-object-type="${objectType}" data-object-id="${objectId}">${escapeHtml(t("edit"))}</button>
       ${attachSource}
       ${attachImage}
-      <button class="btn secondary compact" data-action="archive-object" data-object-type="${objectType}" data-object-id="${objectId}" ${archived ? "disabled" : ""}>Archive</button>
-      <button class="btn secondary compact" data-action="view-object-history" data-object-type="${objectType}" data-object-id="${objectId}">View History</button>
+      <button class="btn secondary compact" data-action="archive-object" data-object-type="${objectType}" data-object-id="${objectId}" ${archived ? "disabled" : ""}>${escapeHtml(t("archive"))}</button>
+      <button class="btn secondary compact" data-action="view-object-history" data-object-type="${objectType}" data-object-id="${objectId}">${escapeHtml(t("viewHistory"))}</button>
     </div>
   `;
 }
@@ -2784,7 +2996,7 @@ function renderHistoryItem(change) {
         <p class="history-detail">Changed: ${escapeDisplay(describeDetails(change.details))}</p>
         ${renderAttachedImages(change)}
         <div class="item-actions">
-          <button class="btn secondary compact" data-action="attach-image" data-object-type="Change" data-object-id="${change.id}">Attach Image</button>
+          <button class="btn secondary compact" data-action="attach-image" data-object-type="Change" data-object-id="${change.id}">${escapeHtml(t("attachImage"))}</button>
         </div>
       </div>
     </article>
@@ -2888,7 +3100,7 @@ function exportCurrentRawData() {
 function openRestoreStorageModal() {
   showModal({
     title: "Restore Project State Backup",
-    submitText: "Restore Backup",
+    submitText: t("restoreBackup"),
     body: `
       <p class="notice">Restore replaces the local storage spine with the selected backup file. This does not use a server.</p>
       <div class="field">
@@ -3072,7 +3284,7 @@ function openProjectOverviewModal() {
   if (!project) return;
   showModal({
     title: "One Page Overview",
-    submitText: "Close",
+    submitText: t("close"),
     body: renderProjectOverview(project),
     onSubmit() {}
   });
@@ -3166,7 +3378,7 @@ function showModal({ title, body, submitText, onSubmit }) {
         ${body}
       </form>
       <div class="form-footer">
-        <button class="btn secondary" type="button" data-close-modal>Cancel</button>
+        <button class="btn secondary" type="button" data-close-modal>${escapeHtml(t("cancel"))}</button>
         <button class="btn" type="submit" form="modal-form">${escapeHtml(submitText)}</button>
       </div>
     </section>
@@ -3314,7 +3526,7 @@ function projectOptions(selected = "") {
 function openCreateIntakeModal() {
   showModal({
     title: "Add Intake",
-    submitText: "Save to Airlock",
+    submitText: t("saveToAirlock"),
     body: `
       <p class="notice">This creates a proposed change only. It will not change Project State until approved.</p>
       <div class="field">
@@ -3389,7 +3601,7 @@ function openApproveIntakeModal(intakeId) {
   if (!intake || intake.status !== "pending" || intake.archived) return;
   showModal({
     title: "Approve Intake",
-    submitText: "Approve to Project State",
+    submitText: t("approveToProjectState"),
     body: `
       <p class="notice">Approval applies this proposed change to the selected project and records it in history.</p>
       ${renderIntakeApprovalPreview(intake)}
@@ -3408,7 +3620,7 @@ function openRejectIntakeModal(intakeId) {
   if (!intake || intake.status !== "pending" || intake.archived) return;
   showModal({
     title: "Reject Intake",
-    submitText: "Reject",
+    submitText: t("reject"),
     body: `
       <p class="notice">Rejecting keeps the intake record but prevents it from reaching Project State.</p>
       ${auditFields()}
@@ -3433,7 +3645,7 @@ function openArchiveIntakeModal(intakeId) {
   if (!intake || intake.archived) return;
   showModal({
     title: "Archive Intake",
-    submitText: "Archive",
+    submitText: t("archive"),
     body: `
       <p class="notice">Archiving removes the intake from active review but keeps the record in the storage spine.</p>
       ${auditFields()}
@@ -3646,7 +3858,7 @@ function applyApprovedIntakeToCore(intake, actor, reason, approval) {
 function openCreateProjectModal() {
   showModal({
     title: "Create Project",
-    submitText: "Approve Project",
+    submitText: t("approveProject"),
     body: `
       <div class="field">
         <label for="name">Project Name</label>
@@ -3717,7 +3929,7 @@ function openDeleteProjectModal(projectId) {
 
   showModal({
     title: "Delete Project",
-    submitText: "Request Deletion",
+    submitText: t("requestDeletion"),
     body: `
       <p class="notice">Deletion does not remove data in v0.1. The project will be archived and flagged as pending deletion approval. The final approval process is still to be determined.</p>
       ${confirmationField("confirmDelete", "I understand this will archive the project and request deletion approval.")}
@@ -3760,7 +3972,7 @@ function openUnarchiveProjectModal(projectId) {
 
   showModal({
     title: "Unarchive Project",
-    submitText: "Approve Unarchive",
+    submitText: t("approveUnarchive"),
     body: `
       <p class="notice">Unarchiving returns the project to current use and records the approval in history.</p>
       ${auditFields()}
@@ -3797,7 +4009,7 @@ function openEditStatusModal() {
   const project = getProject();
   showModal({
     title: "Edit Current Status",
-    submitText: "Approve Change",
+    submitText: t("approveChange"),
     body: `
       <div class="field">
         <label for="currentStatus">Current Status</label>
@@ -3896,7 +4108,7 @@ function openEditObjectModal(objectType, objectId) {
 function openEditProjectModal(project) {
   showModal({
     title: "Edit Project",
-    submitText: "Approve Edit",
+    submitText: t("approveEdit"),
     body: `
       <div class="field">
         <label for="name">Project Name</label>
@@ -3953,7 +4165,7 @@ function openEditProjectModal(project) {
 function openEditDecisionModal(project, decision) {
   showModal({
     title: "Edit Decision",
-    submitText: "Approve Edit",
+    submitText: t("approveEdit"),
     body: `
       <div class="field">
         <label for="decision">Decision</label>
@@ -3995,7 +4207,7 @@ function openEditDecisionModal(project, decision) {
 function openEditFactModal(project, fact) {
   showModal({
     title: "Edit Fact",
-    submitText: "Approve Edit",
+    submitText: t("approveEdit"),
     body: `
       <div class="field">
         <label for="statement">Fact</label>
@@ -4045,7 +4257,7 @@ function openEditFactModal(project, fact) {
 function openEditSourceModal(project, source) {
   showModal({
     title: "Edit Source",
-    submitText: "Approve Edit",
+    submitText: t("approveEdit"),
     body: `
       <div class="field">
         <label for="title">Title</label>
@@ -4128,7 +4340,7 @@ function openEditSourceModal(project, source) {
 function openEditExtractModal(project, extract) {
   showModal({
     title: "Edit Extract",
-    submitText: "Approve Edit",
+    submitText: t("approveEdit"),
     body: `
       <div class="field">
         <label for="text">Extract</label>
@@ -4195,7 +4407,7 @@ function openEditExtractModal(project, extract) {
 function openEditRelationshipModal(project, relationship) {
   showModal({
     title: "Edit Relationship",
-    submitText: "Approve Edit",
+    submitText: t("approveEdit"),
     body: `
       <div class="field">
         <label for="target">Related Project or Entity</label>
@@ -4256,7 +4468,7 @@ function openCreateDraftProjectModal(extractId) {
 
   showModal({
     title: "Create Draft Project",
-    submitText: "Create Draft",
+    submitText: t("createDraft"),
     body: `
       <p class="notice">This creates a draft from the selected extract. It does not create a new project until approved.</p>
       <div class="field">
@@ -4314,7 +4526,7 @@ function openEditDraftProjectModal(project, draftProject) {
   const flags = normalizeDraftReviewFlags(draftProject.reviewFlags);
   showModal({
     title: "Review Draft Project",
-    submitText: "Save Review",
+    submitText: t("saveReview"),
     body: `
       <div class="field">
         <label for="name">Name</label>
@@ -4393,7 +4605,7 @@ function openApproveDraftProjectModal(draftProjectId) {
 
   showModal({
     title: "Approve Draft Project",
-    submitText: "Approve to Project",
+    submitText: t("approveToProject"),
     body: `
       <p class="notice">Approval creates a new project from this draft and records the approval on the draft.</p>
       <div class="field">
@@ -4495,7 +4707,7 @@ function openApproveDraftProjectModal(draftProjectId) {
 function openEditQuestionModal(project, question) {
   showModal({
     title: "Edit Open Question",
-    submitText: "Approve Edit",
+    submitText: t("approveEdit"),
     body: `
       <div class="field">
         <label for="question">Open Question</label>
@@ -4535,7 +4747,7 @@ function openEditQuestionModal(project, question) {
 function openEditActionModal(project, action) {
   showModal({
     title: "Edit Next Action",
-    submitText: "Approve Edit",
+    submitText: t("approveEdit"),
     body: `
       <div class="field">
         <label for="action">Next Action</label>
@@ -4609,7 +4821,7 @@ function openMarkCompleteModal(actionId) {
 
   showModal({
     title: "Mark Action Complete",
-    submitText: "Approve Completion",
+    submitText: t("approveCompletion"),
     body: `
       <div class="field">
         <label for="completedAt">Completed Date</label>
@@ -4649,7 +4861,7 @@ function openAISuggestExtractModal(sourceId) {
 
   showModal({
     title: "AI Suggest Extract",
-    submitText: "Record Suggestion",
+    submitText: t("recordSuggestion"),
     body: `
       <div class="field">
         <label for="suggestedBy">Suggested By</label>
@@ -4714,7 +4926,7 @@ function openApproveExtractModal(extractId) {
 
   showModal({
     title: "Approve Extract",
-    submitText: "Approve Extract",
+    submitText: t("approveExtract"),
     body: `
       <p class="notice">Approval records this AI suggestion as accepted by a human reviewer.</p>
       ${auditFields()}
@@ -4751,7 +4963,7 @@ function openAttachSourceModal(objectType, objectId) {
   if (!sources.length) {
     showModal({
       title: "Attach Source",
-      submitText: "Close",
+      submitText: t("close"),
       body: '<p class="notice">Add a source before attaching one to this object.</p>',
       onSubmit() {}
     });
@@ -4760,7 +4972,7 @@ function openAttachSourceModal(objectType, objectId) {
 
   showModal({
     title: "Attach Source",
-    submitText: "Approve Attachment",
+    submitText: t("approveAttachment"),
     body: `
       <div class="field">
         <label for="sourceId">Source</label>
@@ -4811,7 +5023,7 @@ function openAttachImageModal(objectType, objectId) {
 
   showModal({
     title: "Attach Image",
-    submitText: "Approve Image",
+    submitText: t("approveImage"),
     body: `
       <div class="field">
         <label for="imageFile">Image File</label>
@@ -4879,7 +5091,7 @@ function openImageViewer(objectType, objectId, imageId) {
 
   showModal({
     title: image.fileName || "Attached Image",
-    submitText: "Close",
+    submitText: t("close"),
     body: `
       <div class="image-viewer">
         ${image.dataUrl ? `<img src="${escapeHtml(image.dataUrl)}" alt="${escapeHtml(image.caption || image.fileName || "Attached image")}">` : emptyText("Image data is not available.")}
@@ -4899,7 +5111,7 @@ function openArchiveObjectModal(objectType, objectId) {
 
   showModal({
     title: `Archive ${objectType}`,
-    submitText: "Approve Archive",
+    submitText: t("approveArchive"),
     body: `
       <p class="notice">Archiving removes the object from the current dashboard but keeps its history.</p>
       ${confirmationField("confirmArchive", `I confirm this ${objectType} should be archived.`)}
@@ -4932,7 +5144,7 @@ function openDecisionModal() {
   const project = getProject();
   showModal({
     title: "Add Decision",
-    submitText: "Approve Decision",
+    submitText: t("approveDecision"),
     body: `
       <div class="field">
         <label for="decision">Decision</label>
@@ -4975,7 +5187,7 @@ function openFactModal() {
   const project = getProject();
   showModal({
     title: "Add Fact",
-    submitText: "Approve Fact",
+    submitText: t("approveFact"),
     body: `
       <div class="field">
         <label for="statement">Fact</label>
@@ -5028,7 +5240,7 @@ function openSourceModal() {
   const project = getProject();
   showModal({
     title: "Add Source",
-    submitText: "Approve Source",
+    submitText: t("approveSource"),
     body: `
       <div class="field">
         <label for="title">Title</label>
@@ -5108,7 +5320,7 @@ function openExtractModal(sourceId) {
 
   showModal({
     title: "Add Extract",
-    submitText: "Approve Extract",
+    submitText: t("approveExtract"),
     body: `
       <div class="field">
         <label for="text">Extract</label>
@@ -5173,7 +5385,7 @@ function openReadFileExtractModal(sourceId) {
 
   showModal({
     title: "Read File Extract",
-    submitText: "Approve Extract",
+    submitText: t("approveExtract"),
     body: `
       <p class="notice">Reads TXT/MD directly. PDF and DOCX extraction is best-effort and stays local.</p>
       <div class="field">
@@ -5271,7 +5483,7 @@ function openRelationshipModal() {
   const project = getProject();
   showModal({
     title: "Add Relationship",
-    submitText: "Approve Relationship",
+    submitText: t("approveRelationship"),
     body: `
       <div class="field">
         <label for="target">Related Project or Entity</label>
@@ -5321,7 +5533,7 @@ function openQuestionModal() {
   const project = getProject();
   showModal({
     title: "Add Open Question",
-    submitText: "Approve Question",
+    submitText: t("approveQuestion"),
     body: `
       <div class="field">
         <label for="question">Open Question</label>
@@ -5359,7 +5571,7 @@ function openActionModal() {
   const project = getProject();
   showModal({
     title: "Add Next Action",
-    submitText: "Approve Action",
+    submitText: t("approveAction"),
     body: `
       <div class="field">
         <label for="action">Next Action</label>
