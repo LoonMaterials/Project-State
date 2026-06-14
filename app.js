@@ -3,7 +3,10 @@ const STORAGE_DB_NAME = "project-state-spine";
 const STORAGE_DB_VERSION = 1;
 const STORAGE_OBJECT_STORE = "records";
 const STORAGE_MAIN_RECORD = "main";
+const STORAGE_META_RECORD = "spine-meta";
 const STORAGE_LEGACY_BACKUP_RECORD = "legacy-json-backup";
+const STORAGE_SPINE_VERSION = "0.2.0-phase1";
+const STORAGE_LAYOUT_VERSION = "single-record-v1";
 const DISPLAY_TEXT_LIMIT = 1200;
 const DISPLAY_META_LIMIT = 240;
 const EXTRACT_TEXT_LIMIT = 5000;
@@ -327,7 +330,195 @@ const LANGUAGES = {
     approveSource: "Approve Source",
     approveRelationship: "Approve Relationship",
     approveQuestion: "Approve Question",
-    approveAction: "Approve Action"
+    approveAction: "Approve Action",
+    restoreProjectStateBackup: "Restore Project State Backup",
+    approveIntake: "Approve Intake",
+    rejectIntake: "Reject Intake",
+    archiveIntake: "Archive Intake",
+    editCurrentStatus: "Edit Current Status",
+    editProject: "Edit Project",
+    editDecision: "Edit Decision",
+    editFact: "Edit Fact",
+    editSource: "Edit Source",
+    editExtract: "Edit Extract",
+    editRelationship: "Edit Relationship",
+    reviewDraftProject: "Review Draft Project",
+    editOpenQuestion: "Edit Open Question",
+    editNextAction: "Edit Next Action",
+    markActionComplete: "Mark Action Complete",
+    relationshipPlaceholder: "Parent, child, dependency, related",
+    historyReason: "Reason",
+    historyChanged: "Changed",
+    savedDataNeedsRecovery: "Saved Data Needs Recovery",
+    noActiveProjects: "No active projects",
+    noArchivedProjects: "No archived projects",
+    roleDefinitions: "Role Definitions",
+    intakeAirlock: "Intake Airlock",
+    intakeAirlockSubtitle: "Outside arms can propose changes here. Human approval is required before anything reaches Project State.",
+    pendingReview: "Pending Review",
+    reviewedIntake: "Reviewed Intake",
+    currentState: "Current State",
+    currentObjects: "Current Objects",
+    recentActivity: "Recent Activity",
+    recentDecisions: "Recent Decisions",
+    relationships: "Relationships",
+    facts: "Facts",
+    sources: "Sources",
+    draftProjects: "Draft Projects",
+    lastUpdated: "Last Updated",
+    updatedBy: "Updated By",
+    health: "Health",
+    project: "Project",
+    generated: "Generated",
+    extract: "Extract",
+    attachedImages: "Attached Images:",
+    attachedSources: "Attached Sources:",
+    allEvents: "All events",
+    eventType: "Event Type",
+    projectName: "Project Name",
+    currentStatus: "Current Status",
+    projectHealth: "Project Health",
+    currentSummary: "Current Summary",
+    backupFile: "Backup File",
+    arm: "Arm",
+    targetProject: "Target Project",
+    proposedChangeType: "Proposed Change Type",
+    intakeTitle: "Intake Title",
+    proposedText: "Proposed Text",
+    summaryContext: "Summary / Context",
+    sourceOriginLabel: "Source / Origin Label",
+    relationshipTargetOwner: "Relationship Target / Owner",
+    dueDate: "Due Date",
+    decision: "Decision",
+    confidence: "Confidence",
+    fact: "Fact",
+    source: "Source",
+    title: "Title",
+    type: "Type",
+    dateAdded: "Date Added",
+    location: "Location",
+    findLocalFile: "Find Local File",
+    summary: "Summary",
+    tags: "Tags",
+    mode: "Mode",
+    relatedProjectOrEntity: "Related Project or Entity",
+    relationshipType: "Relationship Type",
+    notes: "Notes",
+    name: "Name",
+    draft: "Draft",
+    approvedProjectName: "Approved Project Name",
+    approvedProjectSummary: "Approved Project Summary",
+    openQuestion: "Open Question",
+    openQuestions: "Open Questions",
+    context: "Context",
+    nextAction: "Next Action",
+    nextActions: "Next Actions",
+    ownerField: "Owner",
+    completedDate: "Completed Date",
+    suggestedBy: "Suggested By",
+    suggestedExtract: "Suggested Extract",
+    imageFile: "Image File",
+    captionNotes: "Caption / Notes",
+    file: "File",
+    addSourceBeforeAttaching: "Add a source before attaching one to this object.",
+    approvalAppliesChangeNotice: "Approval applies this proposed change to the selected project and records it in history.",
+    approvalCreatesProjectNotice: "Approval creates a new project from this draft and records the approval on the draft.",
+    approvalRecordsSuggestionNotice: "Approval records this AI suggestion as accepted by a human reviewer.",
+    archivedProjectsNotice: "Archived projects are kept out of the active project list. Unarchive a project to return it to current use.",
+    archivedProjectsEmpty: "Archived projects will appear here.",
+    archiveIntakeNotice: "Archiving removes the intake from active review but keeps the record in the storage spine.",
+    archiveObjectNotice: "Archiving removes the object from the current dashboard but keeps its history.",
+    chooseProjectEmpty: "Choose a project to see its current state and history.",
+    createProjectEmpty: "Create a project or open Archived Projects to restore one.",
+    stateHistorySeparate: "Current state and historical record are kept in separate views.",
+    deletionNotice: "Deletion does not remove data in v0.1. The project will be archived and flagged as pending deletion approval. The final approval process is still to be determined.",
+    errorDetails: "Error Details",
+    recoveryExportNotice: "Export the raw saved data before resetting. Reset should only be used after the failed data is backed up.",
+    recoveryLoadNotice: "Project State could not safely load the saved local data. The original saved data has not been changed.",
+    readsFileExtractNotice: "Reads TXT/MD directly. PDF and DOCX extraction is best-effort and stays local.",
+    rejectIntakeNotice: "Rejecting keeps the intake record but prevents it from reaching Project State.",
+    restoreBackupNotice: "Restore replaces the local storage spine with the selected backup file. This does not use a server.",
+    createDraftFromExtractNotice: "This creates a draft from the selected extract. It does not create a new project until approved.",
+    proposedChangeNotice: "This creates a proposed change only. It will not change Project State until approved.",
+    unarchiveNotice: "Unarchiving returns the project to current use and records the approval in history.",
+    validationReasonRequired: "A reason is required.",
+    validationActorRequired: "Actor is required.",
+    validationActorNameRequired: "Actor name is required.",
+    validationActorExists: "An actor with this name already exists.",
+    validationExtractFileType: "Choose a PDF, DOCX, TXT, or MD file.",
+    validationImageFileType: "Choose a PNG, JPG, WEBP, or GIF image.",
+    validationBackupFileType: "Choose a Project State backup JSON file.",
+    validationDefaultActorArchive: "Choose a different default actor before archiving this actor.",
+    validationActiveDefaultActor: "Choose an active default actor.",
+    validationConfirmLocalMode: "Confirm local mode before continuing.",
+    validationConfirmRestore: "Confirm restore before continuing.",
+    validationNoReadableText: "No readable text was found in this file.",
+    validationPrimaryActorRequired: "Primary actor is required.",
+    validationStorageOverrideReason: "Record the storage override reason.",
+    validationBackupOverrideReason: "Record the backup override reason.",
+    validationRestoreReasonRequired: "Restore reason is required.",
+    validationBackupUnreadable: "This backup file is not readable JSON.",
+    validationInvalidBackup: "This is not a valid Project State backup.",
+    validationReadExtractFailed: "Could not read text from this file.",
+    notRecorded: "Not recorded",
+    noErrorDetailsRecorded: "No error details recorded.",
+    noCurrentStatusRecorded: "No current status recorded.",
+    noStatusRecorded: "No status recorded.",
+    noCurrentSummaryRecorded: "No current summary recorded.",
+    noChangesRecordedForFilter: "No changes recorded for this filter.",
+    noDecisionsRecorded: "No decisions recorded.",
+    noFactsRecorded: "No facts recorded.",
+    noSourcesRecorded: "No sources recorded.",
+    noRelationshipsRecorded: "No relationships recorded.",
+    noDraftProjects: "No draft projects.",
+    noOpenQuestions: "No open questions.",
+    noNextActions: "No next actions.",
+    noRecentActivity: "No recent activity.",
+    noDraftTextRecorded: "No draft text recorded.",
+    noReasonRecorded: "No reason recorded.",
+    noContextRecorded: "No context recorded.",
+    noProposedTextRecorded: "No proposed text recorded.",
+    noPendingIntake: "No pending intake. Future arms should land here before touching the core.",
+    noReviewedIntake: "No reviewed intake yet.",
+    searchEmptyHint: "Try a project name, decision, fact, source, action, relationship, image caption, or history reason.",
+    missingProject: "Missing project",
+    noTargetProject: "No target project",
+    target: "Target",
+    created: "Created",
+    reviewedBy: "Reviewed by",
+    approvedBy: "Approved by",
+    untitled: "Untitled",
+    untitledIntake: "Untitled intake",
+    untitledObject: "Untitled object",
+    untitledSource: "Untitled Source",
+    attachedImageAlt: "Attached image",
+    imageDataUnavailable: "Image data is not available.",
+    calendar: "Calendar",
+    meeting: "Meeting",
+    email: "Email",
+    other: "Other",
+    projectStatus: "Project Status",
+    proposedChange: "Proposed Change",
+    permissions: "Permissions",
+    restrictions: "Restrictions",
+    schemaVersion: "Schema Version",
+    storageModeLabel: "Storage Mode",
+    lastSettingsUpdate: "Last Settings Update",
+    lastBackupExport: "Last Backup Export",
+    lastRestore: "Last Restore",
+    storageSpineVersion: "Storage Spine Version",
+    storageLayout: "Storage Layout",
+    storageSnapshotBytes: "Storage Snapshot Bytes",
+    attachmentRecords: "Attachment Records",
+    extractTextCharacters: "Extract Text Characters",
+    storageSizeLabel: "Storage Size",
+    activeProjectsLabel: "Active Projects",
+    archivedProjectsLabel: "Archived Projects",
+    actorsLabel: "Actors",
+    changesLabel: "Changes",
+    sourcesLabel: "Sources",
+    extractsLabel: "Extracts",
+    imagesLabel: "Images"
   },
   fr: {
     languageName: "Français",
@@ -502,7 +693,195 @@ const LANGUAGES = {
     approveSource: "Approuver la source",
     approveRelationship: "Approuver la relation",
     approveQuestion: "Approuver la question",
-    approveAction: "Approuver l’action"
+    approveAction: "Approuver l’action",
+    restoreProjectStateBackup: "Restaurer une sauvegarde Project State",
+    approveIntake: "Approuver l’entrée",
+    rejectIntake: "Rejeter l’entrée",
+    archiveIntake: "Archiver l’entrée",
+    editCurrentStatus: "Modifier le statut actuel",
+    editProject: "Modifier le projet",
+    editDecision: "Modifier la décision",
+    editFact: "Modifier le fait",
+    editSource: "Modifier la source",
+    editExtract: "Modifier l’extrait",
+    editRelationship: "Modifier la relation",
+    reviewDraftProject: "Réviser le projet brouillon",
+    editOpenQuestion: "Modifier la question ouverte",
+    editNextAction: "Modifier la prochaine action",
+    markActionComplete: "Marquer l’action terminée",
+    relationshipPlaceholder: "Parent, enfant, dépendance, lié",
+    historyReason: "Raison",
+    historyChanged: "Modifié",
+    savedDataNeedsRecovery: "Les données enregistrées doivent être récupérées",
+    noActiveProjects: "Aucun projet actif",
+    noArchivedProjects: "Aucun projet archivé",
+    roleDefinitions: "Définitions des rôles",
+    intakeAirlock: "Airlock d’entrée",
+    intakeAirlockSubtitle: "Les bras externes peuvent proposer des changements ici. Une approbation humaine est requise avant toute entrée dans Project State.",
+    pendingReview: "En attente de révision",
+    reviewedIntake: "Entrées révisées",
+    currentState: "État actuel",
+    currentObjects: "Objets actuels",
+    recentActivity: "Activité récente",
+    recentDecisions: "Décisions récentes",
+    relationships: "Relations",
+    facts: "Faits",
+    sources: "Sources",
+    draftProjects: "Projets brouillons",
+    lastUpdated: "Dernière mise à jour",
+    updatedBy: "Mis à jour par",
+    health: "Santé",
+    project: "Projet",
+    generated: "Généré",
+    extract: "Extrait",
+    attachedImages: "Images jointes :",
+    attachedSources: "Sources jointes :",
+    allEvents: "Tous les événements",
+    eventType: "Type d’événement",
+    projectName: "Nom du projet",
+    currentStatus: "Statut actuel",
+    projectHealth: "Santé du projet",
+    currentSummary: "Résumé actuel",
+    backupFile: "Fichier de sauvegarde",
+    arm: "Bras",
+    targetProject: "Projet cible",
+    proposedChangeType: "Type de changement proposé",
+    intakeTitle: "Titre de l’entrée",
+    proposedText: "Texte proposé",
+    summaryContext: "Résumé / Contexte",
+    sourceOriginLabel: "Libellé de source / origine",
+    relationshipTargetOwner: "Cible / responsable de la relation",
+    dueDate: "Date d’échéance",
+    decision: "Décision",
+    confidence: "Confiance",
+    fact: "Fait",
+    source: "Source",
+    title: "Titre",
+    type: "Type",
+    dateAdded: "Date ajoutée",
+    location: "Emplacement",
+    findLocalFile: "Trouver un fichier local",
+    summary: "Résumé",
+    tags: "Étiquettes",
+    mode: "Mode",
+    relatedProjectOrEntity: "Projet ou entité liée",
+    relationshipType: "Type de relation",
+    notes: "Notes",
+    name: "Nom",
+    draft: "Brouillon",
+    approvedProjectName: "Nom du projet approuvé",
+    approvedProjectSummary: "Résumé du projet approuvé",
+    openQuestion: "Question ouverte",
+    openQuestions: "Questions ouvertes",
+    context: "Contexte",
+    nextAction: "Prochaine action",
+    nextActions: "Prochaines actions",
+    ownerField: "Responsable",
+    completedDate: "Date d’achèvement",
+    suggestedBy: "Suggéré par",
+    suggestedExtract: "Extrait suggéré",
+    imageFile: "Fichier image",
+    captionNotes: "Légende / Notes",
+    file: "Fichier",
+    addSourceBeforeAttaching: "Ajoutez une source avant d’en joindre une à cet objet.",
+    approvalAppliesChangeNotice: "L’approbation applique ce changement proposé au projet sélectionné et l’enregistre dans l’historique.",
+    approvalCreatesProjectNotice: "L’approbation crée un nouveau projet à partir de ce brouillon et enregistre l’approbation sur le brouillon.",
+    approvalRecordsSuggestionNotice: "L’approbation enregistre cette suggestion de l’IA comme acceptée par un réviseur humain.",
+    archivedProjectsNotice: "Les projets archivés sont retirés de la liste des projets actifs. Désarchivez un projet pour le remettre en usage courant.",
+    archivedProjectsEmpty: "Les projets archivés apparaîtront ici.",
+    archiveIntakeNotice: "L’archivage retire l’entrée de la révision active mais conserve l’enregistrement dans l’axe de stockage.",
+    archiveObjectNotice: "L’archivage retire l’objet du tableau de bord actuel mais conserve son historique.",
+    chooseProjectEmpty: "Choisissez un projet pour voir son état actuel et son historique.",
+    createProjectEmpty: "Créez un projet ou ouvrez Projets archivés pour en restaurer un.",
+    stateHistorySeparate: "L’état actuel et l’historique sont conservés dans des vues séparées.",
+    deletionNotice: "La suppression ne retire pas les données dans la v0.1. Le projet sera archivé et marqué comme en attente d’approbation de suppression. Le processus final d’approbation reste à déterminer.",
+    errorDetails: "Détails de l’erreur",
+    recoveryExportNotice: "Exportez les données brutes enregistrées avant de réinitialiser. La réinitialisation ne doit être utilisée qu’après sauvegarde des données défaillantes.",
+    recoveryLoadNotice: "Project State n’a pas pu charger les données locales enregistrées en toute sécurité. Les données originales n’ont pas été modifiées.",
+    readsFileExtractNotice: "Lit TXT/MD directement. L’extraction PDF et DOCX est au mieux et reste locale.",
+    rejectIntakeNotice: "Le rejet conserve l’entrée mais l’empêche d’atteindre Project State.",
+    restoreBackupNotice: "La restauration remplace l’axe de stockage local par le fichier de sauvegarde sélectionné. Aucun serveur n’est utilisé.",
+    createDraftFromExtractNotice: "Cela crée un brouillon à partir de l’extrait sélectionné. Aucun nouveau projet n’est créé avant approbation.",
+    proposedChangeNotice: "Cela crée seulement un changement proposé. Project State ne sera pas modifié avant approbation.",
+    unarchiveNotice: "Le désarchivage remet le projet en usage courant et enregistre l’approbation dans l’historique.",
+    validationReasonRequired: "Une raison est requise.",
+    validationActorRequired: "L’acteur est requis.",
+    validationActorNameRequired: "Le nom de l’acteur est requis.",
+    validationActorExists: "Un acteur portant ce nom existe déjà.",
+    validationExtractFileType: "Choisissez un fichier PDF, DOCX, TXT ou MD.",
+    validationImageFileType: "Choisissez une image PNG, JPG, WEBP ou GIF.",
+    validationBackupFileType: "Choisissez un fichier JSON de sauvegarde Project State.",
+    validationDefaultActorArchive: "Choisissez un autre acteur par défaut avant d’archiver celui-ci.",
+    validationActiveDefaultActor: "Choisissez un acteur par défaut actif.",
+    validationConfirmLocalMode: "Confirmez le mode local avant de continuer.",
+    validationConfirmRestore: "Confirmez la restauration avant de continuer.",
+    validationNoReadableText: "Aucun texte lisible n’a été trouvé dans ce fichier.",
+    validationPrimaryActorRequired: "L’acteur principal est requis.",
+    validationStorageOverrideReason: "Enregistrez la raison de l’exception de stockage.",
+    validationBackupOverrideReason: "Enregistrez la raison de l’exception de sauvegarde.",
+    validationRestoreReasonRequired: "La raison de restauration est requise.",
+    validationBackupUnreadable: "Ce fichier de sauvegarde n’est pas un JSON lisible.",
+    validationInvalidBackup: "Ce n’est pas une sauvegarde Project State valide.",
+    validationReadExtractFailed: "Impossible de lire le texte de ce fichier.",
+    notRecorded: "Non enregistré",
+    noErrorDetailsRecorded: "Aucun détail d’erreur enregistré.",
+    noCurrentStatusRecorded: "Aucun statut actuel enregistré.",
+    noStatusRecorded: "Aucun statut enregistré.",
+    noCurrentSummaryRecorded: "Aucun résumé actuel enregistré.",
+    noChangesRecordedForFilter: "Aucun changement enregistré pour ce filtre.",
+    noDecisionsRecorded: "Aucune décision enregistrée.",
+    noFactsRecorded: "Aucun fait enregistré.",
+    noSourcesRecorded: "Aucune source enregistrée.",
+    noRelationshipsRecorded: "Aucune relation enregistrée.",
+    noDraftProjects: "Aucun projet brouillon.",
+    noOpenQuestions: "Aucune question ouverte.",
+    noNextActions: "Aucune prochaine action.",
+    noRecentActivity: "Aucune activité récente.",
+    noDraftTextRecorded: "Aucun texte de brouillon enregistré.",
+    noReasonRecorded: "Aucune raison enregistrée.",
+    noContextRecorded: "Aucun contexte enregistré.",
+    noProposedTextRecorded: "Aucun texte proposé enregistré.",
+    noPendingIntake: "Aucune entrée en attente. Les futurs bras doivent arriver ici avant de toucher le noyau.",
+    noReviewedIntake: "Aucune entrée révisée pour l’instant.",
+    searchEmptyHint: "Essayez un nom de projet, une décision, un fait, une source, une action, une relation, une légende d’image ou une raison d’historique.",
+    missingProject: "Projet manquant",
+    noTargetProject: "Aucun projet cible",
+    target: "Cible",
+    created: "Créé",
+    reviewedBy: "Révisé par",
+    approvedBy: "Approuvé par",
+    untitled: "Sans titre",
+    untitledIntake: "Entrée sans titre",
+    untitledObject: "Objet sans titre",
+    untitledSource: "Source sans titre",
+    attachedImageAlt: "Image jointe",
+    imageDataUnavailable: "Les données de l’image ne sont pas disponibles.",
+    calendar: "Calendrier",
+    meeting: "Réunion",
+    email: "E-mail",
+    other: "Autre",
+    projectStatus: "Statut du projet",
+    proposedChange: "Changement proposé",
+    permissions: "Permissions",
+    restrictions: "Restrictions",
+    schemaVersion: "Version du schéma",
+    storageModeLabel: "Mode de stockage",
+    lastSettingsUpdate: "Dernière mise à jour des paramètres",
+    lastBackupExport: "Dernier export de sauvegarde",
+    lastRestore: "Dernière restauration",
+    storageSpineVersion: "Version de l’axe de stockage",
+    storageLayout: "Disposition du stockage",
+    storageSnapshotBytes: "Octets de l’instantané de stockage",
+    attachmentRecords: "Enregistrements de pièces jointes",
+    extractTextCharacters: "Caractères du texte extrait",
+    storageSizeLabel: "Taille du stockage",
+    activeProjectsLabel: "Projets actifs",
+    archivedProjectsLabel: "Projets archivés",
+    actorsLabel: "Acteurs",
+    changesLabel: "Changements",
+    sourcesLabel: "Sources",
+    extractsLabel: "Extraits",
+    imagesLabel: "Images"
   },
   de: {
     languageName: "Deutsch",
@@ -677,7 +1056,195 @@ const LANGUAGES = {
     approveSource: "Quelle genehmigen",
     approveRelationship: "Beziehung genehmigen",
     approveQuestion: "Frage genehmigen",
-    approveAction: "Aktion genehmigen"
+    approveAction: "Aktion genehmigen",
+    restoreProjectStateBackup: "Project-State-Sicherung wiederherstellen",
+    approveIntake: "Eingang genehmigen",
+    rejectIntake: "Eingang ablehnen",
+    archiveIntake: "Eingang archivieren",
+    editCurrentStatus: "Aktuellen Status bearbeiten",
+    editProject: "Projekt bearbeiten",
+    editDecision: "Entscheidung bearbeiten",
+    editFact: "Fakt bearbeiten",
+    editSource: "Quelle bearbeiten",
+    editExtract: "Auszug bearbeiten",
+    editRelationship: "Beziehung bearbeiten",
+    reviewDraftProject: "Entwurfsprojekt prüfen",
+    editOpenQuestion: "Offene Frage bearbeiten",
+    editNextAction: "Nächste Aktion bearbeiten",
+    markActionComplete: "Aktion als erledigt markieren",
+    relationshipPlaceholder: "Übergeordnet, untergeordnet, Abhängigkeit, verbunden",
+    historyReason: "Grund",
+    historyChanged: "Geändert",
+    savedDataNeedsRecovery: "Gespeicherte Daten benötigen Wiederherstellung",
+    noActiveProjects: "Keine aktiven Projekte",
+    noArchivedProjects: "Keine archivierten Projekte",
+    roleDefinitions: "Rollendefinitionen",
+    intakeAirlock: "Eingangs-Airlock",
+    intakeAirlockSubtitle: "Externe Arme können hier Änderungen vorschlagen. Menschliche Genehmigung ist erforderlich, bevor etwas Project State erreicht.",
+    pendingReview: "Ausstehende Prüfung",
+    reviewedIntake: "Geprüfter Eingang",
+    currentState: "Aktueller Stand",
+    currentObjects: "Aktuelle Objekte",
+    recentActivity: "Letzte Aktivität",
+    recentDecisions: "Letzte Entscheidungen",
+    relationships: "Beziehungen",
+    facts: "Fakten",
+    sources: "Quellen",
+    draftProjects: "Projektentwürfe",
+    lastUpdated: "Zuletzt aktualisiert",
+    updatedBy: "Aktualisiert von",
+    health: "Statuslage",
+    project: "Projekt",
+    generated: "Erstellt",
+    extract: "Auszug",
+    attachedImages: "Angehängte Bilder:",
+    attachedSources: "Angehängte Quellen:",
+    allEvents: "Alle Ereignisse",
+    eventType: "Ereignistyp",
+    projectName: "Projektname",
+    currentStatus: "Aktueller Status",
+    projectHealth: "Projektlage",
+    currentSummary: "Aktuelle Zusammenfassung",
+    backupFile: "Sicherungsdatei",
+    arm: "Arm",
+    targetProject: "Zielprojekt",
+    proposedChangeType: "Vorgeschlagener Änderungstyp",
+    intakeTitle: "Eingangstitel",
+    proposedText: "Vorgeschlagener Text",
+    summaryContext: "Zusammenfassung / Kontext",
+    sourceOriginLabel: "Quelle / Herkunft",
+    relationshipTargetOwner: "Beziehungsziel / Verantwortlicher",
+    dueDate: "Fälligkeitsdatum",
+    decision: "Entscheidung",
+    confidence: "Vertrauen",
+    fact: "Fakt",
+    source: "Quelle",
+    title: "Titel",
+    type: "Typ",
+    dateAdded: "Hinzugefügt am",
+    location: "Ort",
+    findLocalFile: "Lokale Datei finden",
+    summary: "Zusammenfassung",
+    tags: "Tags",
+    mode: "Modus",
+    relatedProjectOrEntity: "Zugehöriges Projekt oder Objekt",
+    relationshipType: "Beziehungstyp",
+    notes: "Notizen",
+    name: "Name",
+    draft: "Entwurf",
+    approvedProjectName: "Genehmigter Projektname",
+    approvedProjectSummary: "Genehmigte Projektzusammenfassung",
+    openQuestion: "Offene Frage",
+    openQuestions: "Offene Fragen",
+    context: "Kontext",
+    nextAction: "Nächste Aktion",
+    nextActions: "Nächste Aktionen",
+    ownerField: "Verantwortlicher",
+    completedDate: "Abschlussdatum",
+    suggestedBy: "Vorgeschlagen von",
+    suggestedExtract: "Vorgeschlagener Auszug",
+    imageFile: "Bilddatei",
+    captionNotes: "Beschriftung / Notizen",
+    file: "Datei",
+    addSourceBeforeAttaching: "Fügen Sie eine Quelle hinzu, bevor Sie sie an dieses Objekt anhängen.",
+    approvalAppliesChangeNotice: "Die Genehmigung wendet diese vorgeschlagene Änderung auf das ausgewählte Projekt an und zeichnet sie im Verlauf auf.",
+    approvalCreatesProjectNotice: "Die Genehmigung erstellt aus diesem Entwurf ein neues Projekt und zeichnet die Genehmigung am Entwurf auf.",
+    approvalRecordsSuggestionNotice: "Die Genehmigung zeichnet diesen KI-Vorschlag als von einem Menschen akzeptiert auf.",
+    archivedProjectsNotice: "Archivierte Projekte werden aus der aktiven Projektliste herausgehalten. Heben Sie die Archivierung auf, um ein Projekt wieder aktuell zu nutzen.",
+    archivedProjectsEmpty: "Archivierte Projekte erscheinen hier.",
+    archiveIntakeNotice: "Die Archivierung entfernt den Eingang aus der aktiven Prüfung, behält den Eintrag aber in der Speicher-Spine.",
+    archiveObjectNotice: "Die Archivierung entfernt das Objekt aus dem aktuellen Dashboard, behält aber seinen Verlauf.",
+    chooseProjectEmpty: "Wählen Sie ein Projekt, um den aktuellen Stand und den Verlauf zu sehen.",
+    createProjectEmpty: "Erstellen Sie ein Projekt oder öffnen Sie Archivierte Projekte, um eines wiederherzustellen.",
+    stateHistorySeparate: "Aktueller Stand und historischer Datensatz bleiben in getrennten Ansichten.",
+    deletionNotice: "Löschen entfernt in v0.1 keine Daten. Das Projekt wird archiviert und als ausstehende Löschgenehmigung markiert. Der endgültige Genehmigungsprozess wird noch festgelegt.",
+    errorDetails: "Fehlerdetails",
+    recoveryExportNotice: "Exportieren Sie die rohen gespeicherten Daten vor dem Zurücksetzen. Zurücksetzen sollte nur genutzt werden, nachdem die fehlerhaften Daten gesichert wurden.",
+    recoveryLoadNotice: "Project State konnte die gespeicherten lokalen Daten nicht sicher laden. Die ursprünglichen gespeicherten Daten wurden nicht geändert.",
+    readsFileExtractNotice: "Liest TXT/MD direkt. PDF- und DOCX-Auszüge sind bestmöglich und bleiben lokal.",
+    rejectIntakeNotice: "Ablehnen behält den Eingangseintrag, verhindert aber, dass er Project State erreicht.",
+    restoreBackupNotice: "Wiederherstellen ersetzt die lokale Speicher-Spine durch die ausgewählte Sicherungsdatei. Es wird kein Server verwendet.",
+    createDraftFromExtractNotice: "Dies erstellt einen Entwurf aus dem ausgewählten Auszug. Ein neues Projekt entsteht erst nach Genehmigung.",
+    proposedChangeNotice: "Dies erstellt nur eine vorgeschlagene Änderung. Project State wird erst nach Genehmigung geändert.",
+    unarchiveNotice: "Das Aufheben der Archivierung bringt das Projekt in die aktuelle Nutzung zurück und zeichnet die Genehmigung im Verlauf auf.",
+    validationReasonRequired: "Ein Grund ist erforderlich.",
+    validationActorRequired: "Akteur ist erforderlich.",
+    validationActorNameRequired: "Akteurname ist erforderlich.",
+    validationActorExists: "Ein Akteur mit diesem Namen existiert bereits.",
+    validationExtractFileType: "Wählen Sie eine PDF-, DOCX-, TXT- oder MD-Datei.",
+    validationImageFileType: "Wählen Sie ein PNG-, JPG-, WEBP- oder GIF-Bild.",
+    validationBackupFileType: "Wählen Sie eine Project-State-Sicherungsdatei im JSON-Format.",
+    validationDefaultActorArchive: "Wählen Sie einen anderen Standardakteur, bevor Sie diesen Akteur archivieren.",
+    validationActiveDefaultActor: "Wählen Sie einen aktiven Standardakteur.",
+    validationConfirmLocalMode: "Bestätigen Sie den lokalen Modus, bevor Sie fortfahren.",
+    validationConfirmRestore: "Bestätigen Sie die Wiederherstellung, bevor Sie fortfahren.",
+    validationNoReadableText: "In dieser Datei wurde kein lesbarer Text gefunden.",
+    validationPrimaryActorRequired: "Primärer Akteur ist erforderlich.",
+    validationStorageOverrideReason: "Erfassen Sie den Grund für die Speicher-Ausnahme.",
+    validationBackupOverrideReason: "Erfassen Sie den Grund für die Sicherungs-Ausnahme.",
+    validationRestoreReasonRequired: "Ein Wiederherstellungsgrund ist erforderlich.",
+    validationBackupUnreadable: "Diese Sicherungsdatei ist kein lesbares JSON.",
+    validationInvalidBackup: "Dies ist keine gültige Project-State-Sicherung.",
+    validationReadExtractFailed: "Text konnte aus dieser Datei nicht gelesen werden.",
+    notRecorded: "Nicht erfasst",
+    noErrorDetailsRecorded: "Keine Fehlerdetails erfasst.",
+    noCurrentStatusRecorded: "Kein aktueller Status erfasst.",
+    noStatusRecorded: "Kein Status erfasst.",
+    noCurrentSummaryRecorded: "Keine aktuelle Zusammenfassung erfasst.",
+    noChangesRecordedForFilter: "Für diesen Filter wurden keine Änderungen erfasst.",
+    noDecisionsRecorded: "Keine Entscheidungen erfasst.",
+    noFactsRecorded: "Keine Fakten erfasst.",
+    noSourcesRecorded: "Keine Quellen erfasst.",
+    noRelationshipsRecorded: "Keine Beziehungen erfasst.",
+    noDraftProjects: "Keine Projektentwürfe.",
+    noOpenQuestions: "Keine offenen Fragen.",
+    noNextActions: "Keine nächsten Aktionen.",
+    noRecentActivity: "Keine aktuelle Aktivität.",
+    noDraftTextRecorded: "Kein Entwurfstext erfasst.",
+    noReasonRecorded: "Kein Grund erfasst.",
+    noContextRecorded: "Kein Kontext erfasst.",
+    noProposedTextRecorded: "Kein vorgeschlagener Text erfasst.",
+    noPendingIntake: "Kein ausstehender Eingang. Künftige Arme sollten hier landen, bevor sie den Kern berühren.",
+    noReviewedIntake: "Noch kein geprüfter Eingang.",
+    searchEmptyHint: "Suchen Sie nach Projektname, Entscheidung, Fakt, Quelle, Aktion, Beziehung, Bildbeschriftung oder Verlaufsgrund.",
+    missingProject: "Projekt fehlt",
+    noTargetProject: "Kein Zielprojekt",
+    target: "Ziel",
+    created: "Erstellt",
+    reviewedBy: "Geprüft von",
+    approvedBy: "Genehmigt von",
+    untitled: "Ohne Titel",
+    untitledIntake: "Eingang ohne Titel",
+    untitledObject: "Objekt ohne Titel",
+    untitledSource: "Quelle ohne Titel",
+    attachedImageAlt: "Angehängtes Bild",
+    imageDataUnavailable: "Bilddaten sind nicht verfügbar.",
+    calendar: "Kalender",
+    meeting: "Besprechung",
+    email: "E-Mail",
+    other: "Sonstiges",
+    projectStatus: "Projektstatus",
+    proposedChange: "Vorgeschlagene Änderung",
+    permissions: "Berechtigungen",
+    restrictions: "Einschränkungen",
+    schemaVersion: "Schemaversion",
+    storageModeLabel: "Speichermodus",
+    lastSettingsUpdate: "Letzte Einstellungsänderung",
+    lastBackupExport: "Letzter Sicherungsexport",
+    lastRestore: "Letzte Wiederherstellung",
+    storageSpineVersion: "Speicher-Spine-Version",
+    storageLayout: "Speicherlayout",
+    storageSnapshotBytes: "Speicher-Snapshot-Bytes",
+    attachmentRecords: "Anhangseinträge",
+    extractTextCharacters: "Auszugstext-Zeichen",
+    storageSizeLabel: "Speichergröße",
+    activeProjectsLabel: "Aktive Projekte",
+    archivedProjectsLabel: "Archivierte Projekte",
+    actorsLabel: "Akteure",
+    changesLabel: "Änderungen",
+    sourcesLabel: "Quellen",
+    extractsLabel: "Auszüge",
+    imagesLabel: "Bilder"
   },
   es: {
     languageName: "Español",
@@ -852,7 +1419,195 @@ const LANGUAGES = {
     approveSource: "Aprobar fuente",
     approveRelationship: "Aprobar relación",
     approveQuestion: "Aprobar pregunta",
-    approveAction: "Aprobar acción"
+    approveAction: "Aprobar acción",
+    restoreProjectStateBackup: "Restaurar copia de Project State",
+    approveIntake: "Aprobar entrada",
+    rejectIntake: "Rechazar entrada",
+    archiveIntake: "Archivar entrada",
+    editCurrentStatus: "Editar estado actual",
+    editProject: "Editar proyecto",
+    editDecision: "Editar decisión",
+    editFact: "Editar hecho",
+    editSource: "Editar fuente",
+    editExtract: "Editar extracto",
+    editRelationship: "Editar relación",
+    reviewDraftProject: "Revisar proyecto borrador",
+    editOpenQuestion: "Editar pregunta abierta",
+    editNextAction: "Editar próxima acción",
+    markActionComplete: "Marcar acción completa",
+    relationshipPlaceholder: "Padre, hijo, dependencia, relacionado",
+    historyReason: "Razón",
+    historyChanged: "Cambiado",
+    savedDataNeedsRecovery: "Los datos guardados necesitan recuperación",
+    noActiveProjects: "No hay proyectos activos",
+    noArchivedProjects: "No hay proyectos archivados",
+    roleDefinitions: "Definiciones de roles",
+    intakeAirlock: "Airlock de entrada",
+    intakeAirlockSubtitle: "Los brazos externos pueden proponer cambios aquí. Se requiere aprobación humana antes de que algo llegue a Project State.",
+    pendingReview: "Revisión pendiente",
+    reviewedIntake: "Entrada revisada",
+    currentState: "Estado actual",
+    currentObjects: "Objetos actuales",
+    recentActivity: "Actividad reciente",
+    recentDecisions: "Decisiones recientes",
+    relationships: "Relaciones",
+    facts: "Hechos",
+    sources: "Fuentes",
+    draftProjects: "Proyectos borrador",
+    lastUpdated: "Última actualización",
+    updatedBy: "Actualizado por",
+    health: "Salud",
+    project: "Proyecto",
+    generated: "Generado",
+    extract: "Extracto",
+    attachedImages: "Imágenes adjuntas:",
+    attachedSources: "Fuentes adjuntas:",
+    allEvents: "Todos los eventos",
+    eventType: "Tipo de evento",
+    projectName: "Nombre del proyecto",
+    currentStatus: "Estado actual",
+    projectHealth: "Salud del proyecto",
+    currentSummary: "Resumen actual",
+    backupFile: "Archivo de copia",
+    arm: "Brazo",
+    targetProject: "Proyecto destino",
+    proposedChangeType: "Tipo de cambio propuesto",
+    intakeTitle: "Título de entrada",
+    proposedText: "Texto propuesto",
+    summaryContext: "Resumen / Contexto",
+    sourceOriginLabel: "Etiqueta de fuente / origen",
+    relationshipTargetOwner: "Destino / responsable de la relación",
+    dueDate: "Fecha límite",
+    decision: "Decisión",
+    confidence: "Confianza",
+    fact: "Hecho",
+    source: "Fuente",
+    title: "Título",
+    type: "Tipo",
+    dateAdded: "Fecha agregada",
+    location: "Ubicación",
+    findLocalFile: "Buscar archivo local",
+    summary: "Resumen",
+    tags: "Etiquetas",
+    mode: "Modo",
+    relatedProjectOrEntity: "Proyecto o entidad relacionada",
+    relationshipType: "Tipo de relación",
+    notes: "Notas",
+    name: "Nombre",
+    draft: "Borrador",
+    approvedProjectName: "Nombre del proyecto aprobado",
+    approvedProjectSummary: "Resumen del proyecto aprobado",
+    openQuestion: "Pregunta abierta",
+    openQuestions: "Preguntas abiertas",
+    context: "Contexto",
+    nextAction: "Próxima acción",
+    nextActions: "Próximas acciones",
+    ownerField: "Responsable",
+    completedDate: "Fecha de finalización",
+    suggestedBy: "Sugerido por",
+    suggestedExtract: "Extracto sugerido",
+    imageFile: "Archivo de imagen",
+    captionNotes: "Pie / Notas",
+    file: "Archivo",
+    addSourceBeforeAttaching: "Agrega una fuente antes de adjuntar una a este objeto.",
+    approvalAppliesChangeNotice: "La aprobación aplica este cambio propuesto al proyecto seleccionado y lo registra en el historial.",
+    approvalCreatesProjectNotice: "La aprobación crea un nuevo proyecto desde este borrador y registra la aprobación en el borrador.",
+    approvalRecordsSuggestionNotice: "La aprobación registra esta sugerencia de IA como aceptada por una persona revisora.",
+    archivedProjectsNotice: "Los proyectos archivados se mantienen fuera de la lista activa. Desarchiva un proyecto para volver a usarlo.",
+    archivedProjectsEmpty: "Los proyectos archivados aparecerán aquí.",
+    archiveIntakeNotice: "Archivar quita la entrada de la revisión activa pero mantiene el registro en la columna de almacenamiento.",
+    archiveObjectNotice: "Archivar quita el objeto del panel actual pero mantiene su historial.",
+    chooseProjectEmpty: "Elige un proyecto para ver su estado actual e historial.",
+    createProjectEmpty: "Crea un proyecto o abre Proyectos archivados para restaurar uno.",
+    stateHistorySeparate: "El estado actual y el registro histórico se mantienen en vistas separadas.",
+    deletionNotice: "La eliminación no borra datos en v0.1. El proyecto se archivará y se marcará como pendiente de aprobación de eliminación. El proceso final de aprobación aún está por determinarse.",
+    errorDetails: "Detalles del error",
+    recoveryExportNotice: "Exporta los datos brutos guardados antes de restablecer. El restablecimiento solo debe usarse después de respaldar los datos fallidos.",
+    recoveryLoadNotice: "Project State no pudo cargar de forma segura los datos locales guardados. Los datos guardados originales no se han cambiado.",
+    readsFileExtractNotice: "Lee TXT/MD directamente. La extracción PDF y DOCX es de mejor esfuerzo y permanece local.",
+    rejectIntakeNotice: "Rechazar mantiene el registro de entrada pero evita que llegue a Project State.",
+    restoreBackupNotice: "Restaurar reemplaza la columna de almacenamiento local con el archivo de copia seleccionado. No usa servidor.",
+    createDraftFromExtractNotice: "Esto crea un borrador desde el extracto seleccionado. No crea un nuevo proyecto hasta que se apruebe.",
+    proposedChangeNotice: "Esto crea solo un cambio propuesto. No cambiará Project State hasta que se apruebe.",
+    unarchiveNotice: "Desarchivar devuelve el proyecto al uso actual y registra la aprobación en el historial.",
+    validationReasonRequired: "Se requiere una razón.",
+    validationActorRequired: "Se requiere actor.",
+    validationActorNameRequired: "Se requiere el nombre del actor.",
+    validationActorExists: "Ya existe un actor con este nombre.",
+    validationExtractFileType: "Elige un archivo PDF, DOCX, TXT o MD.",
+    validationImageFileType: "Elige una imagen PNG, JPG, WEBP o GIF.",
+    validationBackupFileType: "Elige un archivo JSON de copia de Project State.",
+    validationDefaultActorArchive: "Elige otro actor predeterminado antes de archivar este actor.",
+    validationActiveDefaultActor: "Elige un actor predeterminado activo.",
+    validationConfirmLocalMode: "Confirma el modo local antes de continuar.",
+    validationConfirmRestore: "Confirma la restauración antes de continuar.",
+    validationNoReadableText: "No se encontró texto legible en este archivo.",
+    validationPrimaryActorRequired: "Se requiere el actor principal.",
+    validationStorageOverrideReason: "Registra la razón de la excepción de almacenamiento.",
+    validationBackupOverrideReason: "Registra la razón de la excepción de copia.",
+    validationRestoreReasonRequired: "Se requiere una razón de restauración.",
+    validationBackupUnreadable: "Este archivo de copia no es JSON legible.",
+    validationInvalidBackup: "Esta no es una copia válida de Project State.",
+    validationReadExtractFailed: "No se pudo leer texto de este archivo.",
+    notRecorded: "No registrado",
+    noErrorDetailsRecorded: "No hay detalles de error registrados.",
+    noCurrentStatusRecorded: "No hay estado actual registrado.",
+    noStatusRecorded: "No hay estado registrado.",
+    noCurrentSummaryRecorded: "No hay resumen actual registrado.",
+    noChangesRecordedForFilter: "No hay cambios registrados para este filtro.",
+    noDecisionsRecorded: "No hay decisiones registradas.",
+    noFactsRecorded: "No hay hechos registrados.",
+    noSourcesRecorded: "No hay fuentes registradas.",
+    noRelationshipsRecorded: "No hay relaciones registradas.",
+    noDraftProjects: "No hay proyectos borrador.",
+    noOpenQuestions: "No hay preguntas abiertas.",
+    noNextActions: "No hay próximas acciones.",
+    noRecentActivity: "No hay actividad reciente.",
+    noDraftTextRecorded: "No hay texto de borrador registrado.",
+    noReasonRecorded: "No hay razón registrada.",
+    noContextRecorded: "No hay contexto registrado.",
+    noProposedTextRecorded: "No hay texto propuesto registrado.",
+    noPendingIntake: "No hay entradas pendientes. Los brazos futuros deben llegar aquí antes de tocar el núcleo.",
+    noReviewedIntake: "Aún no hay entradas revisadas.",
+    searchEmptyHint: "Prueba con nombre de proyecto, decisión, hecho, fuente, acción, relación, pie de imagen o razón del historial.",
+    missingProject: "Proyecto faltante",
+    noTargetProject: "Sin proyecto destino",
+    target: "Destino",
+    created: "Creado",
+    reviewedBy: "Revisado por",
+    approvedBy: "Aprobado por",
+    untitled: "Sin título",
+    untitledIntake: "Entrada sin título",
+    untitledObject: "Objeto sin título",
+    untitledSource: "Fuente sin título",
+    attachedImageAlt: "Imagen adjunta",
+    imageDataUnavailable: "Los datos de la imagen no están disponibles.",
+    calendar: "Calendario",
+    meeting: "Reunión",
+    email: "Correo",
+    other: "Otro",
+    projectStatus: "Estado del proyecto",
+    proposedChange: "Cambio propuesto",
+    permissions: "Permisos",
+    restrictions: "Restricciones",
+    schemaVersion: "Versión del esquema",
+    storageModeLabel: "Modo de almacenamiento",
+    lastSettingsUpdate: "Última actualización de configuración",
+    lastBackupExport: "Última exportación de copia",
+    lastRestore: "Última restauración",
+    storageSpineVersion: "Versión de la columna de almacenamiento",
+    storageLayout: "Diseño de almacenamiento",
+    storageSnapshotBytes: "Bytes de instantánea de almacenamiento",
+    attachmentRecords: "Registros de adjuntos",
+    extractTextCharacters: "Caracteres de texto extraído",
+    storageSizeLabel: "Tamaño de almacenamiento",
+    activeProjectsLabel: "Proyectos activos",
+    archivedProjectsLabel: "Proyectos archivados",
+    actorsLabel: "Actores",
+    changesLabel: "Cambios",
+    sourcesLabel: "Fuentes",
+    extractsLabel: "Extractos",
+    imagesLabel: "Imágenes"
   }
 };
 const DRAFT_REVIEW_FLAGS = [
@@ -937,6 +1692,7 @@ let store = emptyStore();
 let storageReady = false;
 let storageMode = "initializing";
 let storageSnapshotText = "";
+let storageSpineMeta = null;
 let pendingApprovedCoreWrites = 0;
 let activeProjectId = null;
 let activeRootView = "projects";
@@ -1002,14 +1758,29 @@ const ProjectStateStorage = {
       transaction.addEventListener("abort", () => reject(transaction.error));
     });
   },
+  async getMetaRecord() {
+    return this.supported() ? this.getRecord(STORAGE_META_RECORD) : null;
+  },
+  async putMetaRecord(manifest) {
+    if (!this.supported()) return false;
+    await this.putRecord({
+      id: STORAGE_META_RECORD,
+      ...manifest
+    });
+    storageSpineMeta = manifest;
+    return true;
+  },
   async load() {
     if (this.supported()) {
       const record = await this.getRecord(STORAGE_MAIN_RECORD);
       if (record?.store) {
+        const meta = await this.getMetaRecord();
+        storageSpineMeta = meta || record.storageSpine || null;
         return {
           source: "indexeddb",
           store: record.store,
-          raw: JSON.stringify(record.store)
+          raw: JSON.stringify(record.store),
+          meta: storageSpineMeta
         };
       }
     }
@@ -1023,20 +1794,61 @@ const ProjectStateStorage = {
   },
   async save(nextStore) {
     const snapshot = JSON.stringify(nextStore);
+    const manifest = buildStorageSpineManifest(nextStore, snapshot);
     storageSnapshotText = snapshot;
+    storageSpineMeta = manifest;
     if (this.supported()) {
       await this.putRecord({
         id: STORAGE_MAIN_RECORD,
+        app: "Project State",
+        spineVersion: STORAGE_SPINE_VERSION,
+        layoutVersion: STORAGE_LAYOUT_VERSION,
         schemaVersion: nextStore.schemaVersion,
         updatedAt: nowIso(),
+        storageSpine: manifest,
         store: nextStore
       });
+      await this.putMetaRecord(manifest);
+      await this.verifyMainRecord(nextStore, manifest);
       localStorage.removeItem(STORAGE_KEY);
       storageMode = "indexeddb";
       return;
     }
     localStorage.setItem(STORAGE_KEY, JSON.stringify(nextStore, null, 2));
     storageMode = "legacy-json-fallback";
+  },
+  async ensureMeta(nextStore) {
+    const snapshot = JSON.stringify(nextStore);
+    storageSnapshotText = snapshot;
+    const manifest = buildStorageSpineManifest(nextStore, snapshot);
+    storageSpineMeta = manifest;
+    if (!this.supported()) return manifest;
+    const existing = await this.getMetaRecord();
+    if (
+      existing?.spineVersion === STORAGE_SPINE_VERSION &&
+      existing?.layoutVersion === STORAGE_LAYOUT_VERSION &&
+      existing?.snapshotBytes === manifest.snapshotBytes &&
+      existing?.counts?.projects === manifest.counts.projects &&
+      existing?.counts?.changes === manifest.counts.changes
+    ) {
+      storageSpineMeta = existing;
+      return existing;
+    }
+    await this.putMetaRecord(manifest);
+    return manifest;
+  },
+  async verifyMainRecord(expectedStore, expectedManifest) {
+    if (!this.supported()) return true;
+    const record = await this.getRecord(STORAGE_MAIN_RECORD);
+    if (!record?.store) throw new Error("Storage spine verification failed: main record was not saved.");
+    if (record.spineVersion !== STORAGE_SPINE_VERSION) throw new Error("Storage spine verification failed: spine version mismatch.");
+    if (record.layoutVersion !== STORAGE_LAYOUT_VERSION) throw new Error("Storage spine verification failed: layout version mismatch.");
+    if (record.store.schemaVersion !== expectedStore.schemaVersion) throw new Error("Storage spine verification failed: store schema mismatch.");
+    const readback = buildStorageSpineManifest(record.store, JSON.stringify(record.store));
+    if (readback.counts.projects !== expectedManifest.counts.projects) throw new Error("Storage spine verification failed: project count mismatch.");
+    if (readback.counts.changes !== expectedManifest.counts.changes) throw new Error("Storage spine verification failed: history count mismatch.");
+    if (readback.largeContent.attachments !== expectedManifest.largeContent.attachments) throw new Error("Storage spine verification failed: attachment count mismatch.");
+    return true;
   },
   async preserveLegacyRaw(raw) {
     if (!raw || !this.supported()) return;
@@ -1050,12 +1862,114 @@ const ProjectStateStorage = {
   async reset() {
     if (this.supported()) {
       await this.deleteRecord(STORAGE_MAIN_RECORD);
+      await this.deleteRecord(STORAGE_META_RECORD);
       await this.deleteRecord(STORAGE_LEGACY_BACKUP_RECORD);
     }
     localStorage.removeItem(STORAGE_KEY);
     storageSnapshotText = "";
+    storageSpineMeta = null;
   }
 };
+
+function buildStorageSpineManifest(nextStore = emptyStore(), snapshot = "") {
+  const counts = {
+    actors: Array.isArray(nextStore.actors) ? nextStore.actors.length : 0,
+    intakeItems: Array.isArray(nextStore.intakeItems) ? nextStore.intakeItems.length : 0,
+    projects: Array.isArray(nextStore.projects) ? nextStore.projects.length : 0,
+    archivedProjects: 0,
+    decisions: 0,
+    facts: 0,
+    sources: 0,
+    extracts: 0,
+    drafts: 0,
+    relationships: 0,
+    openQuestions: 0,
+    nextActions: 0,
+    changes: 0
+  };
+  const largeContent = {
+    attachments: 0,
+    attachmentDataCharacters: 0,
+    extractTextCharacters: 0,
+    largestAttachmentCharacters: 0,
+    largestExtractCharacters: 0
+  };
+
+  const addAttachment = (image = {}) => {
+    largeContent.attachments += 1;
+    const dataLength = String(image.dataUrl || image.localReference || "").length;
+    largeContent.attachmentDataCharacters += dataLength;
+    largeContent.largestAttachmentCharacters = Math.max(largeContent.largestAttachmentCharacters, dataLength);
+  };
+  const collectImages = (links = []) => {
+    for (const image of links || []) addAttachment(image);
+  };
+
+  for (const project of nextStore.projects || []) {
+    if (project.archived) counts.archivedProjects += 1;
+    counts.decisions += (project.decisions || []).length;
+    counts.facts += (project.facts || []).length;
+    counts.sources += (project.sources || []).length;
+    counts.drafts += (project.draftProjects || []).length;
+    counts.relationships += (project.relationships || []).length;
+    counts.openQuestions += (project.openQuestions || []).length;
+    counts.nextActions += (project.nextActions || []).length;
+    counts.changes += (project.changes || []).length;
+    collectImages(project.imageLinks);
+
+    const imageBearingLists = [project.decisions, project.facts, project.relationships, project.openQuestions, project.nextActions, project.draftProjects, project.changes];
+    for (const list of imageBearingLists) {
+      for (const item of list || []) collectImages(item.imageLinks);
+    }
+
+    for (const source of project.sources || []) {
+      collectImages(source.imageLinks);
+      counts.extracts += (source.extracts || []).length;
+      for (const extract of source.extracts || []) {
+        collectImages(extract.imageLinks);
+        const textLength = String(extract.text || "").length;
+        largeContent.extractTextCharacters += textLength;
+        largeContent.largestExtractCharacters = Math.max(largeContent.largestExtractCharacters, textLength);
+      }
+    }
+  }
+
+  const snapshotBytes = new Blob([snapshot || JSON.stringify(nextStore)]).size;
+  const warnings = [];
+  if (snapshotBytes >= 4.5 * 1024 * 1024) warnings.push("storage-size-danger");
+  else if (snapshotBytes >= 3 * 1024 * 1024) warnings.push("storage-size-warning");
+  if (largeContent.attachmentDataCharacters > snapshotBytes * 0.5) warnings.push("attachments-dominate-main-record");
+  if (largeContent.extractTextCharacters > snapshotBytes * 0.25) warnings.push("extracts-growing-in-main-record");
+
+  return {
+    app: "Project State",
+    spineVersion: STORAGE_SPINE_VERSION,
+    layoutVersion: STORAGE_LAYOUT_VERSION,
+    generatedAt: nowIso(),
+    storageKey: STORAGE_KEY,
+    dbName: STORAGE_DB_NAME,
+    dbVersion: STORAGE_DB_VERSION,
+    objectStores: [STORAGE_OBJECT_STORE],
+    mainRecordId: STORAGE_MAIN_RECORD,
+    metaRecordId: STORAGE_META_RECORD,
+    legacyBackupRecordId: STORAGE_LEGACY_BACKUP_RECORD,
+    storeSchemaVersion: nextStore.schemaVersion || "",
+    snapshotBytes,
+    counts,
+    largeContent,
+    splitTargets: {
+      meta: 1,
+      projects: counts.projects,
+      history: counts.changes,
+      sources: counts.sources,
+      extracts: counts.extracts,
+      attachments: largeContent.attachments,
+      drafts: counts.drafts,
+      recovery: 0
+    },
+    warnings
+  };
+}
 
 async function loadStore() {
   let loaded = { source: "unknown", raw: "" };
@@ -1069,6 +1983,7 @@ async function loadStore() {
     storageMode = loaded.source === "legacy-json" && ProjectStateStorage.supported() ? "migrated-to-indexeddb" : loaded.source;
     if (loaded.source === "legacy-json") await ProjectStateStorage.preserveLegacyRaw(loaded.raw);
     if (migrationNeeded || loaded.source !== "indexeddb") await ProjectStateStorage.save(normalized);
+    else await ProjectStateStorage.ensureMeta(normalized);
     return normalized;
   } catch (error) {
     loadFailure = {
@@ -1386,7 +2301,7 @@ function normalizeIntakeItem(item, context) {
     id,
     armType: normalizeArmType(item.armType),
     status,
-    title: item.title || "Untitled intake",
+    title: item.title || t("untitledIntake"),
     projectId: item.projectId || "",
     createdAt: item.createdAt || nowIso(),
     createdBy: item.createdBy || "",
@@ -1404,7 +2319,7 @@ function createIntakeItem(input = {}) {
     id: uid("intake"),
     armType: normalizeArmType(input.armType),
     status: "pending",
-    title: input.title || "Untitled intake",
+    title: input.title || t("untitledIntake"),
     projectId: input.projectId || "",
     createdAt: nowIso(),
     createdBy: input.createdBy || "",
@@ -1580,10 +2495,10 @@ function nowIso() {
 }
 
 function formatDate(value, includeTime = true) {
-  if (!value) return "Not recorded";
+  if (!value) return t("notRecorded");
   const dateOnly = /^\d{4}-\d{2}-\d{2}$/.test(String(value));
   const date = dateOnly ? new Date(`${value}T00:00:00`) : new Date(value);
-  if (Number.isNaN(date.getTime())) return "Not recorded";
+  if (Number.isNaN(date.getTime())) return t("notRecorded");
   return new Intl.DateTimeFormat(undefined, {
     dateStyle: "medium",
     timeStyle: includeTime && !dateOnly ? "short" : undefined
@@ -2180,19 +3095,19 @@ function renderRecoveryScreen() {
       <section class="panel strong">
         <div class="view-head">
           <div>
-            <h1 class="view-title">Saved Data Needs Recovery</h1>
-            <p class="view-subtitle">Project State could not safely load the saved local data. The original saved data has not been changed.</p>
+            <h1 class="view-title">${escapeHtml(t("savedDataNeedsRecovery"))}</h1>
+            <p class="view-subtitle">${escapeHtml(t("recoveryLoadNotice"))}</p>
           </div>
         </div>
         ${storageWarningHtml(loadFailure.raw || "")}
         <div class="stack">
-          <p class="notice">Export the raw saved data before resetting. Reset should only be used after the failed data is backed up.</p>
+          <p class="notice">${escapeHtml(t("recoveryExportNotice"))}</p>
           <div class="button-row">
             <button class="btn" data-action="export-failed-data">${escapeHtml(t("exportFailedData"))}</button>
             <button class="btn danger" data-action="reset-failed-data">${escapeHtml(t("resetLocalData"))}</button>
           </div>
           <div class="recovery-details">
-            <p class="meta-label">Error Details</p>
+            <p class="meta-label">${escapeHtml(t("errorDetails"))}</p>
             <pre>${escapeHtml(readableLoadError(loadFailure))}</pre>
           </div>
         </div>
@@ -2265,9 +3180,9 @@ function backupReminderOptions(selected = "manual") {
 }
 
 function readableLoadError(failure) {
-  if (!failure) return "No error details recorded.";
+  if (!failure) return t("noErrorDetailsRecorded");
   const lines = [
-    `Date: ${failure.date || "Not recorded"}`,
+    `Date: ${failure.date || t("notRecorded")}`,
     `Storage key: ${STORAGE_KEY}`,
     `Raw saved size: ${storageSizeInfo(failure.raw || "").label}`,
     `Error: ${failure.message || "Unknown load error"}`
@@ -2290,14 +3205,14 @@ function renderProjectList() {
   shell(`
     <section class="view-head">
       <div>
-        <h1 class="view-title">Projects</h1>
-        <p class="view-subtitle">Choose a project to see its current state and history.</p>
+        <h1 class="view-title">${escapeHtml(t("projects"))}</h1>
+        <p class="view-subtitle">${escapeHtml(t("chooseProjectEmpty"))}</p>
       </div>
     </section>
     ${projects.length ? `<section class="project-grid">${projects.map(renderProjectCard).join("")}</section>` : `
       <section class="empty-state">
-        <h2>No active projects</h2>
-        <p>Create a project or open Archived Projects to restore one.</p>
+        <h2>${escapeHtml(t("noActiveProjects"))}</h2>
+        <p>${escapeHtml(t("createProjectEmpty"))}</p>
         <button class="btn" data-action="create-project">${escapeHtml(t("createProject"))}</button>
       </section>
     `}
@@ -2310,14 +3225,14 @@ function renderArchivedProjectList() {
   shell(`
     <section class="view-head">
       <div>
-        <h1 class="view-title">Archived Projects</h1>
-        <p class="view-subtitle">Archived projects are kept out of the active project list. Unarchive a project to return it to current use.</p>
+        <h1 class="view-title">${escapeHtml(t("archivedProjects"))}</h1>
+        <p class="view-subtitle">${escapeHtml(t("archivedProjectsNotice"))}</p>
       </div>
     </section>
     ${projects.length ? `<section class="project-grid">${projects.map(renderProjectCard).join("")}</section>` : `
       <section class="empty-state">
-        <h2>No archived projects</h2>
-        <p>Archived projects will appear here.</p>
+        <h2>${escapeHtml(t("noArchivedProjects"))}</h2>
+        <p>${escapeHtml(t("archivedProjectsEmpty"))}</p>
         <button class="btn secondary" data-action="show-projects">${escapeHtml(t("backToProjects"))}</button>
       </section>
     `}
@@ -2357,7 +3272,7 @@ function renderSettings() {
           </div>
           <label class="check-field">
             <input name="recoveryWarnings" type="checkbox" ${store.settings?.recoveryWarnings !== false ? "checked" : ""}>
-            <span>Show storage and recovery warnings.</span>
+            <span>${escapeHtml(t("recoveryWarnings"))}</span>
           </label>
           <div class="field">
             <label for="settingsReason">${escapeHtml(t("reason"))}</label>
@@ -2399,7 +3314,7 @@ function renderSettings() {
 
       <section class="panel">
         <div class="panel-head">
-          <h2 class="panel-title">Role Definitions v${escapeHtml(ROLE_DEFINITIONS_VERSION)}</h2>
+          <h2 class="panel-title">${escapeHtml(t("roleDefinitions"))} v${escapeHtml(ROLE_DEFINITIONS_VERSION)}</h2>
         </div>
         <div class="settings-list role-definitions">
           ${renderRoleDefinitions()}
@@ -2556,8 +3471,8 @@ function renderRoleDefinitions() {
             <span class="pill">${escapeHtml(role)}</span>
           </div>
           <p class="item-body">${escapeDisplay(definition.purpose, DISPLAY_META_LIMIT)}</p>
-          ${renderDefinitionList("Permissions", definition.permissions)}
-          ${renderDefinitionList("Restrictions", definition.restrictions)}
+          ${renderDefinitionList(t("permissions"), definition.permissions)}
+          ${renderDefinitionList(t("restrictions"), definition.restrictions)}
           ${definition.rule ? `<p class="notice">${escapeDisplay(definition.rule, DISPLAY_META_LIMIT)}</p>` : ""}
         </article>
       `;
@@ -2678,20 +3593,26 @@ function settingsDiagnostics() {
   const extracts = store.projects.reduce((count, project) => count + project.sources.reduce((inner, source) => inner + source.extracts.length, 0), 0);
   const images = store.projects.reduce((count, project) => count + countProjectImages(project), 0);
   const info = storageSizeInfo();
+  const manifest = storageSpineMeta || buildStorageSpineManifest(store, storageSnapshotText || JSON.stringify(store));
   return {
-    "Schema Version": store.schemaVersion || "Not recorded",
-    "Storage Mode": storageMode || "Not recorded",
-    "Storage Size": info.label,
-    "Active Projects": String(activeProjects.length),
-    "Archived Projects": String(archivedProjects.length),
-    "Actors": String(store.actors.length),
-    "Changes": String(changes),
-    "Sources": String(sources),
-    "Extracts": String(extracts),
-    "Images": String(images),
-    "Last Settings Update": store.settings?.settingsUpdatedAt ? formatDate(store.settings.settingsUpdatedAt) : "Not recorded",
-    "Last Backup Export": store.settings?.lastBackupExportedAt ? formatDate(store.settings.lastBackupExportedAt) : "Not recorded",
-    "Last Restore": store.settings?.lastRestoreAt ? formatDate(store.settings.lastRestoreAt) : "Not recorded"
+    [t("schemaVersion")]: store.schemaVersion || t("notRecorded"),
+    [t("storageModeLabel")]: storageMode || t("notRecorded"),
+    [t("storageSpineVersion")]: manifest.spineVersion || t("notRecorded"),
+    [t("storageLayout")]: manifest.layoutVersion || t("notRecorded"),
+    [t("storageSizeLabel")]: info.label,
+    [t("storageSnapshotBytes")]: String(manifest.snapshotBytes || 0),
+    [t("activeProjectsLabel")]: String(activeProjects.length),
+    [t("archivedProjectsLabel")]: String(archivedProjects.length),
+    [t("actorsLabel")]: String(store.actors.length),
+    [t("changesLabel")]: String(changes),
+    [t("sourcesLabel")]: String(sources),
+    [t("extractsLabel")]: String(extracts),
+    [t("imagesLabel")]: String(images),
+    [t("attachmentRecords")]: String(manifest.largeContent?.attachments || 0),
+    [t("extractTextCharacters")]: String(manifest.largeContent?.extractTextCharacters || 0),
+    [t("lastSettingsUpdate")]: store.settings?.settingsUpdatedAt ? formatDate(store.settings.settingsUpdatedAt) : t("notRecorded"),
+    [t("lastBackupExport")]: store.settings?.lastBackupExportedAt ? formatDate(store.settings.lastBackupExportedAt) : t("notRecorded"),
+    [t("lastRestore")]: store.settings?.lastRestoreAt ? formatDate(store.settings.lastRestoreAt) : t("notRecorded")
   };
 }
 
@@ -2715,7 +3636,7 @@ function renderProjectCard(project) {
     <div class="project-card">
       <button class="card-open" data-action="open-project" data-project-id="${project.id}">
         <h2>${escapeDisplay(project.name, DISPLAY_META_LIMIT)}</h2>
-        <p>${escapeDisplay(project.currentStatus || "No current status recorded.")}</p>
+        <p>${escapeDisplay(project.currentStatus || t("noCurrentStatusRecorded"))}</p>
         ${renderAttachedSources(project)}
       </button>
       <div>
@@ -2745,8 +3666,8 @@ function renderIntakeQueue() {
   shell(`
     <section class="view-head">
       <div>
-        <h1 class="view-title">Intake Airlock</h1>
-        <p class="view-subtitle">Outside arms can propose changes here. Human approval is required before anything reaches Project State.</p>
+        <h1 class="view-title">${escapeHtml(t("intakeAirlock"))}</h1>
+        <p class="view-subtitle">${escapeHtml(t("intakeAirlockSubtitle"))}</p>
       </div>
       <button class="btn" data-action="create-intake">${escapeHtml(t("addIntake"))}</button>
     </section>
@@ -2755,17 +3676,17 @@ function renderIntakeQueue() {
       <div class="stack">
         <article class="panel strong">
           <div class="panel-head">
-            <h2 class="panel-title">Pending Review</h2>
+            <h2 class="panel-title">${escapeHtml(t("pendingReview"))}</h2>
           </div>
-          ${pending.length ? `<div class="list">${pending.map(renderIntakeItem).join("")}</div>` : emptyText("No pending intake. Future arms should land here before touching the core.")}
+          ${pending.length ? `<div class="list">${pending.map(renderIntakeItem).join("")}</div>` : emptyText(t("noPendingIntake"))}
         </article>
       </div>
       <aside class="stack">
         <article class="panel">
           <div class="panel-head">
-            <h2 class="panel-title">Reviewed Intake</h2>
+            <h2 class="panel-title">${escapeHtml(t("reviewedIntake"))}</h2>
           </div>
-          ${reviewed.length ? `<div class="list">${reviewed.map(renderIntakeItem).join("")}</div>` : emptyText("No reviewed intake yet.")}
+          ${reviewed.length ? `<div class="list">${reviewed.map(renderIntakeItem).join("")}</div>` : emptyText(t("noReviewedIntake"))}
         </article>
       </aside>
     </section>
@@ -2773,18 +3694,18 @@ function renderIntakeQueue() {
 }
 
 function renderIntakeItem(item) {
-  const projectName = item.projectId ? projectNameById(item.projectId) || "Missing project" : "No target project";
+  const projectName = item.projectId ? projectNameById(item.projectId) || t("missingProject") : t("noTargetProject");
   const proposed = item.proposedChange || {};
   return `
     <div class="item">
       <p class="item-title">${escapeDisplay(item.title, DISPLAY_META_LIMIT)}</p>
       <p class="item-meta">${escapeHtml(armTypeLabel(item.armType))} · ${escapeHtml(proposedObjectTypeLabel(item.proposedObjectType))} · ${escapeHtml(intakeStatusLabel(item))}</p>
-      <p class="item-meta">Target: ${escapeDisplay(projectName, DISPLAY_META_LIMIT)} · Created ${escapeHtml(formatDate(item.createdAt))}</p>
-      ${item.sourceLabel ? `<p class="item-meta">Source: ${escapeDisplay(item.sourceLabel, DISPLAY_META_LIMIT)}</p>` : ""}
+      <p class="item-meta">${escapeHtml(t("target"))}: ${escapeDisplay(projectName, DISPLAY_META_LIMIT)} · ${escapeHtml(t("created"))} ${escapeHtml(formatDate(item.createdAt))}</p>
+      ${item.sourceLabel ? `<p class="item-meta">${escapeHtml(t("source"))}: ${escapeDisplay(item.sourceLabel, DISPLAY_META_LIMIT)}</p>` : ""}
       ${proposed.text ? `<p class="item-body">${escapeDisplay(proposed.text)}</p>` : ""}
-      ${proposed.summary ? `<p class="item-body">Summary: ${escapeDisplay(proposed.summary)}</p>` : ""}
-      ${item.review ? `<p class="item-meta">Reviewed by ${escapeHtml(actorDisplay(item.review.actorId, item.review.actorName))} · ${escapeHtml(formatDate(item.review.reviewedAt))}</p>` : ""}
-      ${item.approval ? `<p class="item-meta">Approved by ${escapeHtml(actorDisplay(item.approval.approvedBy))} · ${escapeHtml(formatDate(item.approval.approvedAt))}</p>` : ""}
+      ${proposed.summary ? `<p class="item-body">${escapeHtml(t("summary"))}: ${escapeDisplay(proposed.summary)}</p>` : ""}
+      ${item.review ? `<p class="item-meta">${escapeHtml(t("reviewedBy"))} ${escapeHtml(actorDisplay(item.review.actorId, item.review.actorName))} · ${escapeHtml(formatDate(item.review.reviewedAt))}</p>` : ""}
+      ${item.approval ? `<p class="item-meta">${escapeHtml(t("approvedBy"))} ${escapeHtml(actorDisplay(item.approval.approvedBy))} · ${escapeHtml(formatDate(item.approval.approvedAt))}</p>` : ""}
       <div class="item-actions">
         ${item.status === "pending" && !item.archived ? `<button class="btn secondary compact" data-action="approve-intake" data-intake-id="${item.id}">${escapeHtml(t("approve"))}</button>` : ""}
         ${item.status === "pending" && !item.archived ? `<button class="btn secondary compact" data-action="reject-intake" data-intake-id="${item.id}">${escapeHtml(t("reject"))}</button>` : ""}
@@ -2796,30 +3717,30 @@ function renderIntakeItem(item) {
 
 function armTypeLabel(type = "other") {
   const labels = {
-    calendar: "Calendar",
-    meeting: "Meeting",
+    calendar: t("calendar"),
+    meeting: t("meeting"),
     ai: "AI",
     codex: "Codex",
-    notes: "Notes",
-    email: "Email",
-    file: "File",
-    manual: "Manual",
-    other: "Other"
+    notes: t("notes"),
+    email: t("email"),
+    file: t("file"),
+    manual: t("manual"),
+    other: t("other")
   };
-  return labels[type] || "Other";
+  return labels[type] || t("other");
 }
 
 function proposedObjectTypeLabel(type = "") {
   const labels = {
-    ProjectStatus: "Project Status",
-    Decision: "Decision",
-    Fact: "Fact",
-    OpenQuestion: "Open Question",
-    NextAction: "Next Action",
-    Source: "Source",
-    Relationship: "Relationship"
+    ProjectStatus: t("projectStatus"),
+    Decision: t("decision"),
+    Fact: t("fact"),
+    OpenQuestion: t("openQuestion"),
+    NextAction: t("nextAction"),
+    Source: t("source"),
+    Relationship: t("relationshipType")
   };
-  return labels[type] || "Proposed Change";
+  return labels[type] || t("proposedChange");
 }
 
 function intakeStatusLabel(item) {
@@ -2846,7 +3767,7 @@ function addSearchResult(results, project, objectType, objectId, title, descript
     projectName: project.name,
     objectType,
     objectId,
-    title: title || "Untitled",
+    title: title || t("untitled"),
     description: description || "",
     ...extra
   });
@@ -2929,12 +3850,12 @@ function renderSearchResults() {
   shell(`
     <section class="view-head">
       <div>
-        <h1 class="view-title">Search</h1>
+        <h1 class="view-title">${escapeHtml(t("search"))}</h1>
         <p class="view-subtitle">${results.length ? `${results.length} results for "${escapeDisplay(query, DISPLAY_META_LIMIT)}"` : `No results for "${escapeDisplay(query, DISPLAY_META_LIMIT)}"`}</p>
       </div>
       <button class="btn secondary" data-action="clear-search">${escapeHtml(t("clearSearch"))}</button>
     </section>
-    ${results.length ? `<section class="search-results">${results.map(renderSearchResult).join("")}</section>` : emptyText("Try a project name, decision, fact, source, action, relationship, image caption, or history reason.")}
+    ${results.length ? `<section class="search-results">${results.map(renderSearchResult).join("")}</section>` : emptyText(t("searchEmptyHint"))}
   `);
 }
 
@@ -2973,19 +3894,19 @@ function renderProject(project) {
   const dashboard = `
     <section class="meta-grid">
       <div class="meta-card">
-        <p class="meta-label">Last Updated</p>
+        <p class="meta-label">${escapeHtml(t("lastUpdated"))}</p>
         <p class="meta-value">${escapeHtml(formatDate(project.updatedAt))}</p>
       </div>
       <div class="meta-card">
-        <p class="meta-label">Updated By</p>
+        <p class="meta-label">${escapeHtml(t("updatedBy"))}</p>
         <p class="meta-value">${escapeHtml(updatedBy)}</p>
       </div>
       <div class="meta-card">
-        <p class="meta-label">Current Objects</p>
+        <p class="meta-label">${escapeHtml(t("currentObjects"))}</p>
         <p class="meta-value">${decisions.length} decisions, ${facts.length} facts, ${sources.length} sources, ${draftProjects.length} drafts, ${relationships.length} relationships, ${questions.length} questions, ${actions.length} actions</p>
       </div>
       <div class="meta-card">
-        <p class="meta-label">Health</p>
+        <p class="meta-label">${escapeHtml(t("health"))}</p>
         <p class="meta-value">${escapeHtml(healthFlagLabel(project.healthFlag))}</p>
       </div>
     </section>
@@ -2994,18 +3915,18 @@ function renderProject(project) {
       <div class="stack">
         <article class="panel strong">
           <div class="panel-head">
-            <h2 class="panel-title">Current Status</h2>
+            <h2 class="panel-title">${escapeHtml(t("currentStatus"))}</h2>
             <button class="btn secondary" data-action="edit-status">${escapeHtml(t("editStatus"))}</button>
           </div>
-          <p class="status-text">${escapeDisplay(project.currentStatus || "No status recorded.")}</p>
-          <p class="summary-text">${escapeDisplay(project.currentSummary || "No current summary recorded.")}</p>
+          <p class="status-text">${escapeDisplay(project.currentStatus || t("noStatusRecorded"))}</p>
+          <p class="summary-text">${escapeDisplay(project.currentSummary || t("noCurrentSummaryRecorded"))}</p>
           ${renderAttachedSources(project)}
           ${renderAttachedImages(project)}
         </article>
 
         <article class="panel">
           <div class="panel-head">
-            <h2 class="panel-title">Next Action</h2>
+            <h2 class="panel-title">${escapeHtml(t("nextAction"))}</h2>
             <button class="btn secondary" data-action="add-action">${escapeHtml(t("addNextAction"))}</button>
           </div>
           ${renderActionList(recent(actions, 3))}
@@ -3013,7 +3934,7 @@ function renderProject(project) {
 
         <article class="panel">
           <div class="panel-head">
-            <h2 class="panel-title">Open Questions</h2>
+            <h2 class="panel-title">${escapeHtml(t("openQuestions"))}</h2>
             <button class="btn secondary" data-action="add-question">${escapeHtml(t("addOpenQuestion"))}</button>
           </div>
           ${renderQuestionList(recent(questions, 5))}
@@ -3021,7 +3942,7 @@ function renderProject(project) {
 
         <article class="panel">
           <div class="panel-head">
-            <h2 class="panel-title">Facts</h2>
+            <h2 class="panel-title">${escapeHtml(t("facts"))}</h2>
             <button class="btn secondary" data-action="add-fact">${escapeHtml(t("addFact"))}</button>
           </div>
           ${renderFactList(recent(facts, 5))}
@@ -3029,7 +3950,7 @@ function renderProject(project) {
 
         <article class="panel">
           <div class="panel-head">
-            <h2 class="panel-title">Sources</h2>
+            <h2 class="panel-title">${escapeHtml(t("sources"))}</h2>
             <button class="btn secondary" data-action="add-source">${escapeHtml(t("addSource"))}</button>
           </div>
           ${renderSourceList(recent(sources, 5), project)}
@@ -3039,7 +3960,7 @@ function renderProject(project) {
       <aside class="stack">
         <article class="panel">
           <div class="panel-head">
-            <h2 class="panel-title">Recent Decisions</h2>
+            <h2 class="panel-title">${escapeHtml(t("recentDecisions"))}</h2>
             <button class="btn secondary" data-action="add-decision">${escapeHtml(t("addDecision"))}</button>
           </div>
           ${renderDecisionList(recent(decisions, 5))}
@@ -3047,7 +3968,7 @@ function renderProject(project) {
 
         <article class="panel">
           <div class="panel-head">
-            <h2 class="panel-title">Relationships</h2>
+            <h2 class="panel-title">${escapeHtml(t("relationships"))}</h2>
             <button class="btn secondary" data-action="add-relationship">${escapeHtml(t("addRelationship"))}</button>
           </div>
           ${renderRelationshipList(recent(relationships, 5))}
@@ -3055,14 +3976,14 @@ function renderProject(project) {
 
         <article class="panel">
           <div class="panel-head">
-            <h2 class="panel-title">Draft Projects</h2>
+            <h2 class="panel-title">${escapeHtml(t("draftProjects"))}</h2>
           </div>
           ${renderDraftProjectList(recent(draftProjects, 5))}
         </article>
 
         <article class="panel">
           <div class="panel-head">
-            <h2 class="panel-title">Recent Activity</h2>
+            <h2 class="panel-title">${escapeHtml(t("recentActivity"))}</h2>
             <button class="btn secondary" data-action="view-history">${escapeHtml(t("viewHistory"))}</button>
           </div>
           ${renderActivityList(recent(changes, 5))}
@@ -3076,14 +3997,14 @@ function renderProject(project) {
       <div class="history-controls">
         ${activeHistoryFilter ? `<button class="btn secondary" data-action="clear-history-filter">${escapeHtml(t("viewFullHistory"))}</button>` : ""}
         <label class="filter-label">
-          Event Type
+          ${escapeHtml(t("eventType"))}
           <select data-history-event-filter>
-            <option value="all" ${activeHistoryEventType === "all" ? "selected" : ""}>All events</option>
+            <option value="all" ${activeHistoryEventType === "all" ? "selected" : ""}>${escapeHtml(t("allEvents"))}</option>
             ${eventTypes.map((eventType) => `<option value="${escapeHtml(eventType)}" ${activeHistoryEventType === eventType ? "selected" : ""}>${escapeDisplay(eventType, DISPLAY_META_LIMIT)}</option>`).join("")}
           </select>
         </label>
       </div>
-      ${visibleChanges.length ? visibleChanges.map(renderHistoryItem).join("") : emptyText("No changes recorded for this filter.")}
+      ${visibleChanges.length ? visibleChanges.map(renderHistoryItem).join("") : emptyText(t("noChangesRecordedForFilter"))}
     </section>
   `;
 
@@ -3091,7 +4012,7 @@ function renderProject(project) {
     <section class="view-head">
       <div>
         <h1 class="view-title">${escapeDisplay(project.name, DISPLAY_META_LIMIT)}</h1>
-        <p class="view-subtitle">Current state and historical record are kept in separate views.</p>
+        <p class="view-subtitle">${escapeHtml(t("stateHistorySeparate"))}</p>
       </div>
       <div class="button-row">
         <button class="btn secondary" data-action="edit-object" data-object-type="Project" data-object-id="${project.id}">${escapeHtml(t("edit"))}</button>
@@ -3119,7 +4040,7 @@ function renderProject(project) {
 }
 
 function renderDecisionList(decisions) {
-  if (!decisions.length) return emptyText("No decisions recorded.");
+  if (!decisions.length) return emptyText(t("noDecisionsRecorded"));
   return `<div class="list">${decisions.map((decision) => `
     <div class="item">
       <p class="item-title">${escapeDisplay(decision.text)}</p>
@@ -3133,11 +4054,11 @@ function renderDecisionList(decisions) {
 }
 
 function renderFactList(facts) {
-  if (!facts.length) return emptyText("No facts recorded.");
+  if (!facts.length) return emptyText(t("noFactsRecorded"));
   return `<div class="list">${facts.map((fact) => `
     <div class="item">
       <p class="item-title">${escapeDisplay(fact.statement)}</p>
-      ${fact.source ? `<p class="item-body">Source: ${escapeDisplay(fact.source)}</p>` : ""}
+      ${fact.source ? `<p class="item-body">${escapeHtml(t("source"))}: ${escapeDisplay(fact.source)}</p>` : ""}
       <p class="item-meta">${escapeHtml(actorDisplay(fact.actorId))} · ${escapeHtml(formatDate(fact.createdAt))} · ${escapeHtml(fact.confidence || "Unknown")}</p>
       ${renderAttachedSources(fact)}
       ${renderAttachedImages(fact)}
@@ -3147,7 +4068,7 @@ function renderFactList(facts) {
 }
 
 function renderSourceList(sources, project) {
-  if (!sources.length) return emptyText("No sources recorded.");
+  if (!sources.length) return emptyText(t("noSourcesRecorded"));
   return `<div class="list">${sources.map((source) => {
     const extracts = sortNewest(source.extracts.filter((extract) => extract.status !== "archived"));
     return `
@@ -3177,13 +4098,13 @@ function renderExtractList(extracts) {
   if (!extracts.length) return "";
   return `<div class="list nested-list">${extracts.map((extract) => `
     <div class="item">
-      <p class="item-title">Extract</p>
+      <p class="item-title">${escapeHtml(t("extract"))}</p>
       <p class="item-meta">Mode: ${escapeHtml(extractModeLabel(extract.extractMode))}</p>
       ${extract.suggestionStatus ? `<p class="item-meta">Suggestion Status: ${escapeHtml(extract.suggestionStatus)}</p>` : ""}
       ${extract.suggestedBy ? `<p class="item-meta">Suggested By: ${escapeHtml(extract.suggestedBy)}</p>` : ""}
       ${extract.extractedFromFile ? `<p class="item-meta">File: ${escapeDisplay(extract.extractedFromFile.fileName, DISPLAY_META_LIMIT)}${extract.extractedFromFile.truncated ? " · Truncated" : ""}</p>` : ""}
       <p class="item-body">${escapeDisplay(extract.text)}</p>
-      ${extract.summary ? `<p class="item-body">Summary: ${escapeDisplay(extract.summary)}</p>` : ""}
+      ${extract.summary ? `<p class="item-body">${escapeHtml(t("summary"))}: ${escapeDisplay(extract.summary)}</p>` : ""}
       <p class="item-meta">${escapeHtml(actorDisplay(extract.actorId))} · ${escapeHtml(formatDate(extract.dateAdded))}</p>
       ${extract.tags?.length ? `<p class="item-meta">Tags: ${escapeDisplay(tagsToText(extract.tags), DISPLAY_META_LIMIT)}</p>` : ""}
       ${renderAttachedSources(extract)}
@@ -3195,7 +4116,7 @@ function renderExtractList(extracts) {
 }
 
 function renderRelationshipList(relationships) {
-  if (!relationships.length) return emptyText("No relationships recorded.");
+  if (!relationships.length) return emptyText(t("noRelationshipsRecorded"));
   return `<div class="list">${relationships.map((relationship) => `
     <div class="item">
       <p class="item-title">${escapeDisplay(relationshipTargetLabel(relationship))}</p>
@@ -3209,13 +4130,13 @@ function renderRelationshipList(relationships) {
 }
 
 function renderDraftProjectList(draftProjects) {
-  if (!draftProjects.length) return emptyText("No draft projects.");
+  if (!draftProjects.length) return emptyText(t("noDraftProjects"));
   return `<div class="list">${draftProjects.map((draftProject) => `
     <div class="item">
       <p class="item-title">${escapeDisplay(draftProject.name, DISPLAY_META_LIMIT)}</p>
-      <p class="item-meta">Created: ${escapeHtml(formatDate(draftProject.createdAt))} · Source: ${escapeDisplay(draftProject.sourceTitle || "Not recorded", DISPLAY_META_LIMIT)}</p>
+      <p class="item-meta">${escapeHtml(t("created"))}: ${escapeHtml(formatDate(draftProject.createdAt))} · ${escapeHtml(t("source"))}: ${escapeDisplay(draftProject.sourceTitle || t("notRecorded"), DISPLAY_META_LIMIT)}</p>
       <p class="item-meta">Status: ${escapeHtml(draftProject.status || "draft")}${draftProject.approvedAt ? ` · Approved ${escapeHtml(formatDate(draftProject.approvedAt))}` : ""}</p>
-      <p class="item-body">${escapeDisplay(draftProject.draft || "No draft text recorded.")}</p>
+      <p class="item-body">${escapeDisplay(draftProject.draft || t("noDraftTextRecorded"))}</p>
       ${renderDraftReviewFlags(draftProject)}
       ${renderAttachedSources(draftProject)}
       ${renderAttachedImages(draftProject)}
@@ -3247,7 +4168,7 @@ function renderDraftReviewFlags(draftProject) {
 }
 
 function renderQuestionList(questions) {
-  if (!questions.length) return emptyText("No open questions.");
+  if (!questions.length) return emptyText(t("noOpenQuestions"));
   return `<div class="list">${questions.map((question) => `
     <div class="item">
       <p class="item-title">${escapeDisplay(question.question)}</p>
@@ -3261,12 +4182,12 @@ function renderQuestionList(questions) {
 }
 
 function renderActionList(actions) {
-  if (!actions.length) return emptyText("No next actions.");
+  if (!actions.length) return emptyText(t("noNextActions"));
   return `<div class="list">${actions.map((action) => `
     <div class="item">
       <p class="item-title">${escapeDisplay(action.action)}</p>
       <p class="item-meta">Status: ${escapeHtml(getActionStatus(action))}</p>
-      <p class="item-meta">Created: ${escapeHtml(formatDate(action.createdAt))}</p>
+      <p class="item-meta">${escapeHtml(t("created"))}: ${escapeHtml(formatDate(action.createdAt))}</p>
       <p class="item-meta">Due: ${escapeHtml(action.dueDate ? formatDate(action.dueDate, false) : "Not set")}</p>
       <p class="item-meta">Completed: ${escapeHtml(action.completedAt ? formatDate(action.completedAt) : "Not completed")}</p>
       <p class="item-meta">${action.owner ? `${escapeDisplay(action.owner, DISPLAY_META_LIMIT)} · ` : ""}${escapeHtml(actorDisplay(action.actorId))}</p>
@@ -3309,7 +4230,7 @@ function renderAttachedSources(object) {
   if (!links.length) return "";
   return `
     <div class="attached-sources">
-      <p class="item-meta">Attached Sources:</p>
+      <p class="item-meta">${escapeHtml(t("attachedSources"))}</p>
       ${links.map((link) => `<p class="item-meta">${escapeDisplay(link.sourceTitle || "Source", DISPLAY_META_LIMIT)} · ${escapeHtml(formatDate(link.attachedAt))}</p>`).join("")}
     </div>
   `;
@@ -3320,11 +4241,11 @@ function renderAttachedImages(object) {
   if (!images.length) return "";
   return `
     <div class="attached-images">
-      <p class="item-meta">Attached Images:</p>
+      <p class="item-meta">${escapeHtml(t("attachedImages"))}</p>
       <div class="image-strip">
         ${images.map((image) => `
           <button class="image-thumb" type="button" data-action="view-image" data-object-type="${escapeHtml(image.attachedToType || "")}" data-object-id="${escapeHtml(image.attachedToId || "")}" data-image-id="${escapeHtml(image.id)}" aria-label="View ${escapeHtml(image.fileName || "image")}">
-            ${image.dataUrl ? `<img src="${escapeHtml(image.dataUrl)}" alt="${escapeHtml(image.caption || image.fileName || "Attached image")}">` : `<span>${escapeDisplay(image.fileName || "Image", DISPLAY_META_LIMIT)}</span>`}
+            ${image.dataUrl ? `<img src="${escapeHtml(image.dataUrl)}" alt="${escapeHtml(image.caption || image.fileName || t("attachedImageAlt"))}">` : `<span>${escapeDisplay(image.fileName || "Image", DISPLAY_META_LIMIT)}</span>`}
           </button>
         `).join("")}
       </div>
@@ -3357,7 +4278,7 @@ function filterHistoryByEventType(changes, eventType) {
 }
 
 function renderActivityList(changes) {
-  if (!changes.length) return emptyText("No recent activity.");
+  if (!changes.length) return emptyText(t("noRecentActivity"));
   return `<div class="list">${changes.map((change) => `
     <div class="item">
       <p class="item-title">${escapeDisplay(change.summary, DISPLAY_META_LIMIT)}</p>
@@ -3375,8 +4296,8 @@ function renderHistoryItem(change) {
       </div>
       <div>
         <p class="history-title">${escapeDisplay(change.summary, DISPLAY_META_LIMIT)}</p>
-        <p class="history-detail">Reason: ${escapeDisplay(change.reason)}</p>
-        <p class="history-detail">Changed: ${escapeDisplay(describeDetails(change.details))}</p>
+        <p class="history-detail">${escapeHtml(t("historyReason"))}: ${escapeDisplay(change.reason)}</p>
+        <p class="history-detail">${escapeHtml(t("historyChanged"))}: ${escapeDisplay(describeDetails(change.details))}</p>
         <p class="history-detail">${escapeHtml(t("howChanged"))}: ${escapeHtml(change.howChanged || change.details?.origin || "human_ui")}</p>
         <p class="history-detail">${escapeHtml(t("languageAtChange"))}: ${escapeHtml(languageDisplayName(change.language || change.details?.language || DEFAULT_LANGUAGE))}</p>
         ${renderAttachedImages(change)}
@@ -3393,7 +4314,7 @@ function describeDetails(details = {}) {
     return `From "${details.from || "empty"}" to "${details.to || "empty"}"`;
   }
   if (details.objectType && (details.objectTitle || details.objectText || details.objectId)) {
-    const title = details.objectTitle || details.objectText || "Untitled object";
+    const title = details.objectTitle || details.objectText || t("untitledObject");
     const idText = details.objectId ? ` [id: ${details.objectId}]` : "";
     return `${details.objectType}: ${title}${idText}`;
   }
@@ -3451,6 +4372,7 @@ function exportStorageBackup() {
   const timestamp = nowIso();
   store.settings.lastBackupExportedAt = timestamp;
   store.settings.lastBackupExportedBy = store.settings.primaryActorId || "";
+  const manifest = buildStorageSpineManifest(store, storageSnapshotText || JSON.stringify(store));
   const payload = {
     exportedAt: timestamp,
     app: "Project State",
@@ -3460,6 +4382,7 @@ function exportStorageBackup() {
       backup: "User-controlled JSON file",
       storageMode
     },
+    storageSpine: manifest,
     schemaVersion: store.schemaVersion,
     store
   };
@@ -3470,12 +4393,14 @@ function exportStorageBackup() {
 
 function exportCurrentRawData() {
   const timestamp = nowIso();
+  const manifest = buildStorageSpineManifest(store, storageSnapshotText || JSON.stringify(store));
   const payload = {
     exportedAt: timestamp,
     app: "Project State",
     exportType: "raw-current-store",
     storageKey: STORAGE_KEY,
     storageMode,
+    storageSpine: manifest,
     store
   };
   const stamp = timestamp.replace(/[:.]/g, "-");
@@ -3484,12 +4409,12 @@ function exportCurrentRawData() {
 
 function openRestoreStorageModal() {
   showModal({
-    title: "Restore Project State Backup",
+    title: t("restoreProjectStateBackup"),
     submitText: t("restoreBackup"),
     body: `
-      <p class="notice">Restore replaces the local storage spine with the selected backup file. This does not use a server.</p>
+      <p class="notice">${escapeHtml(t("restoreBackupNotice"))}</p>
       <div class="field">
-        <label for="backupFile">Backup File</label>
+        <label for="backupFile">${escapeHtml(t("backupFile"))}</label>
         <input id="backupFile" name="backupFile" type="file" accept=".json,application/json" required>
       </div>
       ${confirmationField("confirmRestore", "I understand this will replace the current local Project State storage.")}
@@ -3498,14 +4423,14 @@ function openRestoreStorageModal() {
     async onSubmit(data, form) {
       const confirmField = form.querySelector('[name="confirmRestore"]');
       if (data.confirmRestore !== "on") {
-        confirmField?.setCustomValidity("Confirm restore before continuing.");
+        confirmField?.setCustomValidity(t("validationConfirmRestore"));
         confirmField?.reportValidity();
         confirmField?.setCustomValidity("");
         return false;
       }
       const reasonField = form.querySelector('[name="reason"]');
       if (!String(data.reason || "").trim()) {
-        reasonField?.setCustomValidity("Restore reason is required.");
+        reasonField?.setCustomValidity(t("validationRestoreReasonRequired"));
         reasonField?.reportValidity();
         reasonField?.setCustomValidity("");
         return false;
@@ -3513,7 +4438,7 @@ function openRestoreStorageModal() {
       const fileField = form.querySelector('[name="backupFile"]');
       const file = fileField?.files?.[0] || data.backupFile;
       if (!file) {
-        fileField?.setCustomValidity("Choose a Project State backup JSON file.");
+        fileField?.setCustomValidity(t("validationBackupFileType"));
         fileField?.reportValidity();
         fileField?.setCustomValidity("");
         return false;
@@ -3523,7 +4448,7 @@ function openRestoreStorageModal() {
       try {
         parsed = JSON.parse(await readFileAsText(file));
       } catch {
-        fileField?.setCustomValidity("This backup file is not readable JSON.");
+        fileField?.setCustomValidity(t("validationBackupUnreadable"));
         fileField?.reportValidity();
         fileField?.setCustomValidity("");
         return false;
@@ -3533,7 +4458,7 @@ function openRestoreStorageModal() {
       try {
         restoredStore = normalizeStore(extractStoreFromBackup(parsed));
       } catch (error) {
-        fileField?.setCustomValidity(error.message || "This is not a valid Project State backup.");
+        fileField?.setCustomValidity(error.message || t("validationInvalidBackup"));
         fileField?.reportValidity();
         fileField?.setCustomValidity("");
         return false;
@@ -3668,7 +4593,7 @@ function openProjectOverviewModal() {
   const project = getProject();
   if (!project) return;
   showModal({
-    title: "One Page Overview",
+    title: t("onePageOverview"),
     submitText: t("close"),
     body: renderProjectOverview(project),
     onSubmit() {}
@@ -3683,54 +4608,54 @@ function renderProjectOverview(project) {
     <section class="overview-page">
       <div class="overview-header">
         <div>
-          <p class="meta-label">Project</p>
+          <p class="meta-label">${escapeHtml(t("project"))}</p>
           <h3>${escapeDisplay(project.name, DISPLAY_META_LIMIT)}</h3>
         </div>
         <div>
-          <p class="meta-label">Generated</p>
+          <p class="meta-label">${escapeHtml(t("generated"))}</p>
           <p class="item-meta">${escapeHtml(formatDate(nowIso()))}</p>
         </div>
       </div>
 
       <div class="overview-grid">
         <div>
-          <p class="meta-label">Health</p>
+          <p class="meta-label">${escapeHtml(t("health"))}</p>
           <p class="overview-value">${escapeHtml(healthFlagLabel(project.healthFlag))}</p>
         </div>
         <div>
-          <p class="meta-label">Last Updated</p>
+          <p class="meta-label">${escapeHtml(t("lastUpdated"))}</p>
           <p class="overview-value">${escapeHtml(formatDate(project.updatedAt))}</p>
         </div>
         <div>
-          <p class="meta-label">Updated By</p>
+          <p class="meta-label">${escapeHtml(t("updatedBy"))}</p>
           <p class="overview-value">${escapeHtml(actorDisplay(project.updatedBy))}</p>
         </div>
       </div>
 
       <section>
-        <h4>Current State</h4>
-        <p class="overview-status">${escapeDisplay(project.currentStatus || "No current status recorded.")}</p>
-        <p class="overview-body">${escapeDisplay(project.currentSummary || "No current summary recorded.")}</p>
+        <h4>${escapeHtml(t("currentState"))}</h4>
+        <p class="overview-status">${escapeDisplay(project.currentStatus || t("noCurrentStatusRecorded"))}</p>
+        <p class="overview-body">${escapeDisplay(project.currentSummary || t("noCurrentSummaryRecorded"))}</p>
       </section>
 
       <section>
-        <h4>Recent Decisions</h4>
+        <h4>${escapeHtml(t("recentDecisions"))}</h4>
         ${renderOverviewList(decisions, (decision) => `
           <strong>${escapeDisplay(decision.text, DISPLAY_META_LIMIT)}</strong>
-          <span>${escapeDisplay(decision.reason || "No reason recorded.", DISPLAY_META_LIMIT)} · ${escapeHtml(formatDate(decision.date))}</span>
+          <span>${escapeDisplay(decision.reason || t("noReasonRecorded"), DISPLAY_META_LIMIT)} · ${escapeHtml(formatDate(decision.date))}</span>
         `, "No recent decisions.")}
       </section>
 
       <section>
-        <h4>Open Questions</h4>
+        <h4>${escapeHtml(t("openQuestions"))}</h4>
         ${renderOverviewList(questions, (question) => `
           <strong>${escapeDisplay(question.question, DISPLAY_META_LIMIT)}</strong>
-          <span>${escapeDisplay(question.context || "No context recorded.", DISPLAY_META_LIMIT)}</span>
+          <span>${escapeDisplay(question.context || t("noContextRecorded"), DISPLAY_META_LIMIT)}</span>
         `, "No open questions.")}
       </section>
 
       <section>
-        <h4>Next Actions</h4>
+        <h4>${escapeHtml(t("nextActions"))}</h4>
         ${renderOverviewList(actions, (action) => `
           <strong>${escapeDisplay(action.action, DISPLAY_META_LIMIT)}</strong>
           <span>${action.owner ? `${escapeDisplay(action.owner, DISPLAY_META_LIMIT)} · ` : ""}${escapeHtml(action.dueDate ? `Due ${formatDate(action.dueDate, false)}` : "No due date")}</span>
@@ -3834,13 +4759,13 @@ function validateAuditFields(form, data) {
   const actorField = form.querySelector('[name="actorName"]');
   const reasonField = form.querySelector('[name="reason"]');
   if (actorField && !String(data.actorName || "").trim()) {
-    actorField.setCustomValidity("Actor is required.");
+    actorField.setCustomValidity(t("validationActorRequired"));
     actorField.reportValidity();
     actorField.setCustomValidity("");
     return false;
   }
   if (reasonField && !String(data.reason || "").trim()) {
-    reasonField.setCustomValidity("Reason is required.");
+    reasonField.setCustomValidity(t("validationReasonRequired"));
     reasonField.reportValidity();
     reasonField.setCustomValidity("");
     return false;
@@ -3910,47 +4835,47 @@ function projectOptions(selected = "") {
 
 function openCreateIntakeModal() {
   showModal({
-    title: "Add Intake",
+    title: t("addIntake"),
     submitText: t("saveToAirlock"),
     body: `
-      <p class="notice">This creates a proposed change only. It will not change Project State until approved.</p>
+      <p class="notice">${escapeHtml(t("proposedChangeNotice"))}</p>
       <div class="field">
-        <label for="armType">Arm</label>
+        <label for="armType">${escapeHtml(t("arm"))}</label>
         <select id="armType" name="armType">${armTypeOptions("manual")}</select>
       </div>
       <div class="field">
-        <label for="projectId">Target Project</label>
+        <label for="projectId">${escapeHtml(t("targetProject"))}</label>
         <select id="projectId" name="projectId" required>
           ${projectOptions()}
         </select>
       </div>
       <div class="field">
-        <label for="proposedObjectType">Proposed Change Type</label>
+        <label for="proposedObjectType">${escapeHtml(t("proposedChangeType"))}</label>
         <select id="proposedObjectType" name="proposedObjectType">${proposedObjectTypeOptions()}</select>
       </div>
       <div class="field">
-        <label for="title">Intake Title</label>
+        <label for="title">${escapeHtml(t("intakeTitle"))}</label>
         <input id="title" name="title" required>
       </div>
       <div class="field">
-        <label for="text">Proposed Text</label>
+        <label for="text">${escapeHtml(t("proposedText"))}</label>
         <textarea id="text" name="text" required></textarea>
       </div>
       <div class="field">
-        <label for="summary">Summary / Context</label>
+        <label for="summary">${escapeHtml(t("summaryContext"))}</label>
         <textarea id="summary" name="summary"></textarea>
       </div>
       <div class="field">
-        <label for="sourceLabel">Source / Origin Label</label>
+        <label for="sourceLabel">${escapeHtml(t("sourceOriginLabel"))}</label>
         <input id="sourceLabel" name="sourceLabel">
       </div>
       <div class="two-col">
         <div class="field">
-          <label for="target">Relationship Target / Owner</label>
+          <label for="target">${escapeHtml(t("relationshipTargetOwner"))}</label>
           <input id="target" name="target">
         </div>
         <div class="field">
-          <label for="dueDate">Due Date</label>
+          <label for="dueDate">${escapeHtml(t("dueDate"))}</label>
           <input id="dueDate" name="dueDate" type="date">
         </div>
       </div>
@@ -3985,10 +4910,10 @@ function openApproveIntakeModal(intakeId) {
   const intake = findIntakeItem(intakeId);
   if (!intake || intake.status !== "pending" || intake.archived) return;
   showModal({
-    title: "Approve Intake",
+    title: t("approveIntake"),
     submitText: t("approveToProjectState"),
     body: `
-      <p class="notice">Approval applies this proposed change to the selected project and records it in history.</p>
+      <p class="notice">${escapeHtml(t("approvalAppliesChangeNotice"))}</p>
       ${renderIntakeApprovalPreview(intake)}
       ${auditFields()}
     `,
@@ -4004,10 +4929,10 @@ function openRejectIntakeModal(intakeId) {
   const intake = findIntakeItem(intakeId);
   if (!intake || intake.status !== "pending" || intake.archived) return;
   showModal({
-    title: "Reject Intake",
+    title: t("rejectIntake"),
     submitText: t("reject"),
     body: `
-      <p class="notice">Rejecting keeps the intake record but prevents it from reaching Project State.</p>
+      <p class="notice">${escapeHtml(t("rejectIntakeNotice"))}</p>
       ${auditFields()}
     `,
     onSubmit(data) {
@@ -4029,10 +4954,10 @@ function openArchiveIntakeModal(intakeId) {
   const intake = findIntakeItem(intakeId);
   if (!intake || intake.archived) return;
   showModal({
-    title: "Archive Intake",
+    title: t("archiveIntake"),
     submitText: t("archive"),
     body: `
-      <p class="notice">Archiving removes the intake from active review but keeps the record in the storage spine.</p>
+      <p class="notice">${escapeHtml(t("archiveIntakeNotice"))}</p>
       ${auditFields()}
     `,
     onSubmit(data) {
@@ -4059,7 +4984,7 @@ function renderIntakeApprovalPreview(intake) {
   return `
     <div class="inline-empty">
       <p><strong>${escapeDisplay(proposedObjectTypeLabel(intake.proposedObjectType), DISPLAY_META_LIMIT)}:</strong> ${escapeDisplay(intake.title, DISPLAY_META_LIMIT)}</p>
-      <p>${escapeDisplay(proposed.text || "No proposed text recorded.")}</p>
+      <p>${escapeDisplay(proposed.text || t("noProposedTextRecorded"))}</p>
       ${proposed.summary ? `<p>${escapeDisplay(proposed.summary)}</p>` : ""}
     </div>
   `;
@@ -4242,25 +5167,25 @@ function applyApprovedIntakeToCore(intake, actor, reason, approval) {
 
 function openCreateProjectModal() {
   showModal({
-    title: "Create Project",
+    title: t("createProject"),
     submitText: t("approveProject"),
     body: `
       <div class="field">
-        <label for="name">Project Name</label>
+        <label for="name">${escapeHtml(t("projectName"))}</label>
         <input id="name" name="name" required>
       </div>
       <div class="field">
-        <label for="currentStatus">Current Status</label>
+        <label for="currentStatus">${escapeHtml(t("currentStatus"))}</label>
         <input id="currentStatus" name="currentStatus" required>
       </div>
       <div class="field">
-        <label for="healthFlag">Project Health</label>
+        <label for="healthFlag">${escapeHtml(t("projectHealth"))}</label>
         <select id="healthFlag" name="healthFlag">
           ${healthFlagOptions("active")}
         </select>
       </div>
       <div class="field">
-        <label for="currentSummary">Current Summary</label>
+        <label for="currentSummary">${escapeHtml(t("currentSummary"))}</label>
         <textarea id="currentSummary" name="currentSummary"></textarea>
       </div>
       ${auditFields()}
@@ -4313,10 +5238,10 @@ function openDeleteProjectModal(projectId) {
   if (!project) return;
 
   showModal({
-    title: "Delete Project",
+    title: t("deleteProject"),
     submitText: t("requestDeletion"),
     body: `
-      <p class="notice">Deletion does not remove data in v0.1. The project will be archived and flagged as pending deletion approval. The final approval process is still to be determined.</p>
+      <p class="notice">${escapeHtml(t("deletionNotice"))}</p>
       ${confirmationField("confirmDelete", "I understand this will archive the project and request deletion approval.")}
       ${auditFields()}
     `,
@@ -4356,10 +5281,10 @@ function openUnarchiveProjectModal(projectId) {
   if (!project || !project.archived) return;
 
   showModal({
-    title: "Unarchive Project",
+    title: t("unarchiveProject"),
     submitText: t("approveUnarchive"),
     body: `
-      <p class="notice">Unarchiving returns the project to current use and records the approval in history.</p>
+      <p class="notice">${escapeHtml(t("unarchiveNotice"))}</p>
       ${auditFields()}
     `,
     onSubmit(data) {
@@ -4393,21 +5318,21 @@ function openUnarchiveProjectModal(projectId) {
 function openEditStatusModal() {
   const project = getProject();
   showModal({
-    title: "Edit Current Status",
+    title: t("editCurrentStatus"),
     submitText: t("approveChange"),
     body: `
       <div class="field">
-        <label for="currentStatus">Current Status</label>
+        <label for="currentStatus">${escapeHtml(t("currentStatus"))}</label>
         <input id="currentStatus" name="currentStatus" value="${escapeHtml(project.currentStatus)}" required>
       </div>
       <div class="field">
-        <label for="healthFlag">Project Health</label>
+        <label for="healthFlag">${escapeHtml(t("projectHealth"))}</label>
         <select id="healthFlag" name="healthFlag">
           ${healthFlagOptions(project.healthFlag)}
         </select>
       </div>
       <div class="field">
-        <label for="currentSummary">Current Summary</label>
+        <label for="currentSummary">${escapeHtml(t("currentSummary"))}</label>
         <textarea id="currentSummary" name="currentSummary">${escapeHtml(project.currentSummary)}</textarea>
       </div>
       ${auditFields()}
@@ -4492,25 +5417,25 @@ function openEditObjectModal(objectType, objectId) {
 
 function openEditProjectModal(project) {
   showModal({
-    title: "Edit Project",
+    title: t("editProject"),
     submitText: t("approveEdit"),
     body: `
       <div class="field">
-        <label for="name">Project Name</label>
+        <label for="name">${escapeHtml(t("projectName"))}</label>
         <input id="name" name="name" value="${escapeHtml(project.name)}" required>
       </div>
       <div class="field">
-        <label for="currentStatus">Current Status</label>
+        <label for="currentStatus">${escapeHtml(t("currentStatus"))}</label>
         <input id="currentStatus" name="currentStatus" value="${escapeHtml(project.currentStatus)}" required>
       </div>
       <div class="field">
-        <label for="healthFlag">Project Health</label>
+        <label for="healthFlag">${escapeHtml(t("projectHealth"))}</label>
         <select id="healthFlag" name="healthFlag">
           ${healthFlagOptions(project.healthFlag)}
         </select>
       </div>
       <div class="field">
-        <label for="currentSummary">Current Summary</label>
+        <label for="currentSummary">${escapeHtml(t("currentSummary"))}</label>
         <textarea id="currentSummary" name="currentSummary">${escapeHtml(project.currentSummary)}</textarea>
       </div>
       ${auditFields()}
@@ -4549,15 +5474,15 @@ function openEditProjectModal(project) {
 
 function openEditDecisionModal(project, decision) {
   showModal({
-    title: "Edit Decision",
+    title: t("editDecision"),
     submitText: t("approveEdit"),
     body: `
       <div class="field">
-        <label for="decision">Decision</label>
+        <label for="decision">${escapeHtml(t("decision"))}</label>
         <textarea id="decision" name="decision" required>${escapeHtml(decision.text)}</textarea>
       </div>
       <div class="field">
-        <label for="confidence">Confidence</label>
+        <label for="confidence">${escapeHtml(t("confidence"))}</label>
         <select id="confidence" name="confidence">
           ${["High", "Medium", "Low", "Unknown"].map((value) => `<option ${decision.confidence === value ? "selected" : ""}>${value}</option>`).join("")}
         </select>
@@ -4591,19 +5516,19 @@ function openEditDecisionModal(project, decision) {
 
 function openEditFactModal(project, fact) {
   showModal({
-    title: "Edit Fact",
+    title: t("editFact"),
     submitText: t("approveEdit"),
     body: `
       <div class="field">
-        <label for="statement">Fact</label>
+        <label for="statement">${escapeHtml(t("fact"))}</label>
         <textarea id="statement" name="statement" required>${escapeHtml(fact.statement)}</textarea>
       </div>
       <div class="field">
-        <label for="source">Source</label>
+        <label for="source">${escapeHtml(t("source"))}</label>
         <input id="source" name="source" value="${escapeHtml(fact.source || "")}">
       </div>
       <div class="field">
-        <label for="confidence">Confidence</label>
+        <label for="confidence">${escapeHtml(t("confidence"))}</label>
         <select id="confidence" name="confidence">
           ${["High", "Medium", "Low", "Unknown"].map((value) => `<option ${fact.confidence === value ? "selected" : ""}>${value}</option>`).join("")}
         </select>
@@ -4641,37 +5566,37 @@ function openEditFactModal(project, fact) {
 
 function openEditSourceModal(project, source) {
   showModal({
-    title: "Edit Source",
+    title: t("editSource"),
     submitText: t("approveEdit"),
     body: `
       <div class="field">
-        <label for="title">Title</label>
+        <label for="title">${escapeHtml(t("title"))}</label>
         <input id="title" name="title" value="${escapeHtml(source.title)}" required>
       </div>
       <div class="two-col">
         <div class="field">
-          <label for="sourceType">Type</label>
+          <label for="sourceType">${escapeHtml(t("type"))}</label>
           <input id="sourceType" name="sourceType" value="${escapeHtml(source.sourceType || "")}">
         </div>
         <div class="field">
-          <label for="dateAdded">Date Added</label>
+          <label for="dateAdded">${escapeHtml(t("dateAdded"))}</label>
           <input id="dateAdded" name="dateAdded" type="date" value="${escapeHtml(toDateInputValue(source.dateAdded))}" required>
         </div>
       </div>
       <div class="field">
-        <label for="location">Location</label>
+        <label for="location">${escapeHtml(t("location"))}</label>
         <input id="location" name="location" value="${escapeHtml(source.location || "")}">
       </div>
       <div class="field">
-        <label for="localFile">Find Local File</label>
+        <label for="localFile">${escapeHtml(t("findLocalFile"))}</label>
         <input id="localFile" name="localFile" type="file" data-local-file-picker data-location-target="location" data-title-target="title" data-type-target="sourceType">
       </div>
       <div class="field">
-        <label for="summary">Summary</label>
+        <label for="summary">${escapeHtml(t("summary"))}</label>
         <textarea id="summary" name="summary">${escapeHtml(source.summary || "")}</textarea>
       </div>
       <div class="field">
-        <label for="tags">Tags</label>
+        <label for="tags">${escapeHtml(t("tags"))}</label>
         <input id="tags" name="tags" value="${escapeHtml(tagsToText(source.tags))}">
       </div>
       ${auditFields()}
@@ -4724,15 +5649,15 @@ function openEditSourceModal(project, source) {
 
 function openEditExtractModal(project, extract) {
   showModal({
-    title: "Edit Extract",
+    title: t("editExtract"),
     submitText: t("approveEdit"),
     body: `
       <div class="field">
-        <label for="text">Extract</label>
+        <label for="text">${escapeHtml(t("extract"))}</label>
         <textarea id="text" name="text" required>${escapeHtml(extract.text)}</textarea>
       </div>
       <div class="field">
-        <label for="extractMode">Mode</label>
+        <label for="extractMode">${escapeHtml(t("mode"))}</label>
         <select id="extractMode" name="extractMode">
           <option value="manual" ${extract.extractMode === "manual" || !extract.extractMode ? "selected" : ""}>Manual</option>
           <option value="with_approval" ${extract.extractMode === "with_approval" ? "selected" : ""}>With approval</option>
@@ -4740,11 +5665,11 @@ function openEditExtractModal(project, extract) {
         </select>
       </div>
       <div class="field">
-        <label for="summary">Summary</label>
+        <label for="summary">${escapeHtml(t("summary"))}</label>
         <textarea id="summary" name="summary">${escapeHtml(extract.summary || "")}</textarea>
       </div>
       <div class="field">
-        <label for="tags">Tags</label>
+        <label for="tags">${escapeHtml(t("tags"))}</label>
         <input id="tags" name="tags" value="${escapeHtml(tagsToText(extract.tags))}">
       </div>
       ${auditFields()}
@@ -4791,19 +5716,19 @@ function openEditExtractModal(project, extract) {
 
 function openEditRelationshipModal(project, relationship) {
   showModal({
-    title: "Edit Relationship",
+    title: t("editRelationship"),
     submitText: t("approveEdit"),
     body: `
       <div class="field">
-        <label for="target">Related Project or Entity</label>
+        <label for="target">${escapeHtml(t("relatedProjectOrEntity"))}</label>
         <input id="target" name="target" value="${escapeHtml(relationship.target)}" required>
       </div>
       <div class="field">
-        <label for="relationshipType">Relationship Type</label>
+        <label for="relationshipType">${escapeHtml(t("relationshipType"))}</label>
         <input id="relationshipType" name="relationshipType" value="${escapeHtml(relationship.relationshipType || "")}">
       </div>
       <div class="field">
-        <label for="notes">Notes</label>
+        <label for="notes">${escapeHtml(t("notes"))}</label>
         <textarea id="notes" name="notes">${escapeHtml(relationship.notes || "")}</textarea>
       </div>
       ${auditFields()}
@@ -4852,20 +5777,20 @@ function openCreateDraftProjectModal(extractId) {
   if (!project || !extract || !source) return;
 
   showModal({
-    title: "Create Draft Project",
+    title: t("createDraftProject"),
     submitText: t("createDraft"),
     body: `
-      <p class="notice">This creates a draft from the selected extract. It does not create a new project until approved.</p>
+      <p class="notice">${escapeHtml(t("createDraftFromExtractNotice"))}</p>
       <div class="field">
-        <label for="name">Name</label>
+        <label for="name">${escapeHtml(t("name"))}</label>
         <input id="name" name="name" value="${escapeHtml(source.title || "Draft Project")}" required>
       </div>
       <div class="field">
-        <label for="sourceLabel">Source</label>
+        <label for="sourceLabel">${escapeHtml(t("source"))}</label>
         <input id="sourceLabel" name="sourceLabel" value="${escapeHtml(source.title)}" disabled>
       </div>
       <div class="field">
-        <label for="draft">Draft</label>
+        <label for="draft">${escapeHtml(t("draft"))}</label>
         <textarea id="draft" name="draft" required>${escapeHtml(extract.text || "")}</textarea>
       </div>
       ${auditFields()}
@@ -4910,15 +5835,15 @@ function openCreateDraftProjectModal(extractId) {
 function openEditDraftProjectModal(project, draftProject) {
   const flags = normalizeDraftReviewFlags(draftProject.reviewFlags);
   showModal({
-    title: "Review Draft Project",
+    title: t("reviewDraftProject"),
     submitText: t("saveReview"),
     body: `
       <div class="field">
-        <label for="name">Name</label>
+        <label for="name">${escapeHtml(t("name"))}</label>
         <input id="name" name="name" value="${escapeHtml(draftProject.name)}" required>
       </div>
       <div class="field">
-        <label for="draft">Draft</label>
+        <label for="draft">${escapeHtml(t("draft"))}</label>
         <textarea id="draft" name="draft" required>${escapeHtml(draftProject.draft || "")}</textarea>
       </div>
       <div class="check-list">
@@ -4989,16 +5914,16 @@ function openApproveDraftProjectModal(draftProjectId) {
   if (!project || !draftProject || draftProject.status === "approved" || !draftProject.reviewFlags?.readyForApproval) return;
 
   showModal({
-    title: "Approve Draft Project",
+    title: t("approveDraft"),
     submitText: t("approveToProject"),
     body: `
-      <p class="notice">Approval creates a new project from this draft and records the approval on the draft.</p>
+      <p class="notice">${escapeHtml(t("approvalCreatesProjectNotice"))}</p>
       <div class="field">
-        <label for="name">Approved Project Name</label>
+        <label for="name">${escapeHtml(t("approvedProjectName"))}</label>
         <input id="name" name="name" value="${escapeHtml(draftProject.name)}" required>
       </div>
       <div class="field">
-        <label for="currentSummary">Approved Project Summary</label>
+        <label for="currentSummary">${escapeHtml(t("approvedProjectSummary"))}</label>
         <textarea id="currentSummary" name="currentSummary" required>${escapeHtml(draftProject.draft || "")}</textarea>
       </div>
       ${auditFields()}
@@ -5091,15 +6016,15 @@ function openApproveDraftProjectModal(draftProjectId) {
 
 function openEditQuestionModal(project, question) {
   showModal({
-    title: "Edit Open Question",
+    title: t("editOpenQuestion"),
     submitText: t("approveEdit"),
     body: `
       <div class="field">
-        <label for="question">Open Question</label>
+        <label for="question">${escapeHtml(t("openQuestion"))}</label>
         <textarea id="question" name="question" required>${escapeHtml(question.question)}</textarea>
       </div>
       <div class="field">
-        <label for="context">Context</label>
+        <label for="context">${escapeHtml(t("context"))}</label>
         <textarea id="context" name="context">${escapeHtml(question.context || "")}</textarea>
       </div>
       ${auditFields()}
@@ -5131,32 +6056,32 @@ function openEditQuestionModal(project, question) {
 
 function openEditActionModal(project, action) {
   showModal({
-    title: "Edit Next Action",
+    title: t("editNextAction"),
     submitText: t("approveEdit"),
     body: `
       <div class="field">
-        <label for="action">Next Action</label>
+        <label for="action">${escapeHtml(t("nextAction"))}</label>
         <textarea id="action" name="action" required>${escapeHtml(action.action)}</textarea>
       </div>
       <div class="two-col">
         <div class="field">
-          <label for="owner">Owner</label>
+          <label for="owner">${escapeHtml(t("ownerField"))}</label>
           <input id="owner" name="owner" value="${escapeHtml(action.owner || "")}">
         </div>
         <div class="field">
-          <label for="dueDate">Due Date</label>
+          <label for="dueDate">${escapeHtml(t("dueDate"))}</label>
           <input id="dueDate" name="dueDate" type="date" value="${escapeHtml(action.dueDate || "")}">
         </div>
       </div>
       <div class="two-col">
         <div class="field">
-          <label for="status">Status</label>
+          <label for="status">${escapeHtml(t("status"))}</label>
           <select id="status" name="status">
             ${["open", "completed", "archived"].map((value) => `<option value="${value}" ${getActionStatus(action) === value ? "selected" : ""}>${value}</option>`).join("")}
           </select>
         </div>
         <div class="field">
-          <label for="completedAt">Completed Date</label>
+          <label for="completedAt">${escapeHtml(t("completedDate"))}</label>
           <input id="completedAt" name="completedAt" type="date" value="${escapeHtml(toDateInputValue(action.completedAt))}">
         </div>
       </div>
@@ -5205,11 +6130,11 @@ function openMarkCompleteModal(actionId) {
   if (!action || getActionStatus(action) !== "open") return;
 
   showModal({
-    title: "Mark Action Complete",
+    title: t("markActionComplete"),
     submitText: t("approveCompletion"),
     body: `
       <div class="field">
-        <label for="completedAt">Completed Date</label>
+        <label for="completedAt">${escapeHtml(t("completedDate"))}</label>
         <input id="completedAt" name="completedAt" type="date" value="${escapeHtml(toDateInputValue(nowIso()))}" required>
       </div>
       ${auditFields()}
@@ -5245,23 +6170,23 @@ function openAISuggestExtractModal(sourceId) {
   if (!source) return;
 
   showModal({
-    title: "AI Suggest Extract",
+    title: t("suggestExtract"),
     submitText: t("recordSuggestion"),
     body: `
       <div class="field">
-        <label for="suggestedBy">Suggested By</label>
+        <label for="suggestedBy">${escapeHtml(t("suggestedBy"))}</label>
         <input id="suggestedBy" name="suggestedBy" value="AI" required>
       </div>
       <div class="field">
-        <label for="text">Suggested Extract</label>
+        <label for="text">${escapeHtml(t("suggestedExtract"))}</label>
         <textarea id="text" name="text" required></textarea>
       </div>
       <div class="field">
-        <label for="summary">Summary</label>
+        <label for="summary">${escapeHtml(t("summary"))}</label>
         <textarea id="summary" name="summary"></textarea>
       </div>
       <div class="field">
-        <label for="tags">Tags</label>
+        <label for="tags">${escapeHtml(t("tags"))}</label>
         <input id="tags" name="tags">
       </div>
       ${auditFields()}
@@ -5310,10 +6235,10 @@ function openApproveExtractModal(extractId) {
   if (!extract || extract.extractMode !== "ai_suggested" || extract.suggestionStatus !== "pending_approval") return;
 
   showModal({
-    title: "Approve Extract",
+    title: t("approveExtract"),
     submitText: t("approveExtract"),
     body: `
-      <p class="notice">Approval records this AI suggestion as accepted by a human reviewer.</p>
+      <p class="notice">${escapeHtml(t("approvalRecordsSuggestionNotice"))}</p>
       ${auditFields()}
     `,
     onSubmit(data) {
@@ -5347,20 +6272,20 @@ function openAttachSourceModal(objectType, objectId) {
   const sources = sortNewest(project.sources.filter((source) => source.status !== "archived"));
   if (!sources.length) {
     showModal({
-      title: "Attach Source",
+      title: t("attachSource"),
       submitText: t("close"),
-      body: '<p class="notice">Add a source before attaching one to this object.</p>',
+      body: `<p class="notice">${escapeHtml(t("addSourceBeforeAttaching"))}</p>`,
       onSubmit() {}
     });
     return;
   }
 
   showModal({
-    title: "Attach Source",
+    title: t("attachSource"),
     submitText: t("approveAttachment"),
     body: `
       <div class="field">
-        <label for="sourceId">Source</label>
+        <label for="sourceId">${escapeHtml(t("source"))}</label>
         <select id="sourceId" name="sourceId" required>
           ${sources.map((source) => `<option value="${source.id}">${escapeHtml(source.title)}</option>`).join("")}
         </select>
@@ -5407,15 +6332,15 @@ function openAttachImageModal(objectType, objectId) {
   if (!project || !object || !canAttachImage(objectType)) return;
 
   showModal({
-    title: "Attach Image",
+    title: t("attachImage"),
     submitText: t("approveImage"),
     body: `
       <div class="field">
-        <label for="imageFile">Image File</label>
+        <label for="imageFile">${escapeHtml(t("imageFile"))}</label>
         <input id="imageFile" name="imageFile" type="file" accept="image/png,image/jpeg,image/webp,image/gif" required>
       </div>
       <div class="field">
-        <label for="caption">Caption / Notes</label>
+        <label for="caption">${escapeHtml(t("captionNotes"))}</label>
         <textarea id="caption" name="caption"></textarea>
       </div>
       ${auditFields()}
@@ -5424,7 +6349,7 @@ function openAttachImageModal(objectType, objectId) {
       const fileField = form.querySelector('[name="imageFile"]');
       const file = fileField?.files?.[0] || data.imageFile;
       if (!file || !isSupportedImageFile(file)) {
-        fileField?.setCustomValidity("Choose a PNG, JPG, WEBP, or GIF image.");
+        fileField?.setCustomValidity(t("validationImageFileType"));
         fileField?.reportValidity();
         fileField?.setCustomValidity("");
         return false;
@@ -5479,7 +6404,7 @@ function openImageViewer(objectType, objectId, imageId) {
     submitText: t("close"),
     body: `
       <div class="image-viewer">
-        ${image.dataUrl ? `<img src="${escapeHtml(image.dataUrl)}" alt="${escapeHtml(image.caption || image.fileName || "Attached image")}">` : emptyText("Image data is not available.")}
+        ${image.dataUrl ? `<img src="${escapeHtml(image.dataUrl)}" alt="${escapeHtml(image.caption || image.fileName || t("attachedImageAlt"))}">` : emptyText(t("imageDataUnavailable"))}
         ${image.caption ? `<p class="item-body">${escapeDisplay(image.caption)}</p>` : ""}
         <p class="item-meta">${escapeHtml(image.fileType || "Image")} · Added ${escapeHtml(formatDate(image.dateAdded))} · ${escapeHtml(actorDisplay(image.addedBy))}</p>
         ${image.localPath ? `<p class="item-meta">Local reference: ${escapeDisplay(image.localPath, DISPLAY_META_LIMIT)}</p>` : ""}
@@ -5498,7 +6423,7 @@ function openArchiveObjectModal(objectType, objectId) {
     title: `Archive ${objectType}`,
     submitText: t("approveArchive"),
     body: `
-      <p class="notice">Archiving removes the object from the current dashboard but keeps its history.</p>
+      <p class="notice">${escapeHtml(t("archiveObjectNotice"))}</p>
       ${confirmationField("confirmArchive", `I confirm this ${objectType} should be archived.`)}
       ${auditFields()}
     `,
@@ -5528,15 +6453,15 @@ function openArchiveObjectModal(objectType, objectId) {
 function openDecisionModal() {
   const project = getProject();
   showModal({
-    title: "Add Decision",
+    title: t("addDecision"),
     submitText: t("approveDecision"),
     body: `
       <div class="field">
-        <label for="decision">Decision</label>
+        <label for="decision">${escapeHtml(t("decision"))}</label>
         <textarea id="decision" name="decision" required></textarea>
       </div>
       <div class="field">
-        <label for="confidence">Confidence</label>
+        <label for="confidence">${escapeHtml(t("confidence"))}</label>
         <select id="confidence" name="confidence">
           <option>High</option>
           <option>Medium</option>
@@ -5571,19 +6496,19 @@ function openDecisionModal() {
 function openFactModal() {
   const project = getProject();
   showModal({
-    title: "Add Fact",
+    title: t("addFact"),
     submitText: t("approveFact"),
     body: `
       <div class="field">
-        <label for="statement">Fact</label>
+        <label for="statement">${escapeHtml(t("fact"))}</label>
         <textarea id="statement" name="statement" required></textarea>
       </div>
       <div class="field">
-        <label for="source">Source</label>
+        <label for="source">${escapeHtml(t("source"))}</label>
         <input id="source" name="source">
       </div>
       <div class="field">
-        <label for="confidence">Confidence</label>
+        <label for="confidence">${escapeHtml(t("confidence"))}</label>
         <select id="confidence" name="confidence">
           <option>High</option>
           <option>Medium</option>
@@ -5624,37 +6549,37 @@ function openFactModal() {
 function openSourceModal() {
   const project = getProject();
   showModal({
-    title: "Add Source",
+    title: t("addSource"),
     submitText: t("approveSource"),
     body: `
       <div class="field">
-        <label for="title">Title</label>
+        <label for="title">${escapeHtml(t("title"))}</label>
         <input id="title" name="title" required>
       </div>
       <div class="two-col">
         <div class="field">
-          <label for="sourceType">Type</label>
+          <label for="sourceType">${escapeHtml(t("type"))}</label>
           <input id="sourceType" name="sourceType">
         </div>
         <div class="field">
-          <label for="dateAdded">Date Added</label>
+          <label for="dateAdded">${escapeHtml(t("dateAdded"))}</label>
           <input id="dateAdded" name="dateAdded" type="date" value="${escapeHtml(toDateInputValue(nowIso()))}" required>
         </div>
       </div>
       <div class="field">
-        <label for="location">Location</label>
+        <label for="location">${escapeHtml(t("location"))}</label>
         <input id="location" name="location">
       </div>
       <div class="field">
-        <label for="localFile">Find Local File</label>
+        <label for="localFile">${escapeHtml(t("findLocalFile"))}</label>
         <input id="localFile" name="localFile" type="file" data-local-file-picker data-location-target="location" data-title-target="title" data-type-target="sourceType">
       </div>
       <div class="field">
-        <label for="summary">Summary</label>
+        <label for="summary">${escapeHtml(t("summary"))}</label>
         <textarea id="summary" name="summary"></textarea>
       </div>
       <div class="field">
-        <label for="tags">Tags</label>
+        <label for="tags">${escapeHtml(t("tags"))}</label>
         <input id="tags" name="tags">
       </div>
       ${auditFields()}
@@ -5665,7 +6590,7 @@ function openSourceModal() {
       const source = {
         id: uid("source"),
         projectId: project.id,
-        title: data.title.trim() || localFile?.name || "Untitled Source",
+        title: data.title.trim() || localFile?.name || t("untitledSource"),
         sourceType: data.sourceType.trim(),
         dateAdded: data.dateAdded || nowIso(),
         actorId: actor.id,
@@ -5704,26 +6629,26 @@ function openExtractModal(sourceId) {
   if (!source) return;
 
   showModal({
-    title: "Add Extract",
+    title: t("addExtract"),
     submitText: t("approveExtract"),
     body: `
       <div class="field">
-        <label for="text">Extract</label>
+        <label for="text">${escapeHtml(t("extract"))}</label>
         <textarea id="text" name="text" required></textarea>
       </div>
       <div class="field">
-        <label for="extractMode">Mode</label>
+        <label for="extractMode">${escapeHtml(t("mode"))}</label>
         <select id="extractMode" name="extractMode">
           <option value="manual">Manual</option>
           <option value="with_approval">With approval</option>
         </select>
       </div>
       <div class="field">
-        <label for="summary">Summary</label>
+        <label for="summary">${escapeHtml(t("summary"))}</label>
         <textarea id="summary" name="summary"></textarea>
       </div>
       <div class="field">
-        <label for="tags">Tags</label>
+        <label for="tags">${escapeHtml(t("tags"))}</label>
         <input id="tags" name="tags">
       </div>
       ${auditFields()}
@@ -5769,27 +6694,27 @@ function openReadFileExtractModal(sourceId) {
   if (!source) return;
 
   showModal({
-    title: "Read File Extract",
+    title: t("readFileExtract"),
     submitText: t("approveExtract"),
     body: `
-      <p class="notice">Reads TXT/MD directly. PDF and DOCX extraction is best-effort and stays local.</p>
+      <p class="notice">${escapeHtml(t("readsFileExtractNotice"))}</p>
       <div class="field">
-        <label for="extractFile">File</label>
+        <label for="extractFile">${escapeHtml(t("file"))}</label>
         <input id="extractFile" name="extractFile" type="file" accept=".pdf,.docx,.txt,.md,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,text/markdown" required>
       </div>
       <div class="field">
-        <label for="extractMode">Mode</label>
+        <label for="extractMode">${escapeHtml(t("mode"))}</label>
         <select id="extractMode" name="extractMode">
           <option value="manual">Manual</option>
           <option value="with_approval">With approval</option>
         </select>
       </div>
       <div class="field">
-        <label for="summary">Summary</label>
+        <label for="summary">${escapeHtml(t("summary"))}</label>
         <textarea id="summary" name="summary"></textarea>
       </div>
       <div class="field">
-        <label for="tags">Tags</label>
+        <label for="tags">${escapeHtml(t("tags"))}</label>
         <input id="tags" name="tags">
       </div>
       ${auditFields()}
@@ -5798,7 +6723,7 @@ function openReadFileExtractModal(sourceId) {
       const fileField = form.querySelector('[name="extractFile"]');
       const file = fileField?.files?.[0] || data.extractFile;
       if (!file || !isSupportedExtractFile(file)) {
-        fileField?.setCustomValidity("Choose a PDF, DOCX, TXT, or MD file.");
+        fileField?.setCustomValidity(t("validationExtractFileType"));
         fileField?.reportValidity();
         fileField?.setCustomValidity("");
         return false;
@@ -5808,14 +6733,14 @@ function openReadFileExtractModal(sourceId) {
       try {
         extracted = truncateExtractedText(await extractTextFromFile(file));
       } catch (error) {
-        fileField?.setCustomValidity(error.message || "Could not read text from this file.");
+        fileField?.setCustomValidity(error.message || t("validationReadExtractFailed"));
         fileField?.reportValidity();
         fileField?.setCustomValidity("");
         return false;
       }
 
       if (!extracted.text) {
-        fileField?.setCustomValidity("No readable text was found in this file.");
+        fileField?.setCustomValidity(t("validationNoReadableText"));
         fileField?.reportValidity();
         fileField?.setCustomValidity("");
         return false;
@@ -5867,19 +6792,19 @@ function openReadFileExtractModal(sourceId) {
 function openRelationshipModal() {
   const project = getProject();
   showModal({
-    title: "Add Relationship",
+    title: t("addRelationship"),
     submitText: t("approveRelationship"),
     body: `
       <div class="field">
-        <label for="target">Related Project or Entity</label>
+        <label for="target">${escapeHtml(t("relatedProjectOrEntity"))}</label>
         <input id="target" name="target" required>
       </div>
       <div class="field">
-        <label for="relationshipType">Relationship Type</label>
-        <input id="relationshipType" name="relationshipType" placeholder="Parent, child, dependency, related">
+        <label for="relationshipType">${escapeHtml(t("relationshipType"))}</label>
+          <input id="relationshipType" name="relationshipType" placeholder="${escapeHtml(t("relationshipPlaceholder"))}">
       </div>
       <div class="field">
-        <label for="notes">Notes</label>
+        <label for="notes">${escapeHtml(t("notes"))}</label>
         <textarea id="notes" name="notes"></textarea>
       </div>
       ${auditFields()}
@@ -5917,15 +6842,15 @@ function openRelationshipModal() {
 function openQuestionModal() {
   const project = getProject();
   showModal({
-    title: "Add Open Question",
+    title: t("addOpenQuestion"),
     submitText: t("approveQuestion"),
     body: `
       <div class="field">
-        <label for="question">Open Question</label>
+        <label for="question">${escapeHtml(t("openQuestion"))}</label>
         <textarea id="question" name="question" required></textarea>
       </div>
       <div class="field">
-        <label for="context">Context</label>
+        <label for="context">${escapeHtml(t("context"))}</label>
         <textarea id="context" name="context"></textarea>
       </div>
       ${auditFields()}
@@ -5955,20 +6880,20 @@ function openQuestionModal() {
 function openActionModal() {
   const project = getProject();
   showModal({
-    title: "Add Next Action",
+    title: t("addNextAction"),
     submitText: t("approveAction"),
     body: `
       <div class="field">
-        <label for="action">Next Action</label>
+        <label for="action">${escapeHtml(t("nextAction"))}</label>
         <textarea id="action" name="action" required></textarea>
       </div>
       <div class="two-col">
         <div class="field">
-          <label for="owner">Owner</label>
+          <label for="owner">${escapeHtml(t("ownerField"))}</label>
           <input id="owner" name="owner">
         </div>
         <div class="field">
-          <label for="dueDate">Due Date</label>
+          <label for="dueDate">${escapeHtml(t("dueDate"))}</label>
           <input id="dueDate" name="dueDate" type="date">
         </div>
       </div>
@@ -6013,7 +6938,7 @@ function stampSettingsUpdate(actorId, reason) {
 function validateSettingsReason(form, data) {
   const reasonField = form.querySelector('[name="reason"]');
   if (String(data.reason || "").trim()) return true;
-  reasonField?.setCustomValidity("A reason is required.");
+  reasonField?.setCustomValidity(t("validationReasonRequired"));
   reasonField?.reportValidity();
   reasonField?.setCustomValidity("");
   return false;
@@ -6024,7 +6949,7 @@ function saveSettingsCore(data, form) {
   const primaryActor = getActor(data.primaryActorId);
   const actorField = form.querySelector('[name="primaryActorId"]');
   if (!primaryActor || normalizeActorStatus(primaryActor.status) !== "active") {
-    actorField?.setCustomValidity("Choose an active default actor.");
+    actorField?.setCustomValidity(t("validationActiveDefaultActor"));
     actorField?.reportValidity();
     actorField?.setCustomValidity("");
     return;
@@ -6041,7 +6966,7 @@ function saveSettingsStorage(data, form) {
   if (!validateSettingsReason(form, data)) return;
   if (data.storageOverrideAcknowledged === "on" && !String(data.storageOverrideReason || "").trim()) {
     const field = form.querySelector('[name="storageOverrideReason"]');
-    field?.setCustomValidity("Record the storage override reason.");
+    field?.setCustomValidity(t("validationStorageOverrideReason"));
     field?.reportValidity();
     field?.setCustomValidity("");
     return;
@@ -6058,7 +6983,7 @@ function saveSettingsBackup(data, form) {
   if (!validateSettingsReason(form, data)) return;
   if (data.backupOverrideAcknowledged === "on" && !String(data.backupOverrideReason || "").trim()) {
     const field = form.querySelector('[name="backupOverrideReason"]');
-    field?.setCustomValidity("Record the backup override reason.");
+    field?.setCustomValidity(t("validationBackupOverrideReason"));
     field?.reportValidity();
     field?.setCustomValidity("");
     return;
@@ -6080,7 +7005,7 @@ function saveSettingsActor(data, form) {
   const nextName = String(data.actorName || "").trim();
   const nameField = form.querySelector('[name="actorName"]');
   if (!nextName) {
-    nameField?.setCustomValidity("Actor name is required.");
+    nameField?.setCustomValidity(t("validationActorNameRequired"));
     nameField?.reportValidity();
     nameField?.setCustomValidity("");
     return;
@@ -6088,7 +7013,7 @@ function saveSettingsActor(data, form) {
   const nextStatus = normalizeActorStatus(data.status);
   if (store.settings.primaryActorId === actor.id && nextStatus === "archived") {
     const statusField = form.querySelector('[name="status"]');
-    statusField?.setCustomValidity("Choose a different default actor before archiving this actor.");
+    statusField?.setCustomValidity(t("validationDefaultActorArchive"));
     statusField?.reportValidity();
     statusField?.setCustomValidity("");
     return;
@@ -6109,14 +7034,14 @@ function addSettingsActor(data, form) {
   const name = String(data.actorName || "").trim();
   const nameField = form.querySelector('[name="actorName"]');
   if (!name) {
-    nameField?.setCustomValidity("Actor name is required.");
+    nameField?.setCustomValidity(t("validationActorNameRequired"));
     nameField?.reportValidity();
     nameField?.setCustomValidity("");
     return;
   }
   const existing = store.actors.find((actor) => nameKey(actor.name) === nameKey(name));
   if (existing) {
-    nameField?.setCustomValidity("An actor with this name already exists.");
+    nameField?.setCustomValidity(t("validationActorExists"));
     nameField?.reportValidity();
     nameField?.setCustomValidity("");
     return;
@@ -6291,14 +7216,14 @@ app.addEventListener("submit", (event) => {
   const actorNameValue = String(data.actorName || "").trim();
   const actorField = form.querySelector('[name="actorName"]');
   if (!actorNameValue) {
-    actorField?.setCustomValidity("Primary actor is required.");
+    actorField?.setCustomValidity(t("validationPrimaryActorRequired"));
     actorField?.reportValidity();
     actorField?.setCustomValidity("");
     return;
   }
   const confirmField = form.querySelector('[name="confirmLocalMode"]');
   if (data.confirmLocalMode !== "on") {
-    confirmField?.setCustomValidity("Confirm local mode before continuing.");
+    confirmField?.setCustomValidity(t("validationConfirmLocalMode"));
     confirmField?.reportValidity();
     confirmField?.setCustomValidity("");
     return;

@@ -1,0 +1,294 @@
+{
+  "app": "Project State",
+  "backupType": "phase-0-baseline-fixture",
+  "exportedAt": "2026-06-14T00:00:00.000Z",
+  "schemaVersion": "0.1.0",
+  "store": {
+    "schemaVersion": "0.1.0",
+    "settings": {
+      "setupCompletedAt": "2026-06-14T00:00:00.000Z",
+      "primaryActorId": "actor_owner",
+      "backupLocationHint": "Local backup folder",
+      "backupReminder": "weekly",
+      "language": "en",
+      "localMode": "single_user_local",
+      "recoveryWarnings": true,
+      "storageSystem": "local_browser_spine",
+      "backupSystem": "user_json_export",
+      "historyPolicyVersion": "0.1",
+      "mandatoryHistory": true,
+      "mandatoryHistoryFields": ["actor", "timestamp", "reason", "changedObject", "howChanged", "language"]
+    },
+    "actors": [
+      {
+        "id": "actor_owner",
+        "name": "Owner Person",
+        "type": "Human",
+        "role": "owner",
+        "status": "active"
+      },
+      {
+        "id": "actor_ai",
+        "name": "Codex",
+        "type": "AI / Tool",
+        "role": "ai_tool",
+        "status": "active"
+      }
+    ],
+    "intakeItems": [
+      {
+        "id": "intake_fixture_1",
+        "armType": "manual",
+        "status": "pending",
+        "title": "Fixture intake item",
+        "projectId": "project_alpha",
+        "createdAt": "2026-06-14T00:05:00.000Z",
+        "createdBy": "actor_owner",
+        "sourceLabel": "Fixture note",
+        "proposedObjectType": "Decision",
+        "proposedChange": {
+          "text": "Fixture intake decision"
+        },
+        "evidence": {},
+        "approval": null,
+        "archived": false
+      }
+    ],
+    "projects": [
+      {
+        "id": "project_alpha",
+        "name": "Alpha Project",
+        "createdAt": "2026-06-14T00:00:00.000Z",
+        "updatedAt": "2026-06-14T01:00:00.000Z",
+        "updatedBy": "actor_owner",
+        "currentStatus": "Fixture project is active.",
+        "currentSummary": "This project contains one of every large or growing storage category.",
+        "healthFlag": "active",
+        "archived": false,
+        "deletionStatus": "",
+        "sourceLinks": [
+          {
+            "id": "source_link_project_alpha",
+            "sourceId": "source_alpha_note",
+            "sourceTitle": "Alpha source note",
+            "attachedAt": "2026-06-14T00:30:00.000Z",
+            "attachedBy": "actor_owner",
+            "notes": "Project-level source link."
+          }
+        ],
+        "imageLinks": [
+          {
+            "id": "image_project_alpha",
+            "projectId": "project_alpha",
+            "attachedToType": "Project",
+            "attachedToId": "project_alpha",
+            "fileName": "alpha-dashboard.png",
+            "fileType": "image/png",
+            "dateAdded": "2026-06-14T00:40:00.000Z",
+            "addedBy": "actor_owner",
+            "caption": "Project dashboard fixture image.",
+            "localPath": "fixture-images/alpha-dashboard.png",
+            "dataUrl": "data:image/png;base64,fixture"
+          }
+        ],
+        "decisions": [
+          {
+            "id": "decision_alpha_1",
+            "projectId": "project_alpha",
+            "text": "Use Storage Spine v0.2 split stores.",
+            "reason": "Large records need to move out of the main store.",
+            "confidence": "High",
+            "actorId": "actor_owner",
+            "date": "2026-06-14T00:45:00.000Z",
+            "sourceLinks": [],
+            "imageLinks": []
+          }
+        ],
+        "facts": [
+          {
+            "id": "fact_alpha_1",
+            "projectId": "project_alpha",
+            "statement": "The current main record stores attachments and extracts inline.",
+            "source": "Code inspection",
+            "confidence": "High",
+            "actorId": "actor_owner",
+            "createdAt": "2026-06-14T00:46:00.000Z",
+            "sourceLinks": [],
+            "imageLinks": []
+          }
+        ],
+        "sources": [
+          {
+            "id": "source_alpha_note",
+            "projectId": "project_alpha",
+            "title": "Alpha source note",
+            "sourceType": "note",
+            "dateAdded": "2026-06-14T00:20:00.000Z",
+            "actorId": "actor_owner",
+            "location": "fixtures/alpha-note.md",
+            "summary": "Fixture source with extract text.",
+            "tags": ["fixture", "storage"],
+            "status": "active",
+            "sourceLinks": [],
+            "imageLinks": [
+              {
+                "id": "image_source_alpha",
+                "projectId": "project_alpha",
+                "attachedToType": "Source",
+                "attachedToId": "source_alpha_note",
+                "fileName": "source-shot.webp",
+                "fileType": "image/webp",
+                "dateAdded": "2026-06-14T00:35:00.000Z",
+                "addedBy": "actor_owner",
+                "caption": "Source image fixture.",
+                "localPath": "fixture-images/source-shot.webp",
+                "dataUrl": "data:image/webp;base64,fixture"
+              }
+            ],
+            "extracts": [
+              {
+                "id": "extract_alpha_1",
+                "projectId": "project_alpha",
+                "sourceId": "source_alpha_note",
+                "text": "This is representative extract text that should move to the extracts store in v0.2.",
+                "summary": "Extract fixture",
+                "extractMode": "manual",
+                "suggestionStatus": "",
+                "status": "active",
+                "tags": ["extract"],
+                "createdAt": "2026-06-14T00:25:00.000Z",
+                "actorId": "actor_owner",
+                "sourceLinks": [],
+                "imageLinks": []
+              }
+            ]
+          }
+        ],
+        "draftProjects": [
+          {
+            "id": "draft_alpha_1",
+            "projectId": "project_alpha",
+            "name": "Draft Alpha Project",
+            "createdAt": "2026-06-14T00:50:00.000Z",
+            "createdDate": "2026-06-14T00:50:00.000Z",
+            "sourceId": "source_alpha_note",
+            "sourceTitle": "Alpha source note",
+            "extractId": "extract_alpha_1",
+            "draft": "Draft project text should move to the drafts store in v0.2.",
+            "status": "draft",
+            "reviewFlags": {
+              "factsReviewed": true,
+              "decisionsReviewed": true,
+              "questionsReviewed": false,
+              "actionsReviewed": false,
+              "relationshipsReviewed": false,
+              "readyForApproval": false
+            },
+            "sourceLinks": [],
+            "imageLinks": []
+          }
+        ],
+        "relationships": [
+          {
+            "id": "relationship_alpha_beta",
+            "projectId": "project_alpha",
+            "target": "Beta Project",
+            "targetProjectId": "project_beta",
+            "relationshipType": "related",
+            "notes": "Fixture relationship by project ID.",
+            "status": "active",
+            "actorId": "actor_owner",
+            "createdAt": "2026-06-14T00:55:00.000Z",
+            "sourceLinks": [],
+            "imageLinks": []
+          }
+        ],
+        "openQuestions": [
+          {
+            "id": "question_alpha_1",
+            "projectId": "project_alpha",
+            "question": "Which storage split should happen first?",
+            "context": "Phase 2 planning.",
+            "status": "open",
+            "actorId": "actor_owner",
+            "createdAt": "2026-06-14T00:56:00.000Z",
+            "sourceLinks": [],
+            "imageLinks": []
+          }
+        ],
+        "nextActions": [
+          {
+            "id": "action_alpha_1",
+            "projectId": "project_alpha",
+            "action": "Build Phase 0 baseline harness.",
+            "owner": "Owner Person",
+            "dueDate": "2026-06-15",
+            "completedAt": "",
+            "status": "open",
+            "actorId": "actor_owner",
+            "createdAt": "2026-06-14T00:57:00.000Z",
+            "sourceLinks": [],
+            "imageLinks": []
+          }
+        ],
+        "changes": [
+          {
+            "id": "change_alpha_1",
+            "projectId": "project_alpha",
+            "actorId": "actor_owner",
+            "actorName": "Owner Person",
+            "timestamp": "2026-06-14T01:00:00.000Z",
+            "language": "en",
+            "howChanged": "human_ui",
+            "reason": "Fixture baseline change.",
+            "summary": "Fixture change recorded",
+            "details": {
+              "origin": "human_ui",
+              "language": "en",
+              "objectType": "Project",
+              "objectId": "project_alpha",
+              "objectTitle": "Alpha Project",
+              "objectText": "Alpha Project"
+            },
+            "imageLinks": [
+              {
+                "id": "image_change_alpha",
+                "projectId": "project_alpha",
+                "attachedToType": "Change",
+                "attachedToId": "change_alpha_1",
+                "fileName": "change-proof.gif",
+                "fileType": "image/gif",
+                "dateAdded": "2026-06-14T01:01:00.000Z",
+                "addedBy": "actor_owner",
+                "caption": "Change proof image fixture.",
+                "localPath": "fixture-images/change-proof.gif",
+                "dataUrl": "data:image/gif;base64,fixture"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "project_beta",
+        "name": "Beta Project",
+        "createdAt": "2026-06-14T00:10:00.000Z",
+        "updatedAt": "2026-06-14T00:10:00.000Z",
+        "updatedBy": "actor_owner",
+        "currentStatus": "Related fixture project.",
+        "currentSummary": "Used to verify relationship target IDs survive.",
+        "healthFlag": "on_hold",
+        "archived": false,
+        "sourceLinks": [],
+        "imageLinks": [],
+        "decisions": [],
+        "facts": [],
+        "sources": [],
+        "draftProjects": [],
+        "relationships": [],
+        "openQuestions": [],
+        "nextActions": [],
+        "changes": []
+      }
+    ]
+  }
+}

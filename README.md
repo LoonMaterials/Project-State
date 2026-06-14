@@ -242,6 +242,46 @@ Changed object
 How the change entered the core
 Active UI language
 
+Storage Spine v0.2 Phase 0 Baseline
+
+Phase 0 adds a representative v0.1 storage fixture and a baseline checker before any storage migration work.
+
+Fixture:
+
+fixtures/storage-spine-v0.1-baseline.json
+
+Checker:
+
+scripts/storage-phase0-baseline-check.js
+
+Run:
+
+node scripts/storage-phase0-baseline-check.js
+
+The checker counts actors, projects, sources, extracts, drafts, relationships, actions, history, attachments, and source links. It also verifies core references such as project IDs, source/extract links, relationship targets, attachment targets, and mandatory history fields.
+
+Storage Spine v0.2 Phase 1 Manifest
+
+Phase 1 keeps the current single `records/main` IndexedDB layout, but adds a storage-spine manifest and save verification before the larger multi-store split.
+
+The app now writes:
+
+records/main: the current complete Project State store
+records/spine-meta: a small manifest with spine version, layout version, counts, storage size, large-content counts, and future split targets
+records/legacy-json-backup: preserved legacy localStorage data when migration from the old JSON blob occurs
+
+The save path writes the main record, writes the manifest, then reads the main record back to verify key counts before marking the app saved.
+
+Checker:
+
+scripts/storage-phase1-spine-check.js
+
+Run:
+
+node scripts/storage-phase1-spine-check.js
+
+Phase 1 does not split project data into separate stores yet. It prepares and verifies the bookkeeping needed for that split.
+
 Questions I'd Love Feedback On
 Architecture
 Should project state be directly editable or derived from change events?
