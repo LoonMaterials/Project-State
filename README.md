@@ -282,6 +282,39 @@ node scripts/storage-phase1-spine-check.js
 
 Phase 1 does not split project data into separate stores yet. It prepares and verifies the bookkeeping needed for that split.
 
+Storage Spine v0.2 Phase 2 Split Stores
+
+Phase 2 makes the split IndexedDB stores the primary storage path while preserving `records/main` as a full backup copy.
+
+Primary object stores:
+
+meta
+projects
+history
+sources
+extracts
+attachments
+drafts
+recovery
+
+Compatibility backup:
+
+records/main remains a complete Project State store backup.
+records/spine-meta remains as a compatibility manifest record.
+records/legacy-json-backup remains for old localStorage migration evidence.
+
+On load, the app tries the split stores first. If the split manifest is missing or invalid, the app falls back to the preserved `records/main` store and writes the split stores again after normalization. If both paths fail, recovery mode preserves the raw failed data instead of opening a blank store.
+
+Checker:
+
+scripts/storage-phase2-split-check.js
+
+Run:
+
+node scripts/storage-phase2-split-check.js
+
+The checker splits the Phase 0 fixture, rebuilds the full Project State store from the split records, and verifies the rebuilt store still passes the original integrity checks.
+
 Questions I'd Love Feedback On
 Architecture
 Should project state be directly editable or derived from change events?

@@ -1,12 +1,14 @@
 const STORAGE_KEY = "project-state.v0.1";
 const STORAGE_DB_NAME = "project-state-spine";
-const STORAGE_DB_VERSION = 1;
+const STORAGE_DB_VERSION = 2;
 const STORAGE_OBJECT_STORE = "records";
 const STORAGE_MAIN_RECORD = "main";
 const STORAGE_META_RECORD = "spine-meta";
+const STORAGE_META_MAIN_RECORD = "store";
 const STORAGE_LEGACY_BACKUP_RECORD = "legacy-json-backup";
-const STORAGE_SPINE_VERSION = "0.2.0-phase1";
-const STORAGE_LAYOUT_VERSION = "single-record-v1";
+const STORAGE_SPINE_VERSION = "0.2.0-phase3";
+const STORAGE_LAYOUT_VERSION = "split-stores-v1-audited";
+const STORAGE_SPLIT_STORES = ["meta", "projects", "history", "sources", "extracts", "attachments", "drafts", "recovery"];
 const DISPLAY_TEXT_LIMIT = 1200;
 const DISPLAY_META_LIMIT = 240;
 const EXTRACT_TEXT_LIMIT = 5000;
@@ -1720,6 +1722,9 @@ const ProjectStateStorage = {
       request.addEventListener("upgradeneeded", () => {
         const db = request.result;
         if (!db.objectStoreNames.contains(STORAGE_OBJECT_STORE)) db.createObjectStore(STORAGE_OBJECT_STORE, { keyPath: "id" });
+        for (const storeName of STORAGE_SPLIT_STORES) {
+          if (!db.objectStoreNames.contains(storeName)) db.createObjectStore(storeName, { keyPath: "id" });
+        }
       });
       request.addEventListener("success", () => resolve(request.result));
       request.addEventListener("error", () => reject(request.error));
@@ -1727,42 +1732,77 @@ const ProjectStateStorage = {
     return this.db;
   },
   async getRecord(id) {
+    return this.getFromStore(STORAGE_OBJECT_STORE, id);
+  },
+  async getFromStore(storeName, id) {
     const db = await this.open();
     if (!db) return null;
     return new Promise((resolve, reject) => {
-      const transaction = db.transaction(STORAGE_OBJECT_STORE, "readonly");
-      const request = transaction.objectStore(STORAGE_OBJECT_STORE).get(id);
+      const transaction = db.transaction(storeName, "readonly");
+      const request = transaction.objectStore(storeName).get(id);
       request.addEventListener("success", () => resolve(request.result || null));
       request.addEventListener("error", () => reject(request.error));
     });
   },
   async putRecord(record) {
+    return this.putInStore(STORAGE_OBJECT_STORE, record);
+  },
+  async putInStore(storeName, record) {
     const db = await this.open();
     if (!db) return false;
     return new Promise((resolve, reject) => {
-      const transaction = db.transaction(STORAGE_OBJECT_STORE, "readwrite");
-      transaction.objectStore(STORAGE_OBJECT_STORE).put(record);
+      const transaction = db.transaction(storeName, "readwrite");
+      transaction.objectStore(storeName).put(record);
       transaction.addEventListener("complete", () => resolve(true));
       transaction.addEventListener("error", () => reject(transaction.error));
       transaction.addEventListener("abort", () => reject(transaction.error));
     });
   },
   async deleteRecord(id) {
+    return this.deleteFromStore(STORAGE_OBJECT_STORE, id);
+  },
+  async deleteFromStore(storeName, id) {
     const db = await this.open();
     if (!db) return false;
     return new Promise((resolve, reject) => {
-      const transaction = db.transaction(STORAGE_OBJECT_STORE, "readwrite");
-      transaction.objectStore(STORAGE_OBJECT_STORE).delete(id);
+      const transaction = db.transaction(storeName, "readwrite");
+      transaction.objectStore(storeName).delete(id);
+      transaction.addEventListener("complete", () => resolve(true));
+      transaction.addEventListener("error", () => reject(transaction.error));
+      transaction.addEventListener("abort", () => reject(transaction.error));
+    });
+  },
+  async getAllFromStore(storeName) {
+    const db = await this.open();
+    if (!db) return [];
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction(storeName, "readonly");
+      const request = transaction.objectStore(storeName).getAll();
+      request.addEventListener("success", () => resolve(request.result || []));
+      request.addEventListener("error", () => reject(request.error));
+    });
+  },
+  async clearStore(storeName) {
+    const db = await this.open();
+    if (!db) return false;
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction(storeName, "readwrite");
+      transaction.objectStore(storeName).clear();
       transaction.addEventListener("complete", () => resolve(true));
       transaction.addEventListener("error", () => reject(transaction.error));
       transaction.addEventListener("abort", () => reject(transaction.error));
     });
   },
   async getMetaRecord() {
-    return this.supported() ? this.getRecord(STORAGE_META_RECORD) : null;
+    if (!this.supported()) return null;
+    return await this.getFromStore("meta", STORAGE_META_MAIN_RECORD) || this.getRecord(STORAGE_META_RECORD);
   },
   async putMetaRecord(manifest) {
     if (!this.supported()) return false;
+    await this.putInStore("meta", {
+      id: STORAGE_META_MAIN_RECORD,
+      ...manifest
+    });
     await this.putRecord({
       id: STORAGE_META_RECORD,
       ...manifest
@@ -1772,12 +1812,24 @@ const ProjectStateStorage = {
   },
   async load() {
     if (this.supported()) {
+      try {
+        const splitStore = await this.loadSplitStore();
+        if (splitStore) return splitStore;
+      } catch (error) {
+        console.warn("Project State split-store load failed; attempting preserved main record.", error);
+        await this.preserveRecoveryRecord({
+          stage: "split-store-load",
+          message: error?.message || "Unknown split-store load failure",
+          stack: error?.stack || ""
+        });
+      }
+
       const record = await this.getRecord(STORAGE_MAIN_RECORD);
       if (record?.store) {
         const meta = await this.getMetaRecord();
         storageSpineMeta = meta || record.storageSpine || null;
         return {
-          source: "indexeddb",
+          source: "indexeddb-main-backup",
           store: record.store,
           raw: JSON.stringify(record.store),
           meta: storageSpineMeta
@@ -1798,20 +1850,10 @@ const ProjectStateStorage = {
     storageSnapshotText = snapshot;
     storageSpineMeta = manifest;
     if (this.supported()) {
-      await this.putRecord({
-        id: STORAGE_MAIN_RECORD,
-        app: "Project State",
-        spineVersion: STORAGE_SPINE_VERSION,
-        layoutVersion: STORAGE_LAYOUT_VERSION,
-        schemaVersion: nextStore.schemaVersion,
-        updatedAt: nowIso(),
-        storageSpine: manifest,
-        store: nextStore
-      });
-      await this.putMetaRecord(manifest);
-      await this.verifyMainRecord(nextStore, manifest);
+      await this.writeSplitStore(nextStore, manifest);
+      await this.verifySplitStore(nextStore, manifest);
       localStorage.removeItem(STORAGE_KEY);
-      storageMode = "indexeddb";
+      storageMode = "indexeddb-split";
       return;
     }
     localStorage.setItem(STORAGE_KEY, JSON.stringify(nextStore, null, 2));
@@ -1837,6 +1879,67 @@ const ProjectStateStorage = {
     await this.putMetaRecord(manifest);
     return manifest;
   },
+  async loadSplitStore() {
+    const meta = await this.getMetaRecord();
+    if (meta?.spineVersion !== STORAGE_SPINE_VERSION || meta?.layoutVersion !== STORAGE_LAYOUT_VERSION) return null;
+    const split = {};
+    for (const storeName of STORAGE_SPLIT_STORES) {
+      split[storeName] = await this.getAllFromStore(storeName);
+    }
+    const splitAuditErrors = auditSplitStoreRecords(split);
+    if (splitAuditErrors.length) throw new Error(`Storage spine split audit failed: ${splitAuditErrors.join("; ")}`);
+    const rebuilt = rebuildStoreFromSplitRecords(split);
+    const manifest = buildStorageSpineManifest(rebuilt, JSON.stringify(rebuilt));
+    verifyStorageSpineManifest(manifest, meta);
+    storageSpineMeta = meta;
+    return {
+      source: "indexeddb-split",
+      store: rebuilt,
+      raw: JSON.stringify(rebuilt),
+      meta
+    };
+  },
+  async writeSplitStore(nextStore, manifest) {
+    const db = await this.open();
+    if (!db) return false;
+    const split = splitStoreRecords(nextStore, manifest);
+    split.recovery = await this.getAllFromStore("recovery").catch(() => []);
+    await new Promise((resolve, reject) => {
+      const transaction = db.transaction([STORAGE_OBJECT_STORE, ...STORAGE_SPLIT_STORES], "readwrite");
+      for (const storeName of STORAGE_SPLIT_STORES) transaction.objectStore(storeName).clear();
+
+      transaction.objectStore(STORAGE_OBJECT_STORE).put({
+        id: STORAGE_MAIN_RECORD,
+        app: "Project State",
+        role: "phase2-main-backup",
+        spineVersion: STORAGE_SPINE_VERSION,
+        layoutVersion: STORAGE_LAYOUT_VERSION,
+        schemaVersion: nextStore.schemaVersion,
+        updatedAt: manifest.generatedAt,
+        storageSpine: manifest,
+        store: nextStore
+      });
+      transaction.objectStore(STORAGE_OBJECT_STORE).put({
+        id: STORAGE_META_RECORD,
+        ...manifest
+      });
+
+      transaction.objectStore("meta").put(split.meta);
+      for (const project of split.projects) transaction.objectStore("projects").put(project);
+      for (const change of split.history) transaction.objectStore("history").put(change);
+      for (const source of split.sources) transaction.objectStore("sources").put(source);
+      for (const extract of split.extracts) transaction.objectStore("extracts").put(extract);
+      for (const attachment of split.attachments) transaction.objectStore("attachments").put(attachment);
+      for (const draft of split.drafts) transaction.objectStore("drafts").put(draft);
+      for (const recovery of split.recovery) transaction.objectStore("recovery").put(recovery);
+
+      transaction.addEventListener("complete", () => resolve(true));
+      transaction.addEventListener("error", () => reject(transaction.error));
+      transaction.addEventListener("abort", () => reject(transaction.error));
+    });
+    storageSpineMeta = manifest;
+    return true;
+  },
   async verifyMainRecord(expectedStore, expectedManifest) {
     if (!this.supported()) return true;
     const record = await this.getRecord(STORAGE_MAIN_RECORD);
@@ -1850,6 +1953,17 @@ const ProjectStateStorage = {
     if (readback.largeContent.attachments !== expectedManifest.largeContent.attachments) throw new Error("Storage spine verification failed: attachment count mismatch.");
     return true;
   },
+  async verifySplitStore(expectedStore, expectedManifest) {
+    const splitStore = await this.loadSplitStore();
+    if (!splitStore?.store) throw new Error("Storage spine verification failed: split stores did not reload.");
+    const readback = buildStorageSpineManifest(splitStore.store, JSON.stringify(splitStore.store));
+    verifyStorageSpineManifest(readback, expectedManifest);
+    if (readback.counts.projects !== expectedManifest.counts.projects) throw new Error("Storage spine verification failed: split project count mismatch.");
+    if (readback.counts.changes !== expectedManifest.counts.changes) throw new Error("Storage spine verification failed: split history count mismatch.");
+    if (readback.largeContent.attachments !== expectedManifest.largeContent.attachments) throw new Error("Storage spine verification failed: split attachment count mismatch.");
+    await this.verifyMainRecord(expectedStore, expectedManifest);
+    return true;
+  },
   async preserveLegacyRaw(raw) {
     if (!raw || !this.supported()) return;
     await this.putRecord({
@@ -1859,17 +1973,267 @@ const ProjectStateStorage = {
       raw
     });
   },
+  async preserveRecoveryRecord(issue = {}) {
+    if (!this.supported()) return;
+    try {
+      await this.putInStore("recovery", {
+        id: uid("recovery"),
+        date: nowIso(),
+        ...issue
+      });
+    } catch (error) {
+      console.warn("Project State could not preserve a recovery record.", error);
+    }
+  },
   async reset() {
     if (this.supported()) {
       await this.deleteRecord(STORAGE_MAIN_RECORD);
       await this.deleteRecord(STORAGE_META_RECORD);
       await this.deleteRecord(STORAGE_LEGACY_BACKUP_RECORD);
+      for (const storeName of STORAGE_SPLIT_STORES) await this.clearStore(storeName);
     }
     localStorage.removeItem(STORAGE_KEY);
     storageSnapshotText = "";
     storageSpineMeta = null;
   }
 };
+
+function cloneRecord(record) {
+  return JSON.parse(JSON.stringify(record || {}));
+}
+
+function withoutImageLinks(record) {
+  const clone = cloneRecord(record);
+  delete clone.imageLinks;
+  return clone;
+}
+
+function withSortIndex(record, index) {
+  return {
+    ...record,
+    _sortIndex: index
+  };
+}
+
+function cleanSplitRecord(record) {
+  const clone = cloneRecord(record);
+  delete clone._sortIndex;
+  return clone;
+}
+
+function sortSplitRecords(records = []) {
+  return [...records].sort((a, b) => (a._sortIndex ?? 0) - (b._sortIndex ?? 0)).map(cleanSplitRecord);
+}
+
+function splitStoreRecords(nextStore, manifest) {
+  const split = {
+    meta: {
+      id: STORAGE_META_MAIN_RECORD,
+      ...manifest,
+      schemaVersion: nextStore.schemaVersion || "",
+      settings: cloneRecord(nextStore.settings),
+      actors: cloneRecord(nextStore.actors || []),
+      intakeItems: cloneRecord(nextStore.intakeItems || [])
+    },
+    projects: [],
+    history: [],
+    sources: [],
+    extracts: [],
+    attachments: [],
+    drafts: [],
+    recovery: []
+  };
+
+  const addAttachments = (project, ownerType, ownerId, links = []) => {
+    (links || []).forEach((image) => {
+      split.attachments.push(withSortIndex({
+        ...cloneRecord(image),
+        projectId: image.projectId || project.id,
+        attachedToType: image.attachedToType || ownerType,
+        attachedToId: image.attachedToId || ownerId
+      }, split.attachments.length));
+    });
+  };
+
+  (nextStore.projects || []).forEach((project, projectIndex) => {
+    const projectRecord = withoutImageLinks(project);
+    projectRecord.decisions = (project.decisions || []).map(withoutImageLinks);
+    projectRecord.facts = (project.facts || []).map(withoutImageLinks);
+    projectRecord.relationships = (project.relationships || []).map(withoutImageLinks);
+    projectRecord.openQuestions = (project.openQuestions || []).map(withoutImageLinks);
+    projectRecord.nextActions = (project.nextActions || []).map(withoutImageLinks);
+    projectRecord.sourceIds = (project.sources || []).map((source) => source.id);
+    projectRecord.historyIds = (project.changes || []).map((change) => change.id);
+    projectRecord.draftProjectIds = (project.draftProjects || []).map((draft) => draft.id);
+    projectRecord.attachmentIds = (project.imageLinks || []).map((image) => image.id);
+    delete projectRecord.sources;
+    delete projectRecord.changes;
+    delete projectRecord.draftProjects;
+    split.projects.push(withSortIndex(projectRecord, projectIndex));
+    addAttachments(project, "Project", project.id, project.imageLinks);
+
+    (project.changes || []).forEach((change, changeIndex) => {
+      const historyRecord = withoutImageLinks(change);
+      historyRecord.projectId = historyRecord.projectId || project.id;
+      split.history.push(withSortIndex(historyRecord, changeIndex));
+      addAttachments(project, "Change", change.id, change.imageLinks);
+    });
+
+    (project.sources || []).forEach((source, sourceIndex) => {
+      const sourceRecord = withoutImageLinks(source);
+      sourceRecord.projectId = sourceRecord.projectId || project.id;
+      sourceRecord.extractIds = (source.extracts || []).map((extract) => extract.id);
+      sourceRecord.attachmentIds = (source.imageLinks || []).map((image) => image.id);
+      delete sourceRecord.extracts;
+      split.sources.push(withSortIndex(sourceRecord, sourceIndex));
+      addAttachments(project, "Source", source.id, source.imageLinks);
+
+      (source.extracts || []).forEach((extract, extractIndex) => {
+        const extractRecord = withoutImageLinks(extract);
+        extractRecord.projectId = extractRecord.projectId || project.id;
+        extractRecord.sourceId = extractRecord.sourceId || source.id;
+        extractRecord.attachmentIds = (extract.imageLinks || []).map((image) => image.id);
+        split.extracts.push(withSortIndex(extractRecord, extractIndex));
+        addAttachments(project, "Extract", extract.id, extract.imageLinks);
+      });
+    });
+
+    (project.draftProjects || []).forEach((draft, draftIndex) => {
+      const draftRecord = withoutImageLinks(draft);
+      draftRecord.projectId = draftRecord.projectId || project.id;
+      draftRecord.attachmentIds = (draft.imageLinks || []).map((image) => image.id);
+      split.drafts.push(withSortIndex(draftRecord, draftIndex));
+      addAttachments(project, "DraftProject", draft.id, draft.imageLinks);
+    });
+
+    const objectLists = [
+      ["Decision", project.decisions || []],
+      ["Fact", project.facts || []],
+      ["Relationship", project.relationships || []],
+      ["OpenQuestion", project.openQuestions || []],
+      ["NextAction", project.nextActions || []]
+    ];
+    for (const [objectType, objects] of objectLists) {
+      for (const object of objects) addAttachments(project, objectType, object.id, object.imageLinks);
+    }
+  });
+
+  return split;
+}
+
+function rebuildStoreFromSplitRecords(split = {}) {
+  const meta = (split.meta || []).find((record) => record.id === STORAGE_META_MAIN_RECORD) || {};
+  const rebuilt = {
+    ...emptyStore(),
+    schemaVersion: meta.schemaVersion || "0.1.0",
+    settings: meta.settings || defaultSettings(),
+    actors: Array.isArray(meta.actors) ? meta.actors : [],
+    intakeItems: Array.isArray(meta.intakeItems) ? meta.intakeItems : [],
+    projects: sortSplitRecords(split.projects || [])
+  };
+
+  for (const project of rebuilt.projects) {
+    project.sources = [];
+    project.changes = [];
+    project.draftProjects = [];
+    project.imageLinks = [];
+  }
+
+  const projectById = new Map(rebuilt.projects.map((project) => [project.id, project]));
+
+  for (const source of sortSplitRecords(split.sources || [])) {
+    const project = projectById.get(source.projectId);
+    if (!project) continue;
+    source.extracts = [];
+    source.imageLinks = [];
+    project.sources.push(source);
+  }
+
+  const sourceById = new Map();
+  for (const project of rebuilt.projects) {
+    for (const source of project.sources) sourceById.set(source.id, source);
+  }
+
+  for (const extract of sortSplitRecords(split.extracts || [])) {
+    const source = sourceById.get(extract.sourceId);
+    if (!source) continue;
+    extract.imageLinks = [];
+    source.extracts.push(extract);
+  }
+
+  for (const change of sortSplitRecords(split.history || [])) {
+    const project = projectById.get(change.projectId);
+    if (!project) continue;
+    change.imageLinks = [];
+    project.changes.push(change);
+  }
+
+  for (const draft of sortSplitRecords(split.drafts || [])) {
+    const project = projectById.get(draft.projectId);
+    if (!project) continue;
+    draft.imageLinks = [];
+    project.draftProjects.push(draft);
+  }
+
+  for (const attachment of sortSplitRecords(split.attachments || [])) {
+    const project = projectById.get(attachment.projectId);
+    if (!project) continue;
+    const object = findSplitAttachmentTarget(project, attachment.attachedToType, attachment.attachedToId);
+    if (!object) continue;
+    if (!Array.isArray(object.imageLinks)) object.imageLinks = [];
+    object.imageLinks.push(attachment);
+  }
+
+  for (const project of rebuilt.projects) {
+    delete project.sourceIds;
+    delete project.historyIds;
+    delete project.draftProjectIds;
+    delete project.attachmentIds;
+    for (const source of project.sources || []) {
+      delete source.extractIds;
+      delete source.attachmentIds;
+      for (const extract of source.extracts || []) delete extract.attachmentIds;
+    }
+    for (const draft of project.draftProjects || []) delete draft.attachmentIds;
+  }
+
+  return rebuilt;
+}
+
+function findSplitAttachmentTarget(project, objectType, objectId) {
+  if (objectType === "Project" && project.id === objectId) return project;
+  const lists = {
+    Decision: project.decisions || [],
+    Fact: project.facts || [],
+    Relationship: project.relationships || [],
+    OpenQuestion: project.openQuestions || [],
+    NextAction: project.nextActions || [],
+    DraftProject: project.draftProjects || [],
+    Change: project.changes || []
+  };
+  if (lists[objectType]) return lists[objectType].find((item) => item.id === objectId) || null;
+  if (objectType === "Source") return (project.sources || []).find((source) => source.id === objectId) || null;
+  if (objectType === "Extract") {
+    for (const source of project.sources || []) {
+      const extract = (source.extracts || []).find((item) => item.id === objectId);
+      if (extract) return extract;
+    }
+  }
+  return null;
+}
+
+function verifyStorageSpineManifest(actual, expected) {
+  if (!actual || !expected) throw new Error("Storage spine verification failed: missing manifest.");
+  if (actual.spineVersion !== expected.spineVersion) throw new Error("Storage spine verification failed: spine version mismatch.");
+  if (actual.layoutVersion !== expected.layoutVersion) throw new Error("Storage spine verification failed: layout version mismatch.");
+  if (actual.counts.projects !== expected.counts.projects) throw new Error("Storage spine verification failed: project count mismatch.");
+  if (actual.counts.sources !== expected.counts.sources) throw new Error("Storage spine verification failed: source count mismatch.");
+  if (actual.counts.extracts !== expected.counts.extracts) throw new Error("Storage spine verification failed: extract count mismatch.");
+  if (actual.counts.drafts !== expected.counts.drafts) throw new Error("Storage spine verification failed: draft count mismatch.");
+  if (actual.counts.changes !== expected.counts.changes) throw new Error("Storage spine verification failed: history count mismatch.");
+  if (actual.largeContent.attachments !== expected.largeContent.attachments) throw new Error("Storage spine verification failed: attachment count mismatch.");
+  return true;
+}
 
 function buildStorageSpineManifest(nextStore = emptyStore(), snapshot = "") {
   const counts = {
@@ -1949,9 +2313,10 @@ function buildStorageSpineManifest(nextStore = emptyStore(), snapshot = "") {
     storageKey: STORAGE_KEY,
     dbName: STORAGE_DB_NAME,
     dbVersion: STORAGE_DB_VERSION,
-    objectStores: [STORAGE_OBJECT_STORE],
+    objectStores: [STORAGE_OBJECT_STORE, ...STORAGE_SPLIT_STORES],
     mainRecordId: STORAGE_MAIN_RECORD,
     metaRecordId: STORAGE_META_RECORD,
+    splitMetaRecordId: STORAGE_META_MAIN_RECORD,
     legacyBackupRecordId: STORAGE_LEGACY_BACKUP_RECORD,
     storeSchemaVersion: nextStore.schemaVersion || "",
     snapshotBytes,
@@ -1980,9 +2345,9 @@ async function loadStore() {
     const parsed = loaded.store || JSON.parse(loaded.raw);
     const normalized = normalizeStore(parsed);
     storageSnapshotText = JSON.stringify(normalized);
-    storageMode = loaded.source === "legacy-json" && ProjectStateStorage.supported() ? "migrated-to-indexeddb" : loaded.source;
+    storageMode = loaded.source === "legacy-json" && ProjectStateStorage.supported() ? "migrated-to-indexeddb-split" : loaded.source;
     if (loaded.source === "legacy-json") await ProjectStateStorage.preserveLegacyRaw(loaded.raw);
-    if (migrationNeeded || loaded.source !== "indexeddb") await ProjectStateStorage.save(normalized);
+    if (migrationNeeded || loaded.source !== "indexeddb-split") await ProjectStateStorage.save(normalized);
     else await ProjectStateStorage.ensureMeta(normalized);
     return normalized;
   } catch (error) {
@@ -1993,6 +2358,13 @@ async function loadStore() {
       stack: error?.stack || "",
       date: nowIso()
     };
+    await ProjectStateStorage.preserveRecoveryRecord({
+      stage: "store-load",
+      source: loadFailure.source,
+      message: loadFailure.message,
+      stack: loadFailure.stack,
+      raw: loadFailure.raw
+    });
     console.error("Project State could not load saved data.", loadFailure);
     return null;
   }
@@ -4546,7 +4918,7 @@ async function resetFailedData() {
   migrationNeeded = false;
   store = emptyStore();
   storageReady = true;
-  storageMode = ProjectStateStorage.supported() ? "indexeddb" : "legacy-json-fallback";
+  storageMode = ProjectStateStorage.supported() ? "indexeddb-split" : "legacy-json-fallback";
   activeProjectId = null;
   activeView = "dashboard";
   activeHistoryFilter = null;
@@ -4566,7 +4938,7 @@ async function resetLocalDataFromSettings() {
   migrationNeeded = false;
   store = emptyStore();
   storageReady = true;
-  storageMode = ProjectStateStorage.supported() ? "indexeddb" : "legacy-json-fallback";
+  storageMode = ProjectStateStorage.supported() ? "indexeddb-split" : "legacy-json-fallback";
   activeProjectId = null;
   activeRootView = "projects";
   activeView = "dashboard";
