@@ -368,6 +368,7 @@ const LANGUAGES = {
     sources: "Sources",
     draftProjects: "Draft Projects",
     lastUpdated: "Last Updated",
+    updated: "Updated",
     updatedBy: "Updated By",
     health: "Health",
     project: "Project",
@@ -375,6 +376,8 @@ const LANGUAGES = {
     extract: "Extract",
     attachedImages: "Attached Images:",
     attachedSources: "Attached Sources:",
+    added: "Added",
+    localReference: "Local reference",
     allEvents: "All events",
     eventType: "Event Type",
     projectName: "Project Name",
@@ -397,12 +400,19 @@ const LANGUAGES = {
     source: "Source",
     title: "Title",
     type: "Type",
+    unknown: "Unknown",
     dateAdded: "Date Added",
+    actor: "Actor",
     location: "Location",
+    localFile: "Local File",
+    modified: "Modified",
     findLocalFile: "Find Local File",
     summary: "Summary",
     tags: "Tags",
     mode: "Mode",
+    suggestionStatus: "Suggestion Status",
+    truncated: "Truncated",
+    related: "Related",
     relatedProjectOrEntity: "Related Project or Entity",
     relationshipType: "Relationship Type",
     notes: "Notes",
@@ -422,6 +432,24 @@ const LANGUAGES = {
     imageFile: "Image File",
     captionNotes: "Caption / Notes",
     file: "File",
+    factsReviewed: "Facts reviewed",
+    decisionsReviewed: "Decisions reviewed",
+    questionsReviewed: "Questions reviewed",
+    actionsReviewed: "Actions reviewed",
+    relationshipsReviewed: "Relationships reviewed",
+    readyForApproval: "Ready for approval",
+    due: "Due",
+    notSet: "Not set",
+    completed: "Completed",
+    notCompleted: "Not completed",
+    noDueDate: "No due date",
+    searchResultsFor: "{count} results for \"{query}\"",
+    noSearchResultsFor: "No results for \"{query}\"",
+    limitCharacters: "Limit {limit} characters",
+    viewImage: "View {name}",
+    attachedImage: "Attached Image",
+    draftProjectDefault: "Draft Project",
+    changeHistory: "Change History",
     addSourceBeforeAttaching: "Add a source before attaching one to this object.",
     approvalAppliesChangeNotice: "Approval applies this proposed change to the selected project and records it in history.",
     approvalCreatesProjectNotice: "Approval creates a new project from this draft and records the approval on the draft.",
@@ -731,6 +759,7 @@ const LANGUAGES = {
     sources: "Sources",
     draftProjects: "Projets brouillons",
     lastUpdated: "Dernière mise à jour",
+    updated: "Mis à jour",
     updatedBy: "Mis à jour par",
     health: "Santé",
     project: "Projet",
@@ -738,6 +767,8 @@ const LANGUAGES = {
     extract: "Extrait",
     attachedImages: "Images jointes :",
     attachedSources: "Sources jointes :",
+    added: "Ajouté",
+    localReference: "Référence locale",
     allEvents: "Tous les événements",
     eventType: "Type d’événement",
     projectName: "Nom du projet",
@@ -760,12 +791,19 @@ const LANGUAGES = {
     source: "Source",
     title: "Titre",
     type: "Type",
+    unknown: "Inconnu",
     dateAdded: "Date ajoutée",
+    actor: "Acteur",
     location: "Emplacement",
+    localFile: "Fichier local",
+    modified: "Modifié",
     findLocalFile: "Trouver un fichier local",
     summary: "Résumé",
     tags: "Étiquettes",
     mode: "Mode",
+    suggestionStatus: "Statut de suggestion",
+    truncated: "Tronqué",
+    related: "Lié",
     relatedProjectOrEntity: "Projet ou entité liée",
     relationshipType: "Type de relation",
     notes: "Notes",
@@ -785,6 +823,24 @@ const LANGUAGES = {
     imageFile: "Fichier image",
     captionNotes: "Légende / Notes",
     file: "Fichier",
+    factsReviewed: "Faits revus",
+    decisionsReviewed: "Décisions revues",
+    questionsReviewed: "Questions revues",
+    actionsReviewed: "Actions revues",
+    relationshipsReviewed: "Relations revues",
+    readyForApproval: "Prêt pour approbation",
+    due: "Échéance",
+    notSet: "Non défini",
+    completed: "Terminé",
+    notCompleted: "Non terminé",
+    noDueDate: "Aucune échéance",
+    searchResultsFor: "{count} résultats pour « {query} »",
+    noSearchResultsFor: "Aucun résultat pour « {query} »",
+    limitCharacters: "Limite de {limit} caractères",
+    viewImage: "Voir {name}",
+    attachedImage: "Image jointe",
+    draftProjectDefault: "Projet brouillon",
+    changeHistory: "Historique des changements",
     addSourceBeforeAttaching: "Ajoutez une source avant d’en joindre une à cet objet.",
     approvalAppliesChangeNotice: "L’approbation applique ce changement proposé au projet sélectionné et l’enregistre dans l’historique.",
     approvalCreatesProjectNotice: "L’approbation crée un nouveau projet à partir de ce brouillon et enregistre l’approbation sur le brouillon.",
@@ -1094,6 +1150,7 @@ const LANGUAGES = {
     sources: "Quellen",
     draftProjects: "Projektentwürfe",
     lastUpdated: "Zuletzt aktualisiert",
+    updated: "Aktualisiert",
     updatedBy: "Aktualisiert von",
     health: "Statuslage",
     project: "Projekt",
@@ -1101,6 +1158,8 @@ const LANGUAGES = {
     extract: "Auszug",
     attachedImages: "Angehängte Bilder:",
     attachedSources: "Angehängte Quellen:",
+    added: "Hinzugefügt",
+    localReference: "Lokaler Verweis",
     allEvents: "Alle Ereignisse",
     eventType: "Ereignistyp",
     projectName: "Projektname",
@@ -1123,12 +1182,19 @@ const LANGUAGES = {
     source: "Quelle",
     title: "Titel",
     type: "Typ",
+    unknown: "Unbekannt",
     dateAdded: "Hinzugefügt am",
+    actor: "Akteur",
     location: "Ort",
+    localFile: "Lokale Datei",
+    modified: "Geändert",
     findLocalFile: "Lokale Datei finden",
     summary: "Zusammenfassung",
     tags: "Tags",
     mode: "Modus",
+    suggestionStatus: "Vorschlagsstatus",
+    truncated: "Gekürzt",
+    related: "Zugehörig",
     relatedProjectOrEntity: "Zugehöriges Projekt oder Objekt",
     relationshipType: "Beziehungstyp",
     notes: "Notizen",
@@ -1148,6 +1214,24 @@ const LANGUAGES = {
     imageFile: "Bilddatei",
     captionNotes: "Beschriftung / Notizen",
     file: "Datei",
+    factsReviewed: "Fakten geprüft",
+    decisionsReviewed: "Entscheidungen geprüft",
+    questionsReviewed: "Fragen geprüft",
+    actionsReviewed: "Aktionen geprüft",
+    relationshipsReviewed: "Beziehungen geprüft",
+    readyForApproval: "Bereit zur Genehmigung",
+    due: "Fällig",
+    notSet: "Nicht festgelegt",
+    completed: "Abgeschlossen",
+    notCompleted: "Nicht abgeschlossen",
+    noDueDate: "Kein Fälligkeitsdatum",
+    searchResultsFor: "{count} Ergebnisse für „{query}“",
+    noSearchResultsFor: "Keine Ergebnisse für „{query}“",
+    limitCharacters: "Maximal {limit} Zeichen",
+    viewImage: "{name} anzeigen",
+    attachedImage: "Angehängtes Bild",
+    draftProjectDefault: "Projektentwurf",
+    changeHistory: "Änderungsverlauf",
     addSourceBeforeAttaching: "Fügen Sie eine Quelle hinzu, bevor Sie sie an dieses Objekt anhängen.",
     approvalAppliesChangeNotice: "Die Genehmigung wendet diese vorgeschlagene Änderung auf das ausgewählte Projekt an und zeichnet sie im Verlauf auf.",
     approvalCreatesProjectNotice: "Die Genehmigung erstellt aus diesem Entwurf ein neues Projekt und zeichnet die Genehmigung am Entwurf auf.",
@@ -1457,6 +1541,7 @@ const LANGUAGES = {
     sources: "Fuentes",
     draftProjects: "Proyectos borrador",
     lastUpdated: "Última actualización",
+    updated: "Actualizado",
     updatedBy: "Actualizado por",
     health: "Salud",
     project: "Proyecto",
@@ -1464,6 +1549,8 @@ const LANGUAGES = {
     extract: "Extracto",
     attachedImages: "Imágenes adjuntas:",
     attachedSources: "Fuentes adjuntas:",
+    added: "Agregado",
+    localReference: "Referencia local",
     allEvents: "Todos los eventos",
     eventType: "Tipo de evento",
     projectName: "Nombre del proyecto",
@@ -1486,12 +1573,19 @@ const LANGUAGES = {
     source: "Fuente",
     title: "Título",
     type: "Tipo",
+    unknown: "Desconocido",
     dateAdded: "Fecha agregada",
+    actor: "Actor",
     location: "Ubicación",
+    localFile: "Archivo local",
+    modified: "Modificado",
     findLocalFile: "Buscar archivo local",
     summary: "Resumen",
     tags: "Etiquetas",
     mode: "Modo",
+    suggestionStatus: "Estado de sugerencia",
+    truncated: "Truncado",
+    related: "Relacionado",
     relatedProjectOrEntity: "Proyecto o entidad relacionada",
     relationshipType: "Tipo de relación",
     notes: "Notas",
@@ -1511,6 +1605,24 @@ const LANGUAGES = {
     imageFile: "Archivo de imagen",
     captionNotes: "Pie / Notas",
     file: "Archivo",
+    factsReviewed: "Hechos revisados",
+    decisionsReviewed: "Decisiones revisadas",
+    questionsReviewed: "Preguntas revisadas",
+    actionsReviewed: "Acciones revisadas",
+    relationshipsReviewed: "Relaciones revisadas",
+    readyForApproval: "Listo para aprobación",
+    due: "Vence",
+    notSet: "No definido",
+    completed: "Completado",
+    notCompleted: "No completado",
+    noDueDate: "Sin fecha límite",
+    searchResultsFor: "{count} resultados para \"{query}\"",
+    noSearchResultsFor: "Sin resultados para \"{query}\"",
+    limitCharacters: "Límite de {limit} caracteres",
+    viewImage: "Ver {name}",
+    attachedImage: "Imagen adjunta",
+    draftProjectDefault: "Proyecto borrador",
+    changeHistory: "Historial de cambios",
     addSourceBeforeAttaching: "Agrega una fuente antes de adjuntar una a este objeto.",
     approvalAppliesChangeNotice: "La aprobación aplica este cambio propuesto al proyecto seleccionado y lo registra en el historial.",
     approvalCreatesProjectNotice: "La aprobación crea un nuevo proyecto desde este borrador y registra la aprobación en el borrador.",
@@ -2222,6 +2334,113 @@ function findSplitAttachmentTarget(project, objectType, objectId) {
   return null;
 }
 
+function auditSplitStoreRecords(split = {}) {
+  const errors = [];
+  const meta = (split.meta || []).find((record) => record.id === STORAGE_META_MAIN_RECORD);
+  if (!meta) errors.push("meta store missing main store manifest");
+
+  const projectRecords = split.projects || [];
+  const sourceRecords = split.sources || [];
+  const extractRecords = split.extracts || [];
+  const historyRecords = split.history || [];
+  const draftRecords = split.drafts || [];
+  const attachmentRecords = split.attachments || [];
+
+  const ids = new Set();
+  const addId = (id, label) => {
+    if (!id) {
+      errors.push(`${label} missing id`);
+      return;
+    }
+    if (ids.has(id)) errors.push(`duplicate id ${id}`);
+    ids.add(id);
+  };
+
+  for (const project of projectRecords) addId(project.id, "project");
+  for (const source of sourceRecords) addId(source.id, "source");
+  for (const extract of extractRecords) addId(extract.id, "extract");
+  for (const change of historyRecords) addId(change.id, "history");
+  for (const draft of draftRecords) addId(draft.id, "draft");
+  for (const attachment of attachmentRecords) addId(attachment.id, "attachment");
+
+  const projectsById = new Map(projectRecords.map((project) => [project.id, project]));
+  const sourcesById = new Map(sourceRecords.map((source) => [source.id, source]));
+  const extractsById = new Map(extractRecords.map((extract) => [extract.id, extract]));
+
+  const projectObjectIds = new Map();
+  for (const project of projectRecords) {
+    const objectIds = new Set([project.id]);
+    for (const decision of project.decisions || []) objectIds.add(decision.id);
+    for (const fact of project.facts || []) objectIds.add(fact.id);
+    for (const relationship of project.relationships || []) objectIds.add(relationship.id);
+    for (const question of project.openQuestions || []) objectIds.add(question.id);
+    for (const action of project.nextActions || []) objectIds.add(action.id);
+    projectObjectIds.set(project.id, objectIds);
+  }
+  for (const change of historyRecords) projectObjectIds.get(change.projectId)?.add(change.id);
+  for (const draft of draftRecords) projectObjectIds.get(draft.projectId)?.add(draft.id);
+
+  for (const source of sourceRecords) {
+    const project = projectsById.get(source.projectId);
+    if (!project) errors.push(`source ${source.id} references missing project ${source.projectId}`);
+    else if (Array.isArray(project.sourceIds) && !project.sourceIds.includes(source.id)) errors.push(`source ${source.id} missing from project ${project.id} sourceIds`);
+  }
+
+  for (const extract of extractRecords) {
+    const source = sourcesById.get(extract.sourceId);
+    if (!source) errors.push(`extract ${extract.id} references missing source ${extract.sourceId}`);
+    else {
+      if (extract.projectId !== source.projectId) errors.push(`extract ${extract.id} projectId does not match source projectId`);
+      if (Array.isArray(source.extractIds) && !source.extractIds.includes(extract.id)) errors.push(`extract ${extract.id} missing from source ${source.id} extractIds`);
+    }
+    if (!projectsById.has(extract.projectId)) errors.push(`extract ${extract.id} references missing project ${extract.projectId}`);
+  }
+
+  for (const change of historyRecords) {
+    const project = projectsById.get(change.projectId);
+    if (!project) errors.push(`history ${change.id} references missing project ${change.projectId}`);
+    else if (Array.isArray(project.historyIds) && !project.historyIds.includes(change.id)) errors.push(`history ${change.id} missing from project ${project.id} historyIds`);
+    if (!change.actorId && !change.actorName) errors.push(`history ${change.id} missing actor`);
+    if (!change.timestamp) errors.push(`history ${change.id} missing timestamp`);
+    if (!change.reason) errors.push(`history ${change.id} missing reason`);
+    if (!change.details?.objectType && !change.details?.objectId) errors.push(`history ${change.id} missing changed object detail`);
+  }
+
+  for (const draft of draftRecords) {
+    const project = projectsById.get(draft.projectId);
+    if (!project) errors.push(`draft ${draft.id} references missing project ${draft.projectId}`);
+    else if (Array.isArray(project.draftProjectIds) && !project.draftProjectIds.includes(draft.id)) errors.push(`draft ${draft.id} missing from project ${project.id} draftProjectIds`);
+    if (draft.sourceId && !sourcesById.has(draft.sourceId)) errors.push(`draft ${draft.id} references missing source ${draft.sourceId}`);
+    if (draft.extractId && !extractsById.has(draft.extractId)) errors.push(`draft ${draft.id} references missing extract ${draft.extractId}`);
+  }
+
+  for (const attachment of attachmentRecords) {
+    const project = projectsById.get(attachment.projectId);
+    if (!project) {
+      errors.push(`attachment ${attachment.id} references missing project ${attachment.projectId}`);
+      continue;
+    }
+    if (!attachment.attachedToType || !attachment.attachedToId) errors.push(`attachment ${attachment.id} missing target`);
+    if (attachment.attachedToType === "Source" && !sourcesById.has(attachment.attachedToId)) errors.push(`attachment ${attachment.id} targets missing source ${attachment.attachedToId}`);
+    else if (attachment.attachedToType === "Extract" && !extractsById.has(attachment.attachedToId)) errors.push(`attachment ${attachment.id} targets missing extract ${attachment.attachedToId}`);
+    else if (attachment.attachedToType !== "Source" && attachment.attachedToType !== "Extract") {
+      const objectIds = projectObjectIds.get(project.id);
+      if (!objectIds?.has(attachment.attachedToId)) errors.push(`attachment ${attachment.id} target ${attachment.attachedToType}:${attachment.attachedToId} missing in project ${project.id}`);
+    }
+  }
+
+  if (meta?.counts) {
+    if (meta.counts.projects !== projectRecords.length) errors.push("meta project count does not match projects store");
+    if (meta.counts.sources !== sourceRecords.length) errors.push("meta source count does not match sources store");
+    if (meta.counts.extracts !== extractRecords.length) errors.push("meta extract count does not match extracts store");
+    if (meta.counts.drafts !== draftRecords.length) errors.push("meta draft count does not match drafts store");
+    if (meta.counts.changes !== historyRecords.length) errors.push("meta history count does not match history store");
+    if (meta.largeContent?.attachments !== attachmentRecords.length) errors.push("meta attachment count does not match attachments store");
+  }
+
+  return errors;
+}
+
 function verifyStorageSpineManifest(actual, expected) {
   if (!actual || !expected) throw new Error("Storage spine verification failed: missing manifest.");
   if (actual.spineVersion !== expected.spineVersion) throw new Error("Storage spine verification failed: spine version mismatch.");
@@ -2930,6 +3149,12 @@ function currentLanguage() {
 
 function t(key) {
   return LANGUAGES[currentLanguage()]?.[key] || LANGUAGES[DEFAULT_LANGUAGE][key] || key;
+}
+
+function tFormat(key, values = {}) {
+  return Object.entries(values).reduce((text, [name, value]) => {
+    return text.replaceAll(`{${name}}`, String(value));
+  }, t(key));
 }
 
 function languageOptions(selected = currentLanguage()) {
@@ -4013,8 +4238,8 @@ function renderProjectCard(project) {
       </button>
       <div>
         <span class="pill health-${escapeHtml(project.healthFlag || "active")}">${escapeHtml(healthFlagLabel(project.healthFlag))}</span>
-        <span class="pill">Updated ${escapeHtml(formatDate(project.updatedAt))}</span>
-        ${project.archived ? '<span class="pill">Archived</span>' : ""}
+        <span class="pill">${escapeHtml(t("updated"))} ${escapeHtml(formatDate(project.updatedAt))}</span>
+        ${project.archived ? `<span class="pill">${escapeHtml(t("archived"))}</span>` : ""}
         ${project.deletionStatus ? `<span class="pill">${escapeHtml(project.deletionStatus)}</span>` : ""}
       </div>
       ${renderObjectActions("Project", project.id, project.archived)}
@@ -4204,7 +4429,7 @@ function addImageSearchResults(results, project, objectType, object) {
       project,
       "Image",
       image.id,
-      image.caption || image.fileName || "Image",
+      image.caption || image.fileName || t("attachedImage"),
       `${objectType}: ${objectLabel(objectType, object)}`,
       [image.fileName, image.fileType, image.caption, image.localPath, objectLabel(objectType, object)],
       {
@@ -4223,7 +4448,7 @@ function renderSearchResults() {
     <section class="view-head">
       <div>
         <h1 class="view-title">${escapeHtml(t("search"))}</h1>
-        <p class="view-subtitle">${results.length ? `${results.length} results for "${escapeDisplay(query, DISPLAY_META_LIMIT)}"` : `No results for "${escapeDisplay(query, DISPLAY_META_LIMIT)}"`}</p>
+        <p class="view-subtitle">${escapeHtml(results.length ? tFormat("searchResultsFor", { count: results.length, query: limitText(query, DISPLAY_META_LIMIT) }) : tFormat("noSearchResultsFor", { query: limitText(query, DISPLAY_META_LIMIT) }))}</p>
       </div>
       <button class="btn secondary" data-action="clear-search">${escapeHtml(t("clearSearch"))}</button>
     </section>
@@ -4261,7 +4486,7 @@ function renderProject(project) {
   const objectFilteredChanges = activeHistoryFilter ? filterObjectHistory(changes, activeHistoryFilter) : changes;
   const visibleChanges = filterHistoryByEventType(objectFilteredChanges, activeHistoryEventType);
   const eventTypes = historyEventTypes(objectFilteredChanges);
-  const historyTitle = activeHistoryFilter ? `${activeHistoryFilter.objectType} History` : "Change History";
+  const historyTitle = activeHistoryFilter ? `${activeHistoryFilter.objectType} ${t("viewHistory")}` : t("changeHistory");
 
   const dashboard = `
     <section class="meta-grid">
@@ -4431,7 +4656,7 @@ function renderFactList(facts) {
     <div class="item">
       <p class="item-title">${escapeDisplay(fact.statement)}</p>
       ${fact.source ? `<p class="item-body">${escapeHtml(t("source"))}: ${escapeDisplay(fact.source)}</p>` : ""}
-      <p class="item-meta">${escapeHtml(actorDisplay(fact.actorId))} · ${escapeHtml(formatDate(fact.createdAt))} · ${escapeHtml(fact.confidence || "Unknown")}</p>
+      <p class="item-meta">${escapeHtml(actorDisplay(fact.actorId))} · ${escapeHtml(formatDate(fact.createdAt))} · ${escapeHtml(fact.confidence || t("unknown"))}</p>
       ${renderAttachedSources(fact)}
       ${renderAttachedImages(fact)}
       ${renderObjectActions("Fact", fact.id, fact.status === "archived")}
@@ -4446,14 +4671,14 @@ function renderSourceList(sources, project) {
     return `
       <div class="item">
         <p class="item-title">${escapeDisplay(source.title, DISPLAY_META_LIMIT)}</p>
-        <p class="item-meta">Type: ${escapeDisplay(source.sourceType || "Unknown", DISPLAY_META_LIMIT)}</p>
-        <p class="item-meta">Date Added: ${escapeHtml(formatDate(source.dateAdded))}</p>
-        <p class="item-meta">Actor: ${escapeHtml(actorDisplay(source.actorId))}</p>
-        <p class="item-meta">Project: ${escapeDisplay(project.name, DISPLAY_META_LIMIT)}</p>
-        ${source.location ? `<p class="item-meta">Location: ${escapeDisplay(source.location, DISPLAY_META_LIMIT)}</p>` : ""}
-        ${source.localFile ? `<p class="item-meta">Local File: ${escapeDisplay(source.localFile.name, DISPLAY_META_LIMIT)} · ${escapeHtml(formatBytes(source.localFile.size))}${source.localFile.lastModified ? ` · Modified ${escapeHtml(formatDate(source.localFile.lastModified))}` : ""}</p>` : ""}
+        <p class="item-meta">${escapeHtml(t("type"))}: ${escapeDisplay(source.sourceType || t("unknown"), DISPLAY_META_LIMIT)}</p>
+        <p class="item-meta">${escapeHtml(t("dateAdded"))}: ${escapeHtml(formatDate(source.dateAdded))}</p>
+        <p class="item-meta">${escapeHtml(t("actor"))}: ${escapeHtml(actorDisplay(source.actorId))}</p>
+        <p class="item-meta">${escapeHtml(t("project"))}: ${escapeDisplay(project.name, DISPLAY_META_LIMIT)}</p>
+        ${source.location ? `<p class="item-meta">${escapeHtml(t("location"))}: ${escapeDisplay(source.location, DISPLAY_META_LIMIT)}</p>` : ""}
+        ${source.localFile ? `<p class="item-meta">${escapeHtml(t("localFile"))}: ${escapeDisplay(source.localFile.name, DISPLAY_META_LIMIT)} · ${escapeHtml(formatBytes(source.localFile.size))}${source.localFile.lastModified ? ` · ${escapeHtml(t("modified"))} ${escapeHtml(formatDate(source.localFile.lastModified))}` : ""}</p>` : ""}
         ${source.summary ? `<p class="item-body">${escapeDisplay(source.summary)}</p>` : ""}
-        ${source.tags?.length ? `<p class="item-meta">Tags: ${escapeDisplay(tagsToText(source.tags), DISPLAY_META_LIMIT)}</p>` : ""}
+        ${source.tags?.length ? `<p class="item-meta">${escapeHtml(t("tags"))}: ${escapeDisplay(tagsToText(source.tags), DISPLAY_META_LIMIT)}</p>` : ""}
         <div class="item-actions">
           <button class="btn secondary compact" data-action="add-extract" data-source-id="${source.id}">${escapeHtml(t("addExtract"))}</button>
           <button class="btn secondary compact" data-action="read-file-extract" data-source-id="${source.id}">${escapeHtml(t("readFileExtract"))}</button>
@@ -4471,14 +4696,14 @@ function renderExtractList(extracts) {
   return `<div class="list nested-list">${extracts.map((extract) => `
     <div class="item">
       <p class="item-title">${escapeHtml(t("extract"))}</p>
-      <p class="item-meta">Mode: ${escapeHtml(extractModeLabel(extract.extractMode))}</p>
-      ${extract.suggestionStatus ? `<p class="item-meta">Suggestion Status: ${escapeHtml(extract.suggestionStatus)}</p>` : ""}
-      ${extract.suggestedBy ? `<p class="item-meta">Suggested By: ${escapeHtml(extract.suggestedBy)}</p>` : ""}
-      ${extract.extractedFromFile ? `<p class="item-meta">File: ${escapeDisplay(extract.extractedFromFile.fileName, DISPLAY_META_LIMIT)}${extract.extractedFromFile.truncated ? " · Truncated" : ""}</p>` : ""}
+      <p class="item-meta">${escapeHtml(t("mode"))}: ${escapeHtml(extractModeLabel(extract.extractMode))}</p>
+      ${extract.suggestionStatus ? `<p class="item-meta">${escapeHtml(t("suggestionStatus"))}: ${escapeHtml(extract.suggestionStatus)}</p>` : ""}
+      ${extract.suggestedBy ? `<p class="item-meta">${escapeHtml(t("suggestedBy"))}: ${escapeHtml(extract.suggestedBy)}</p>` : ""}
+      ${extract.extractedFromFile ? `<p class="item-meta">${escapeHtml(t("file"))}: ${escapeDisplay(extract.extractedFromFile.fileName, DISPLAY_META_LIMIT)}${extract.extractedFromFile.truncated ? ` · ${escapeHtml(t("truncated"))}` : ""}</p>` : ""}
       <p class="item-body">${escapeDisplay(extract.text)}</p>
       ${extract.summary ? `<p class="item-body">${escapeHtml(t("summary"))}: ${escapeDisplay(extract.summary)}</p>` : ""}
       <p class="item-meta">${escapeHtml(actorDisplay(extract.actorId))} · ${escapeHtml(formatDate(extract.dateAdded))}</p>
-      ${extract.tags?.length ? `<p class="item-meta">Tags: ${escapeDisplay(tagsToText(extract.tags), DISPLAY_META_LIMIT)}</p>` : ""}
+      ${extract.tags?.length ? `<p class="item-meta">${escapeHtml(t("tags"))}: ${escapeDisplay(tagsToText(extract.tags), DISPLAY_META_LIMIT)}</p>` : ""}
       ${renderAttachedSources(extract)}
       <div class="item-actions"><button class="btn secondary compact" data-action="create-draft-project" data-object-id="${extract.id}">${escapeHtml(t("createDraftProject"))}</button></div>
       ${extract.extractMode === "ai_suggested" && extract.suggestionStatus === "pending_approval" ? `<div class="item-actions"><button class="btn secondary compact" data-action="approve-extract" data-object-id="${extract.id}">${escapeHtml(t("approveExtract"))}</button></div>` : ""}
@@ -4492,7 +4717,7 @@ function renderRelationshipList(relationships) {
   return `<div class="list">${relationships.map((relationship) => `
     <div class="item">
       <p class="item-title">${escapeDisplay(relationshipTargetLabel(relationship))}</p>
-      <p class="item-meta">${escapeDisplay(relationship.relationshipType || "Related", DISPLAY_META_LIMIT)} · ${escapeHtml(actorDisplay(relationship.actorId))} · ${escapeHtml(formatDate(relationship.createdAt))}</p>
+      <p class="item-meta">${escapeDisplay(relationship.relationshipType || t("related"), DISPLAY_META_LIMIT)} · ${escapeHtml(actorDisplay(relationship.actorId))} · ${escapeHtml(formatDate(relationship.createdAt))}</p>
       ${relationship.notes ? `<p class="item-body">${escapeDisplay(relationship.notes)}</p>` : ""}
       ${renderAttachedSources(relationship)}
       ${renderAttachedImages(relationship)}
@@ -4507,7 +4732,7 @@ function renderDraftProjectList(draftProjects) {
     <div class="item">
       <p class="item-title">${escapeDisplay(draftProject.name, DISPLAY_META_LIMIT)}</p>
       <p class="item-meta">${escapeHtml(t("created"))}: ${escapeHtml(formatDate(draftProject.createdAt))} · ${escapeHtml(t("source"))}: ${escapeDisplay(draftProject.sourceTitle || t("notRecorded"), DISPLAY_META_LIMIT)}</p>
-      <p class="item-meta">Status: ${escapeHtml(draftProject.status || "draft")}${draftProject.approvedAt ? ` · Approved ${escapeHtml(formatDate(draftProject.approvedAt))}` : ""}</p>
+      <p class="item-meta">${escapeHtml(t("status"))}: ${escapeHtml(draftProject.status || t("draft"))}${draftProject.approvedAt ? ` · ${escapeHtml(t("approved"))} ${escapeHtml(formatDate(draftProject.approvedAt))}` : ""}</p>
       <p class="item-body">${escapeDisplay(draftProject.draft || t("noDraftTextRecorded"))}</p>
       ${renderDraftReviewFlags(draftProject)}
       ${renderAttachedSources(draftProject)}
@@ -4525,16 +4750,16 @@ function renderDraftProjectList(draftProjects) {
 function renderDraftReviewFlags(draftProject) {
   const flags = normalizeDraftReviewFlags(draftProject.reviewFlags);
   const labels = {
-    factsReviewed: "Facts reviewed",
-    decisionsReviewed: "Decisions reviewed",
-    questionsReviewed: "Questions reviewed",
-    actionsReviewed: "Actions reviewed",
-    relationshipsReviewed: "Relationships reviewed",
-    readyForApproval: "Ready for approval"
+    factsReviewed: t("factsReviewed"),
+    decisionsReviewed: t("decisionsReviewed"),
+    questionsReviewed: t("questionsReviewed"),
+    actionsReviewed: t("actionsReviewed"),
+    relationshipsReviewed: t("relationshipsReviewed"),
+    readyForApproval: t("readyForApproval")
   };
   return `
     <div class="review-flags">
-      ${DRAFT_REVIEW_FLAGS.map((flag) => `<span class="pill ${flags[flag] ? "review-done" : "review-open"}">${escapeHtml(labels[flag])}: ${flags[flag] ? "Yes" : "No"}</span>`).join("")}
+      ${DRAFT_REVIEW_FLAGS.map((flag) => `<span class="pill ${flags[flag] ? "review-done" : "review-open"}">${escapeHtml(labels[flag])}: ${flags[flag] ? escapeHtml(t("yes")) : escapeHtml(t("no"))}</span>`).join("")}
     </div>
   `;
 }
@@ -4558,10 +4783,10 @@ function renderActionList(actions) {
   return `<div class="list">${actions.map((action) => `
     <div class="item">
       <p class="item-title">${escapeDisplay(action.action)}</p>
-      <p class="item-meta">Status: ${escapeHtml(getActionStatus(action))}</p>
+      <p class="item-meta">${escapeHtml(t("status"))}: ${escapeHtml(getActionStatus(action))}</p>
       <p class="item-meta">${escapeHtml(t("created"))}: ${escapeHtml(formatDate(action.createdAt))}</p>
-      <p class="item-meta">Due: ${escapeHtml(action.dueDate ? formatDate(action.dueDate, false) : "Not set")}</p>
-      <p class="item-meta">Completed: ${escapeHtml(action.completedAt ? formatDate(action.completedAt) : "Not completed")}</p>
+      <p class="item-meta">${escapeHtml(t("due"))}: ${escapeHtml(action.dueDate ? formatDate(action.dueDate, false) : t("notSet"))}</p>
+      <p class="item-meta">${escapeHtml(t("completed"))}: ${escapeHtml(action.completedAt ? formatDate(action.completedAt) : t("notCompleted"))}</p>
       <p class="item-meta">${action.owner ? `${escapeDisplay(action.owner, DISPLAY_META_LIMIT)} · ` : ""}${escapeHtml(actorDisplay(action.actorId))}</p>
       ${renderAttachedSources(action)}
       ${renderAttachedImages(action)}
@@ -4603,7 +4828,7 @@ function renderAttachedSources(object) {
   return `
     <div class="attached-sources">
       <p class="item-meta">${escapeHtml(t("attachedSources"))}</p>
-      ${links.map((link) => `<p class="item-meta">${escapeDisplay(link.sourceTitle || "Source", DISPLAY_META_LIMIT)} · ${escapeHtml(formatDate(link.attachedAt))}</p>`).join("")}
+      ${links.map((link) => `<p class="item-meta">${escapeDisplay(link.sourceTitle || t("source"), DISPLAY_META_LIMIT)} · ${escapeHtml(formatDate(link.attachedAt))}</p>`).join("")}
     </div>
   `;
 }
@@ -4616,8 +4841,8 @@ function renderAttachedImages(object) {
       <p class="item-meta">${escapeHtml(t("attachedImages"))}</p>
       <div class="image-strip">
         ${images.map((image) => `
-          <button class="image-thumb" type="button" data-action="view-image" data-object-type="${escapeHtml(image.attachedToType || "")}" data-object-id="${escapeHtml(image.attachedToId || "")}" data-image-id="${escapeHtml(image.id)}" aria-label="View ${escapeHtml(image.fileName || "image")}">
-            ${image.dataUrl ? `<img src="${escapeHtml(image.dataUrl)}" alt="${escapeHtml(image.caption || image.fileName || t("attachedImageAlt"))}">` : `<span>${escapeDisplay(image.fileName || "Image", DISPLAY_META_LIMIT)}</span>`}
+          <button class="image-thumb" type="button" data-action="view-image" data-object-type="${escapeHtml(image.attachedToType || "")}" data-object-id="${escapeHtml(image.attachedToId || "")}" data-image-id="${escapeHtml(image.id)}" aria-label="${escapeHtml(t("viewImage").replace("{name}", image.fileName || t("attachedImageAlt")))}">
+            ${image.dataUrl ? `<img src="${escapeHtml(image.dataUrl)}" alt="${escapeHtml(image.caption || image.fileName || t("attachedImageAlt"))}">` : `<span>${escapeDisplay(image.fileName || t("attachedImage"), DISPLAY_META_LIMIT)}</span>`}
           </button>
         `).join("")}
       </div>
@@ -5030,7 +5255,7 @@ function renderProjectOverview(project) {
         <h4>${escapeHtml(t("nextActions"))}</h4>
         ${renderOverviewList(actions, (action) => `
           <strong>${escapeDisplay(action.action, DISPLAY_META_LIMIT)}</strong>
-          <span>${action.owner ? `${escapeDisplay(action.owner, DISPLAY_META_LIMIT)} · ` : ""}${escapeHtml(action.dueDate ? `Due ${formatDate(action.dueDate, false)}` : "No due date")}</span>
+        <span>${action.owner ? `${escapeDisplay(action.owner, DISPLAY_META_LIMIT)} · ` : ""}${escapeHtml(action.dueDate ? `${t("due")} ${formatDate(action.dueDate, false)}` : t("noDueDate"))}</span>
         `, "No open next actions.")}
       </section>
     </section>
@@ -5054,7 +5279,7 @@ function showModal({ title, body, submitText, onSubmit }) {
     <section class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
       <div class="modal-head">
         <h2 class="modal-title" id="modal-title">${escapeHtml(title)}</h2>
-        <button class="icon-btn" type="button" data-close-modal aria-label="Close">×</button>
+        <button class="icon-btn" type="button" data-close-modal aria-label="${escapeHtml(t("close"))}">×</button>
       </div>
       <form class="form">
         ${body}
@@ -5113,7 +5338,7 @@ function applyInputLimits(form) {
     const limit = INPUT_LIMITS[field.name];
     if (!limit || field.type === "date") continue;
     field.maxLength = limit;
-    if (!field.placeholder) field.placeholder = `Limit ${limit} characters`;
+    if (!field.placeholder) field.placeholder = tFormat("limitCharacters", { limit });
   }
 }
 
@@ -5161,7 +5386,7 @@ function wireLocalFilePickers(form) {
   }
 }
 
-function auditFields({ actorLabel = "Approved By", reasonLabel = "Reason" } = {}) {
+function auditFields({ actorLabel = t("approvedBy"), reasonLabel = t("reason") } = {}) {
   return `
     <div class="field">
       <label for="actorName">${escapeHtml(actorLabel)}</label>
@@ -6155,7 +6380,7 @@ function openCreateDraftProjectModal(extractId) {
       <p class="notice">${escapeHtml(t("createDraftFromExtractNotice"))}</p>
       <div class="field">
         <label for="name">${escapeHtml(t("name"))}</label>
-        <input id="name" name="name" value="${escapeHtml(source.title || "Draft Project")}" required>
+        <input id="name" name="name" value="${escapeHtml(source.title || t("draftProjectDefault"))}" required>
       </div>
       <div class="field">
         <label for="sourceLabel">${escapeHtml(t("source"))}</label>
@@ -6219,12 +6444,12 @@ function openEditDraftProjectModal(project, draftProject) {
         <textarea id="draft" name="draft" required>${escapeHtml(draftProject.draft || "")}</textarea>
       </div>
       <div class="check-list">
-        ${reviewCheckbox("factsReviewed", "Facts reviewed", flags.factsReviewed)}
-        ${reviewCheckbox("decisionsReviewed", "Decisions reviewed", flags.decisionsReviewed)}
-        ${reviewCheckbox("questionsReviewed", "Questions reviewed", flags.questionsReviewed)}
-        ${reviewCheckbox("actionsReviewed", "Actions reviewed", flags.actionsReviewed)}
-        ${reviewCheckbox("relationshipsReviewed", "Relationships reviewed", flags.relationshipsReviewed)}
-        ${reviewCheckbox("readyForApproval", "Ready for approval", flags.readyForApproval)}
+        ${reviewCheckbox("factsReviewed", t("factsReviewed"), flags.factsReviewed)}
+        ${reviewCheckbox("decisionsReviewed", t("decisionsReviewed"), flags.decisionsReviewed)}
+        ${reviewCheckbox("questionsReviewed", t("questionsReviewed"), flags.questionsReviewed)}
+        ${reviewCheckbox("actionsReviewed", t("actionsReviewed"), flags.actionsReviewed)}
+        ${reviewCheckbox("relationshipsReviewed", t("relationshipsReviewed"), flags.relationshipsReviewed)}
+        ${reviewCheckbox("readyForApproval", t("readyForApproval"), flags.readyForApproval)}
       </div>
       ${auditFields()}
     `,
@@ -6772,14 +6997,14 @@ function openImageViewer(objectType, objectId, imageId) {
   if (!image) return;
 
   showModal({
-    title: image.fileName || "Attached Image",
+    title: image.fileName || t("attachedImage"),
     submitText: t("close"),
     body: `
       <div class="image-viewer">
         ${image.dataUrl ? `<img src="${escapeHtml(image.dataUrl)}" alt="${escapeHtml(image.caption || image.fileName || t("attachedImageAlt"))}">` : emptyText(t("imageDataUnavailable"))}
         ${image.caption ? `<p class="item-body">${escapeDisplay(image.caption)}</p>` : ""}
-        <p class="item-meta">${escapeHtml(image.fileType || "Image")} · Added ${escapeHtml(formatDate(image.dateAdded))} · ${escapeHtml(actorDisplay(image.addedBy))}</p>
-        ${image.localPath ? `<p class="item-meta">Local reference: ${escapeDisplay(image.localPath, DISPLAY_META_LIMIT)}</p>` : ""}
+        <p class="item-meta">${escapeHtml(image.fileType || t("attachedImage"))} · ${escapeHtml(t("added"))} ${escapeHtml(formatDate(image.dateAdded))} · ${escapeHtml(actorDisplay(image.addedBy))}</p>
+        ${image.localPath ? `<p class="item-meta">${escapeHtml(t("localReference"))}: ${escapeDisplay(image.localPath, DISPLAY_META_LIMIT)}</p>` : ""}
       </div>
     `,
     onSubmit() {}
@@ -6792,11 +7017,11 @@ function openArchiveObjectModal(objectType, objectId) {
   if (!object) return;
 
   showModal({
-    title: `Archive ${objectType}`,
+    title: `${escapeHtml(t("archive"))} ${escapeHtml(objectType)}`,
     submitText: t("approveArchive"),
     body: `
       <p class="notice">${escapeHtml(t("archiveObjectNotice"))}</p>
-      ${confirmationField("confirmArchive", `I confirm this ${objectType} should be archived.`)}
+      ${confirmationField("confirmArchive", `${t("archiveObjectNotice")} (${objectType})`)}
       ${auditFields()}
     `,
     onSubmit(data) {

@@ -193,7 +193,7 @@ function recordChange(project, actor, reason, summary, details, ids) {
   return change;
 }
 
-function approvalFlowTest(inputStore) {
+function approvalFlowTest(inputStore, includeStore = false) {
   const store = clone(inputStore);
   const actor = store.actors.find((item) => item.role === "owner") || store.actors[0];
   const { ids } = collectIds(store);
@@ -303,12 +303,14 @@ function approvalFlowTest(inputStore) {
   assert(sourceProject.changes.some((change) => change.details?.objectId === draft.id), "Source project history did not record draft approval.");
   assert(approvedProject.changes.some((change) => change.details?.objectId === approvedProject.id), "New project history did not record project creation.");
 
-  return {
+  const result = {
     createdProjectId: approvedProject.id,
     sourceLinkPreserved: Boolean(approvedProject.sourceLinks[0]?.sourceId),
     historyRecords: sourceProject.changes.length + approvedProject.changes.length,
     uniqueIds: uniqueness.ids.size
   };
+  if (includeStore) result.store = store;
+  return result;
 }
 
 function persistenceTest(store) {
@@ -408,11 +410,24 @@ function run() {
   console.log("Internal tests: ok");
 }
 
-try {
-  run();
-} catch (error) {
-  console.error("Internal tests failed:");
-  console.error(error.message);
-  if (error.details) console.error(JSON.stringify(error.details, null, 2));
-  process.exitCode = 1;
+if (require.main === module) {
+  try {
+    run();
+  } catch (error) {
+    console.error("Internal tests failed:");
+    console.error(error.message);
+    if (error.details) console.error(JSON.stringify(error.details, null, 2));
+    process.exitCode = 1;
+  }
 }
+
+module.exports = {
+  approvalFlowTest,
+  backupTest,
+  collectIds,
+  dataIntegrityTest,
+  listFullProjectImages,
+  persistenceTest,
+  recoveryTest,
+  searchTest
+};

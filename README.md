@@ -315,6 +315,30 @@ node scripts/storage-phase2-split-check.js
 
 The checker splits the Phase 0 fixture, rebuilds the full Project State store from the split records, and verifies the rebuilt store still passes the original integrity checks.
 
+Storage Spine v0.2 Phase 3 Audit
+
+Phase 3 keeps the Phase 2 split-store layout and adds stricter storage audits.
+
+The app now audits split-store references before accepting a split-store load:
+
+source records must point to existing projects
+extract records must point to existing sources and projects
+draft records must point to existing projects and any referenced source/extract
+history records must point to existing projects and include actor, timestamp, reason, and changed-object details
+attachments must point to an existing project object, source, or extract
+split-store counts must match the manifest
+IDs must remain unique across split records
+
+The save path also verifies that `records/main` remains a readable full backup after the split stores are written.
+
+Checker:
+
+scripts/storage-phase3-audit-check.js
+
+Run:
+
+node scripts/storage-phase3-audit-check.js
+
 Questions I'd Love Feedback On
 Architecture
 Should project state be directly editable or derived from change events?
