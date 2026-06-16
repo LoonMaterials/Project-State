@@ -213,6 +213,8 @@ const LANGUAGES = {
     role: "Role",
     addActor: "Add Actor",
     storageSystem: "Storage System",
+    platformStorageSpine: "Platform storage spine",
+    platformAdapterLabel: "Platform Adapter",
     primaryStorage: "Primary Storage",
     localBrowserStorageSpine: "Local browser storage spine",
     currentMode: "Current Mode",
@@ -604,6 +606,8 @@ const LANGUAGES = {
     role: "Rôle",
     addActor: "Ajouter un acteur",
     storageSystem: "Système de stockage",
+    platformStorageSpine: "Axe de stockage de plateforme",
+    platformAdapterLabel: "Adaptateur de plateforme",
     primaryStorage: "Stockage principal",
     localBrowserStorageSpine: "Axe de stockage local du navigateur",
     currentMode: "Mode actuel",
@@ -995,6 +999,8 @@ const LANGUAGES = {
     role: "Rolle",
     addActor: "Akteur hinzufügen",
     storageSystem: "Speichersystem",
+    platformStorageSpine: "Plattform-Speicher-Spine",
+    platformAdapterLabel: "Plattformadapter",
     primaryStorage: "Primärspeicher",
     localBrowserStorageSpine: "Lokaler Browser-Speicher-Spine",
     currentMode: "Aktueller Modus",
@@ -1386,6 +1392,8 @@ const LANGUAGES = {
     role: "Rol",
     addActor: "Agregar actor",
     storageSystem: "Sistema de almacenamiento",
+    platformStorageSpine: "Columna de almacenamiento de plataforma",
+    platformAdapterLabel: "Adaptador de plataforma",
     primaryStorage: "Almacenamiento principal",
     localBrowserStorageSpine: "Columna de almacenamiento local del navegador",
     currentMode: "Modo actual",
@@ -1772,10 +1780,10 @@ const defaultSettings = () => ({
   language: DEFAULT_LANGUAGE,
   localMode: "single_user_local",
   recoveryWarnings: true,
-  storageSystem: "local_browser_spine",
+  storageSystem: "platform_storage_spine",
   storageOverrideAcknowledged: false,
   storageOverrideReason: "",
-  backupSystem: "user_json_export",
+  backupSystem: "user_controlled_backup",
   backupOverrideAcknowledged: false,
   backupOverrideReason: "",
   settingsUpdatedAt: "",
@@ -1821,25 +1829,235 @@ let saveState = {
 
 const app = document.querySelector("#app");
 
+function createProjectStatePlatformAdapter() {
+  const desktopBridge = typeof window !== "undefined" ? window.ProjectStateDesktop : null;
+  if (desktopBridge) return createDesktopPlatformAdapter(desktopBridge);
+  return createBrowserPlatformAdapter();
+}
+
+function createDesktopPlatformAdapter(bridge) {
+  const browserFallback = createBrowserPlatformAdapter();
+  const storage = bridge.storage || {};
+  const files = bridge.files || {};
+  const downloads = bridge.downloads || {};
+  return {
+    id: "desktop",
+    label: bridge.label || "Desktop platform bridge",
+    storage: {
+      externalStore: typeof storage.loadStore === "function" && typeof storage.saveStore === "function",
+      supported() {
+        return (typeof storage.loadStore === "function" && typeof storage.saveStore === "function") || browserFallback.storage.supported();
+      },
+      async loadStore(context) {
+        return storage.loadStore(context);
+      },
+      async saveStore(payload) {
+        return storage.saveStore(payload);
+      },
+      async saveMeta(payload) {
+        if (typeof storage.saveMeta === "function") return storage.saveMeta(payload);
+        return null;
+      },
+      async preserveLegacyRaw(raw) {
+        if (typeof storage.preserveLegacyRaw === "function") return storage.preserveLegacyRaw(raw);
+        return null;
+      },
+      async preserveRecoveryRecord(issue) {
+        if (typeof storage.preserveRecoveryRecord === "function") return storage.preserveRecoveryRecord(issue);
+        return null;
+      },
+      async reset() {
+        if (typeof storage.reset === "function") return storage.reset();
+        return null;
+      },
+      supportsIndexedDb() {
+        return browserFallback.storage.supportsIndexedDb();
+      },
+      async openDatabase(name, version, onUpgrade) {
+        return browserFallback.storage.openDatabase(name, version, onUpgrade);
+      },
+      getLegacyItem(key) {
+        return browserFallback.storage.getLegacyItem(key);
+      },
+      setLegacyItem(key, value) {
+        return browserFallback.storage.setLegacyItem(key, value);
+      },
+      removeLegacyItem(key) {
+        return browserFallback.storage.removeLegacyItem(key);
+      }
+    },
+    files: {
+      metadata(file) {
+        if (typeof files.metadata === "function") return files.metadata(file);
+        return browserFileMetadata(file);
+      },
+      localPath(file) {
+        if (typeof files.localPath === "function") return files.localPath(file);
+        return browserLocalFilePath(file);
+      },
+      async readAsDataUrl(file) {
+        if (typeof files.readAsDataUrl === "function") return files.readAsDataUrl(file);
+        return browserReadFileAsDataUrl(file);
+      },
+      async readAsText(file) {
+        if (typeof files.readAsText === "function") return files.readAsText(file);
+        return browserReadFileAsText(file);
+      },
+      async readAsArrayBuffer(file) {
+        if (typeof files.readAsArrayBuffer === "function") return files.readAsArrayBuffer(file);
+        return browserReadFileAsArrayBuffer(file);
+      },
+      async extractText(file) {
+        if (typeof files.extractText === "function") return files.extractText(file);
+        return null;
+      },
+      async inflateRaw(bytes) {
+        if (typeof files.inflateRaw === "function") return files.inflateRaw(bytes);
+        return browserInflateRaw(bytes);
+      }
+    },
+    downloads: {
+      saveTextFile(fileName, text, type) {
+        if (typeof downloads.saveTextFile === "function") return downloads.saveTextFile({ fileName, text, type });
+        return browserSaveTextFile(fileName, text, type);
+      }
+    }
+  };
+}
+
+function createBrowserPlatformAdapter() {
+  return {
+    id: "browser",
+    label: "Browser platform adapter",
+    storage: {
+      externalStore: false,
+      supported() {
+        return typeof indexedDB !== "undefined";
+      },
+      supportsIndexedDb() {
+        return typeof indexedDB !== "undefined";
+      },
+      async openDatabase(name, version, onUpgrade) {
+        if (typeof indexedDB === "undefined") return null;
+        return new Promise((resolve, reject) => {
+          const request = indexedDB.open(name, version);
+          request.addEventListener("upgradeneeded", () => onUpgrade(request.result));
+          request.addEventListener("success", () => resolve(request.result));
+          request.addEventListener("error", () => reject(request.error));
+        });
+      },
+      getLegacyItem(key) {
+        if (typeof localStorage === "undefined") return "";
+        return localStorage.getItem(key) || "";
+      },
+      setLegacyItem(key, value) {
+        if (typeof localStorage !== "undefined") localStorage.setItem(key, value);
+      },
+      removeLegacyItem(key) {
+        if (typeof localStorage !== "undefined") localStorage.removeItem(key);
+      }
+    },
+    files: {
+      metadata: browserFileMetadata,
+      localPath: browserLocalFilePath,
+      readAsDataUrl: browserReadFileAsDataUrl,
+      readAsText: browserReadFileAsText,
+      readAsArrayBuffer: browserReadFileAsArrayBuffer,
+      async extractText() {
+        return null;
+      },
+      inflateRaw: browserInflateRaw
+    },
+    downloads: {
+      saveTextFile: browserSaveTextFile
+    }
+  };
+}
+
+function browserLocalFilePath(file) {
+  return file?.webkitRelativePath || file?.name || "";
+}
+
+function browserFileMetadata(file) {
+  if (!file || typeof file.name !== "string" || !file.name) return null;
+  return {
+    name: file.name,
+    type: file.type || "",
+    size: file.size || 0,
+    lastModified: file.lastModified ? new Date(file.lastModified).toISOString() : ""
+  };
+}
+
+function browserReadFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.addEventListener("load", () => resolve(reader.result));
+    reader.addEventListener("error", () => reject(reader.error));
+    reader.readAsDataURL(file);
+  });
+}
+
+function browserReadFileAsText(file) {
+  if (typeof file?.text === "function") return file.text();
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.addEventListener("load", () => resolve(reader.result || ""));
+    reader.addEventListener("error", () => reject(reader.error));
+    reader.readAsText(file);
+  });
+}
+
+function browserReadFileAsArrayBuffer(file) {
+  if (typeof file?.arrayBuffer === "function") return file.arrayBuffer();
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.addEventListener("load", () => resolve(reader.result));
+    reader.addEventListener("error", () => reject(reader.error));
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+function browserSaveTextFile(fileName, text, type = "text/plain") {
+  const blob = new Blob([text], { type });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+async function browserInflateRaw(compressed) {
+  if (typeof DecompressionStream === "undefined") {
+    throw new Error("This platform cannot read compressed DOCX text locally.");
+  }
+  const stream = new Blob([compressed]).stream().pipeThrough(new DecompressionStream("deflate-raw"));
+  return new Uint8Array(await new Response(stream).arrayBuffer());
+}
+
+const platformAdapter = createProjectStatePlatformAdapter();
+
 const ProjectStateStorage = {
   db: null,
+  usesExternalStore() {
+    return Boolean(platformAdapter.storage.externalStore && platformAdapter.storage.supported());
+  },
+  browserDbSupported() {
+    return Boolean(platformAdapter.storage.supportsIndexedDb?.());
+  },
   supported() {
-    return typeof indexedDB !== "undefined";
+    return this.usesExternalStore() || this.browserDbSupported();
   },
   async open() {
-    if (!this.supported()) return null;
+    if (!this.browserDbSupported()) return null;
     if (this.db) return this.db;
-    this.db = await new Promise((resolve, reject) => {
-      const request = indexedDB.open(STORAGE_DB_NAME, STORAGE_DB_VERSION);
-      request.addEventListener("upgradeneeded", () => {
-        const db = request.result;
+    this.db = await platformAdapter.storage.openDatabase(STORAGE_DB_NAME, STORAGE_DB_VERSION, (db) => {
         if (!db.objectStoreNames.contains(STORAGE_OBJECT_STORE)) db.createObjectStore(STORAGE_OBJECT_STORE, { keyPath: "id" });
         for (const storeName of STORAGE_SPLIT_STORES) {
           if (!db.objectStoreNames.contains(storeName)) db.createObjectStore(storeName, { keyPath: "id" });
         }
-      });
-      request.addEventListener("success", () => resolve(request.result));
-      request.addEventListener("error", () => reject(request.error));
     });
     return this.db;
   },
@@ -1906,11 +2124,17 @@ const ProjectStateStorage = {
     });
   },
   async getMetaRecord() {
-    if (!this.supported()) return null;
+    if (this.usesExternalStore()) return storageSpineMeta;
+    if (!this.browserDbSupported()) return null;
     return await this.getFromStore("meta", STORAGE_META_MAIN_RECORD) || this.getRecord(STORAGE_META_RECORD);
   },
   async putMetaRecord(manifest) {
-    if (!this.supported()) return false;
+    if (this.usesExternalStore()) {
+      await platformAdapter.storage.saveMeta({ manifest });
+      storageSpineMeta = manifest;
+      return true;
+    }
+    if (!this.browserDbSupported()) return false;
     await this.putInStore("meta", {
       id: STORAGE_META_MAIN_RECORD,
       ...manifest
@@ -1923,7 +2147,23 @@ const ProjectStateStorage = {
     return true;
   },
   async load() {
-    if (this.supported()) {
+    if (this.usesExternalStore()) {
+      const loaded = await platformAdapter.storage.loadStore({
+        app: "Project State",
+        spineVersion: STORAGE_SPINE_VERSION,
+        layoutVersion: STORAGE_LAYOUT_VERSION,
+        schemaVersion: store.schemaVersion
+      });
+      storageSpineMeta = loaded?.meta || null;
+      return {
+        source: loaded?.source || "desktop-spine",
+        raw: loaded?.raw || (loaded?.store ? JSON.stringify(loaded.store) : ""),
+        store: loaded?.store || (!loaded?.raw ? emptyStore() : null),
+        meta: storageSpineMeta
+      };
+    }
+
+    if (this.browserDbSupported()) {
       try {
         const splitStore = await this.loadSplitStore();
         if (splitStore) return splitStore;
@@ -1949,7 +2189,7 @@ const ProjectStateStorage = {
       }
     }
 
-    const raw = localStorage.getItem(STORAGE_KEY) || "";
+    const raw = platformAdapter.storage.getLegacyItem(STORAGE_KEY) || "";
     return {
       source: raw ? "legacy-json" : "empty",
       raw,
@@ -1961,14 +2201,24 @@ const ProjectStateStorage = {
     const manifest = buildStorageSpineManifest(nextStore, snapshot);
     storageSnapshotText = snapshot;
     storageSpineMeta = manifest;
-    if (this.supported()) {
+    if (this.usesExternalStore()) {
+      await platformAdapter.storage.saveStore({
+        store: nextStore,
+        manifest,
+        split: splitStoreRecords(nextStore, manifest),
+        snapshot
+      });
+      storageMode = "desktop-spine";
+      return;
+    }
+    if (this.browserDbSupported()) {
       await this.writeSplitStore(nextStore, manifest);
       await this.verifySplitStore(nextStore, manifest);
-      localStorage.removeItem(STORAGE_KEY);
+      platformAdapter.storage.removeLegacyItem(STORAGE_KEY);
       storageMode = "indexeddb-split";
       return;
     }
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(nextStore, null, 2));
+    platformAdapter.storage.setLegacyItem(STORAGE_KEY, JSON.stringify(nextStore, null, 2));
     storageMode = "legacy-json-fallback";
   },
   async ensureMeta(nextStore) {
@@ -1976,7 +2226,11 @@ const ProjectStateStorage = {
     storageSnapshotText = snapshot;
     const manifest = buildStorageSpineManifest(nextStore, snapshot);
     storageSpineMeta = manifest;
-    if (!this.supported()) return manifest;
+    if (this.usesExternalStore()) {
+      await platformAdapter.storage.saveMeta({ manifest });
+      return manifest;
+    }
+    if (!this.browserDbSupported()) return manifest;
     const existing = await this.getMetaRecord();
     if (
       existing?.spineVersion === STORAGE_SPINE_VERSION &&
@@ -2053,7 +2307,7 @@ const ProjectStateStorage = {
     return true;
   },
   async verifyMainRecord(expectedStore, expectedManifest) {
-    if (!this.supported()) return true;
+    if (this.usesExternalStore() || !this.browserDbSupported()) return true;
     const record = await this.getRecord(STORAGE_MAIN_RECORD);
     if (!record?.store) throw new Error("Storage spine verification failed: main record was not saved.");
     if (record.spineVersion !== STORAGE_SPINE_VERSION) throw new Error("Storage spine verification failed: spine version mismatch.");
@@ -2078,6 +2332,10 @@ const ProjectStateStorage = {
   },
   async preserveLegacyRaw(raw) {
     if (!raw || !this.supported()) return;
+    if (this.usesExternalStore()) {
+      await platformAdapter.storage.preserveLegacyRaw(raw);
+      return;
+    }
     await this.putRecord({
       id: STORAGE_LEGACY_BACKUP_RECORD,
       createdAt: nowIso(),
@@ -2087,6 +2345,14 @@ const ProjectStateStorage = {
   },
   async preserveRecoveryRecord(issue = {}) {
     if (!this.supported()) return;
+    if (this.usesExternalStore()) {
+      await platformAdapter.storage.preserveRecoveryRecord({
+        id: uid("recovery"),
+        date: nowIso(),
+        ...issue
+      });
+      return;
+    }
     try {
       await this.putInStore("recovery", {
         id: uid("recovery"),
@@ -2098,17 +2364,25 @@ const ProjectStateStorage = {
     }
   },
   async reset() {
-    if (this.supported()) {
+    if (this.usesExternalStore()) {
+      await platformAdapter.storage.reset();
+    } else if (this.browserDbSupported()) {
       await this.deleteRecord(STORAGE_MAIN_RECORD);
       await this.deleteRecord(STORAGE_META_RECORD);
       await this.deleteRecord(STORAGE_LEGACY_BACKUP_RECORD);
       for (const storeName of STORAGE_SPLIT_STORES) await this.clearStore(storeName);
     }
-    localStorage.removeItem(STORAGE_KEY);
+    platformAdapter.storage.removeLegacyItem(STORAGE_KEY);
     storageSnapshotText = "";
     storageSpineMeta = null;
   }
 };
+
+function currentStorageModeName() {
+  if (ProjectStateStorage.usesExternalStore()) return "desktop-spine";
+  if (ProjectStateStorage.browserDbSupported()) return "indexeddb-split";
+  return "legacy-json-fallback";
+}
 
 function cloneRecord(record) {
   return JSON.parse(JSON.stringify(record || {}));
@@ -2517,7 +2791,7 @@ function buildStorageSpineManifest(nextStore = emptyStore(), snapshot = "") {
     }
   }
 
-  const snapshotBytes = new Blob([snapshot || JSON.stringify(nextStore)]).size;
+  const snapshotBytes = textByteSize(snapshot || JSON.stringify(nextStore));
   const warnings = [];
   if (snapshotBytes >= 4.5 * 1024 * 1024) warnings.push("storage-size-danger");
   else if (snapshotBytes >= 3 * 1024 * 1024) warnings.push("storage-size-warning");
@@ -2620,6 +2894,12 @@ function normalizeStore(parsed) {
 
 function normalizeSettings(settings = {}) {
   const defaults = defaultSettings();
+  const storageSystem = settings.storageSystem === "local_browser_spine"
+    ? defaults.storageSystem
+    : settings.storageSystem || defaults.storageSystem;
+  const backupSystem = settings.backupSystem === "user_json_export"
+    ? defaults.backupSystem
+    : settings.backupSystem || defaults.backupSystem;
   const normalized = {
     ...defaults,
     ...settings,
@@ -2627,10 +2907,10 @@ function normalizeSettings(settings = {}) {
     language: normalizeLanguage(settings.language),
     localMode: settings.localMode || defaults.localMode,
     recoveryWarnings: settings.recoveryWarnings !== false,
-    storageSystem: settings.storageSystem || defaults.storageSystem,
+    storageSystem,
     storageOverrideAcknowledged: Boolean(settings.storageOverrideAcknowledged),
     storageOverrideReason: settings.storageOverrideReason || "",
-    backupSystem: settings.backupSystem || defaults.backupSystem,
+    backupSystem,
     backupOverrideAcknowledged: Boolean(settings.backupOverrideAcknowledged),
     backupOverrideReason: settings.backupOverrideReason || "",
     settingsUpdatedAt: settings.settingsUpdatedAt || "",
@@ -3023,8 +3303,8 @@ function saveStore(options = {}) {
     });
 }
 
-function storageSizeInfo(raw = storageSnapshotText || localStorage.getItem(STORAGE_KEY) || "") {
-  const bytes = new Blob([raw]).size;
+function storageSizeInfo(raw = storageSnapshotText || platformAdapter.storage.getLegacyItem(STORAGE_KEY) || "") {
+  const bytes = textByteSize(raw);
   const mb = bytes / 1024 / 1024;
   let level = "ok";
   if (mb >= 4.5) level = "danger";
@@ -3035,6 +3315,12 @@ function storageSizeInfo(raw = storageSnapshotText || localStorage.getItem(STORA
     level,
     label: `${mb.toFixed(2)} MB`
   };
+}
+
+function textByteSize(value = "") {
+  const text = String(value || "");
+  if (typeof TextEncoder !== "undefined") return new TextEncoder().encode(text).length;
+  return text.length;
 }
 
 function renderStorageWarning() {
@@ -3212,13 +3498,7 @@ function findObjectByTitle(project, objectType, title = "") {
 }
 
 function fileMetadata(file) {
-  if (!file || typeof file.name !== "string" || !file.name) return null;
-  return {
-    name: file.name,
-    type: file.type || "",
-    size: file.size || 0,
-    lastModified: file.lastModified ? new Date(file.lastModified).toISOString() : ""
-  };
+  return platformAdapter.files.metadata(file);
 }
 
 function supportedImageTypes() {
@@ -3233,32 +3513,15 @@ function isSupportedImageFile(file) {
 }
 
 function readFileAsDataUrl(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.addEventListener("load", () => resolve(reader.result));
-    reader.addEventListener("error", () => reject(reader.error));
-    reader.readAsDataURL(file);
-  });
+  return platformAdapter.files.readAsDataUrl(file);
 }
 
 function readFileAsText(file) {
-  if (typeof file.text === "function") return file.text();
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.addEventListener("load", () => resolve(reader.result || ""));
-    reader.addEventListener("error", () => reject(reader.error));
-    reader.readAsText(file);
-  });
+  return platformAdapter.files.readAsText(file);
 }
 
 function readFileAsArrayBuffer(file) {
-  if (typeof file.arrayBuffer === "function") return file.arrayBuffer();
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.addEventListener("load", () => resolve(reader.result));
-    reader.addEventListener("error", () => reject(reader.error));
-    reader.readAsArrayBuffer(file);
-  });
+  return platformAdapter.files.readAsArrayBuffer(file);
 }
 
 function extractFileExtension(fileName = "") {
@@ -3271,6 +3534,8 @@ function isSupportedExtractFile(file) {
 }
 
 async function extractTextFromFile(file) {
+  const platformText = await platformAdapter.files.extractText(file);
+  if (typeof platformText === "string") return cleanExtractedText(platformText);
   const extension = extractFileExtension(file.name);
   if (extension === "txt" || extension === "md") {
     return cleanExtractedText(await readFileAsText(file));
@@ -3336,11 +3601,8 @@ async function inflateZipEntry(bytes, entry) {
   const dataStart = localOffset + 30 + nameLength + extraLength;
   const compressed = bytes.slice(dataStart, dataStart + entry.compressedSize);
   if (entry.method === 0) return compressed;
-  if (entry.method !== 8 || typeof DecompressionStream === "undefined") {
-    throw new Error("This browser cannot read compressed DOCX text locally.");
-  }
-  const stream = new Blob([compressed]).stream().pipeThrough(new DecompressionStream("deflate-raw"));
-  return new Uint8Array(await new Response(stream).arrayBuffer());
+  if (entry.method !== 8) throw new Error("This DOCX compression method is not supported.");
+  return platformAdapter.files.inflateRaw(compressed);
 }
 
 function xmlToText(xml = "") {
@@ -3946,7 +4208,11 @@ function renderSettings() {
           <div class="meta-grid">
             <div>
               <p class="meta-label">${escapeHtml(t("primaryStorage"))}</p>
-              <p>${escapeHtml(t("localBrowserStorageSpine"))}</p>
+              <p>${escapeHtml(t("platformStorageSpine"))}</p>
+            </div>
+            <div>
+              <p class="meta-label">${escapeHtml(t("platformAdapterLabel"))}</p>
+              <p>${escapeHtml(platformAdapter.label)}</p>
             </div>
             <div>
               <p class="meta-label">${escapeHtml(t("currentMode"))}</p>
@@ -4193,6 +4459,7 @@ function settingsDiagnostics() {
   const manifest = storageSpineMeta || buildStorageSpineManifest(store, storageSnapshotText || JSON.stringify(store));
   return {
     [t("schemaVersion")]: store.schemaVersion || t("notRecorded"),
+    [t("platformAdapterLabel")]: platformAdapter.label,
     [t("storageModeLabel")]: storageMode || t("notRecorded"),
     [t("storageSpineVersion")]: manifest.spineVersion || t("notRecorded"),
     [t("storageLayout")]: manifest.layoutVersion || t("notRecorded"),
@@ -4975,7 +5242,11 @@ function exportStorageBackup() {
     app: "Project State",
     backupType: "full-storage-spine",
     storage: {
-      primary: ProjectStateStorage.supported() ? "IndexedDB" : "Legacy JSON fallback",
+      primary: ProjectStateStorage.usesExternalStore()
+        ? "Desktop storage spine"
+        : (ProjectStateStorage.browserDbSupported() ? "IndexedDB split stores" : "Legacy JSON fallback"),
+      platformAdapter: platformAdapter.id,
+      platformAdapterLabel: platformAdapter.label,
       backup: "User-controlled JSON file",
       storageMode
     },
@@ -5143,7 +5414,7 @@ async function resetFailedData() {
   migrationNeeded = false;
   store = emptyStore();
   storageReady = true;
-  storageMode = ProjectStateStorage.supported() ? "indexeddb-split" : "legacy-json-fallback";
+  storageMode = currentStorageModeName();
   activeProjectId = null;
   activeView = "dashboard";
   activeHistoryFilter = null;
@@ -5163,7 +5434,7 @@ async function resetLocalDataFromSettings() {
   migrationNeeded = false;
   store = emptyStore();
   storageReady = true;
-  storageMode = ProjectStateStorage.supported() ? "indexeddb-split" : "legacy-json-fallback";
+  storageMode = currentStorageModeName();
   activeProjectId = null;
   activeRootView = "projects";
   activeView = "dashboard";
@@ -5175,15 +5446,7 @@ async function resetLocalDataFromSettings() {
 }
 
 function downloadTextFile(fileName, text, type = "text/plain") {
-  const blob = new Blob([text], { type });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = fileName;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  URL.revokeObjectURL(url);
+  platformAdapter.downloads.saveTextFile(fileName, text, type);
 }
 
 function openProjectOverviewModal() {
@@ -5378,7 +5641,7 @@ function wireLocalFilePickers(form) {
       const locationField = form.querySelector(`[name="${field.dataset.locationTarget}"]`);
       const titleField = form.querySelector(`[name="${field.dataset.titleTarget}"]`);
       const typeField = form.querySelector(`[name="${field.dataset.typeTarget}"]`);
-      const fileLocation = file.webkitRelativePath || file.name;
+      const fileLocation = platformAdapter.files.localPath(file);
       if (locationField) locationField.value = fileLocation;
       if (titleField && !titleField.value.trim()) titleField.value = file.name;
       if (typeField && !typeField.value.trim()) typeField.value = file.type || file.name.split(".").pop() || "";
@@ -6964,7 +7227,7 @@ function openAttachImageModal(objectType, objectId) {
         dateAdded: nowIso(),
         addedBy: actor.id,
         caption: String(data.caption || "").trim(),
-        localPath: file.webkitRelativePath || file.name,
+        localPath: platformAdapter.files.localPath(file),
         dataUrl
       };
 
@@ -7358,7 +7621,7 @@ function openReadFileExtractModal(sourceId) {
         extractedFromFile: {
           fileName: file.name,
           fileType: file.type || extractFileExtension(file.name),
-          localPath: file.webkitRelativePath || file.name,
+          localPath: platformAdapter.files.localPath(file),
           truncated: extracted.truncated
         }
       };
@@ -7568,7 +7831,7 @@ function saveSettingsStorage(data, form) {
     field?.setCustomValidity("");
     return;
   }
-  store.settings.storageSystem = "local_browser_spine";
+  store.settings.storageSystem = "platform_storage_spine";
   store.settings.storageOverrideAcknowledged = data.storageOverrideAcknowledged === "on";
   store.settings.storageOverrideReason = String(data.storageOverrideReason || "").trim();
   stampSettingsUpdate(store.settings.primaryActorId, data.reason);
@@ -7585,7 +7848,7 @@ function saveSettingsBackup(data, form) {
     field?.setCustomValidity("");
     return;
   }
-  store.settings.backupSystem = "user_json_export";
+  store.settings.backupSystem = "user_controlled_backup";
   store.settings.backupLocationHint = String(data.backupLocationHint || "").trim();
   store.settings.backupReminder = ["manual", "weekly", "monthly"].includes(data.backupReminder) ? data.backupReminder : "manual";
   store.settings.backupOverrideAcknowledged = data.backupOverrideAcknowledged === "on";

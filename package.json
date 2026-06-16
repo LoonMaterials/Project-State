@@ -1,0 +1,15 @@
+{
+  "name": "project-state",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Local-first Project State desktop/web prototype.",
+  "main": "desktop/main.cjs",
+  "scripts": {
+    "desktop": "electron .",
+    "check": "node --check app.js && node --check desktop/main.cjs && node --check desktop/preload.cjs && node --check desktop/project-state-desktop-bridge.cjs",
+    "check:desktop": "node scripts/desktop-wrapper-check.js && node scripts/desktop-spine-contract-check.js && node scripts/desktop-bridge-implementation-check.js"
+  },
+  "devDependencies": {
+    "electron": "^31.0.0"
+  }
+}

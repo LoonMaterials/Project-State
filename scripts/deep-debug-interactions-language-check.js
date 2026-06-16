@@ -109,6 +109,41 @@ function hardcodedLabelRegressionTest(appText) {
   return { checkedPatterns: oldPatterns.length };
 }
 
+function platformBoundaryTest(appText) {
+  const required = [
+    "createProjectStatePlatformAdapter",
+    "window.ProjectStateDesktop",
+    "platformAdapter.storage",
+    "platformAdapter.files",
+    "platformAdapter.downloads",
+    "ProjectStateStorage.usesExternalStore"
+  ];
+  const missing = required.filter((text) => !appText.includes(text));
+  assert(!missing.length, "Platform adapter boundary is missing required pieces.", { missing });
+
+  const adapterStart = appText.indexOf("function createProjectStatePlatformAdapter");
+  const adapterEnd = appText.indexOf("const ProjectStateStorage =");
+  assert(adapterStart > -1 && adapterEnd > adapterStart, "Could not locate platform adapter boundary.");
+  const outsideAdapter = `${appText.slice(0, adapterStart)}\n${appText.slice(adapterEnd)}`;
+  const forbiddenOutsideAdapter = [
+    "localStorage.",
+    "indexedDB.",
+    "new FileReader",
+    "webkitRelativePath",
+    "URL.createObjectURL",
+    "new Blob",
+    "DecompressionStream",
+    "new Response"
+  ];
+  const leaks = forbiddenOutsideAdapter.filter((text) => outsideAdapter.includes(text));
+  assert(!leaks.length, "Browser-only APIs leaked outside the platform adapter.", { leaks });
+
+  return {
+    requiredPieces: required.length,
+    forbiddenApisChecked: forbiddenOutsideAdapter.length
+  };
+}
+
 function outsideSourceProjectCreationTest(appText, store) {
   assert(appText.includes("createIntakeItem({"), "Intake creation path is missing.");
   assert(appText.includes("approveIntakeItem(intake.id"), "Intake approval path is missing.");
@@ -146,6 +181,7 @@ function main() {
     interactions: interactionWiringTest(appText),
     language: languageCoverageTest(appText),
     hardcodedLabels: hardcodedLabelRegressionTest(appText),
+    platformBoundary: platformBoundaryTest(appText),
     dataIntegrity: dataIntegrityTest(store),
     outsideSourceProjectCreation: outsideSourceProjectCreationTest(appText, store),
     search: searchTest(store)

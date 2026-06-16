@@ -1,0 +1,164 @@
+{
+  "app": "Project State",
+  "contractType": "desktop-storage-spine",
+  "contractVersion": "0.1",
+  "storageEngine": "sqlite-plus-managed-folders",
+  "databaseFile": "project-state.db",
+  "folderLayout": [
+    {
+      "name": "sources",
+      "purpose": "Original source files and copied local evidence files."
+    },
+    {
+      "name": "extracts",
+      "purpose": "Long extracted text, chunk text, and generated extraction artifacts."
+    },
+    {
+      "name": "attachments",
+      "purpose": "Images, screenshots, and non-source attached files."
+    },
+    {
+      "name": "backups",
+      "purpose": "User-controlled backup packages separate from primary storage."
+    },
+    {
+      "name": "recovery",
+      "purpose": "Raw failed loads, failed migrations, and recovery exports."
+    },
+    {
+      "name": "manifests",
+      "purpose": "Storage manifests, checksums, and integrity reports."
+    },
+    {
+      "name": "logs",
+      "purpose": "Readable local diagnostic logs."
+    },
+    {
+      "name": "temp",
+      "purpose": "Temporary import and extraction workspace."
+    }
+  ],
+  "tables": [
+    {
+      "name": "meta",
+      "purpose": "Schema version, storage version, settings snapshot, and manifest pointers."
+    },
+    {
+      "name": "actors",
+      "purpose": "Human and tool actors with roles and status."
+    },
+    {
+      "name": "projects",
+      "purpose": "Lightweight current project state and project metadata."
+    },
+    {
+      "name": "decisions",
+      "purpose": "Approved decisions linked to projects."
+    },
+    {
+      "name": "facts",
+      "purpose": "Approved facts linked to projects and sources."
+    },
+    {
+      "name": "open_questions",
+      "purpose": "Approved open questions linked to projects."
+    },
+    {
+      "name": "next_actions",
+      "purpose": "Approved next actions with created, due, completed, and status fields."
+    },
+    {
+      "name": "relationships",
+      "purpose": "Project and entity relationships using stable IDs."
+    },
+    {
+      "name": "changes",
+      "purpose": "Append-only change history with actor, timestamp, reason, language, object ID, and readable title."
+    },
+    {
+      "name": "sources",
+      "purpose": "Source metadata, original local path/reference, managed file path, checksum, tags, and summary."
+    },
+    {
+      "name": "extracts",
+      "purpose": "Extract metadata and reference to long extract text stored outside project metadata."
+    },
+    {
+      "name": "extract_chunks",
+      "purpose": "Page, section, message, or size-based chunks for huge files and chat exports."
+    },
+    {
+      "name": "attachments",
+      "purpose": "Image and attachment metadata with managed file paths and checksums."
+    },
+    {
+      "name": "source_links",
+      "purpose": "Many-to-many links from sources/extracts/attachments to projects and objects."
+    },
+    {
+      "name": "intake_batches",
+      "purpose": "Batch imports from files, folders, chats, notes, AI, or other arms."
+    },
+    {
+      "name": "intake_items",
+      "purpose": "Individual proposed changes that have not reached Project State."
+    },
+    {
+      "name": "proposed_projects",
+      "purpose": "Draft project candidates produced from extracts, chunks, AI, or manual intake."
+    },
+    {
+      "name": "proposal_items",
+      "purpose": "Proposed facts, decisions, questions, actions, relationships, and source links under a proposed project."
+    },
+    {
+      "name": "draft_projects",
+      "purpose": "Human-review draft project records and review flags."
+    },
+    {
+      "name": "approval_records",
+      "purpose": "Human approvals, rejections, reasons, and approval scope."
+    },
+    {
+      "name": "recovery_records",
+      "purpose": "Load, migration, and integrity failure records."
+    }
+  ],
+  "largeContentRules": [
+    "Project metadata stays lightweight.",
+    "Original source files live in sources/.",
+    "Long extract text and chunks live in extracts/.",
+    "Images and screenshots live in attachments/.",
+    "SQLite records store IDs, metadata, checksums, and managed paths instead of embedded large content."
+  ],
+  "safetyRules": [
+    "Preserve all stable IDs during migration.",
+    "Do not write outside arms directly into Project State.",
+    "AI, file reads, chats, and notes create intake or proposal records first.",
+    "Human approval is required before proposed records enter core project tables.",
+    "Change history is append-only and records actor, timestamp, reason, changed object ID, readable object title, language, and origin.",
+    "If load, migration, or integrity checks fail, preserve raw data and enter recovery mode instead of returning a blank store.",
+    "Backup location must remain separate from primary storage unless a future server deployment explicitly changes that rule."
+  ],
+  "minimumBridgeMethods": {
+    "storage": [
+      "loadStore",
+      "saveStore",
+      "saveMeta",
+      "preserveRecoveryRecord",
+      "reset"
+    ],
+    "files": [
+      "metadata",
+      "localPath",
+      "readAsDataUrl",
+      "readAsText",
+      "readAsArrayBuffer",
+      "extractText",
+      "inflateRaw"
+    ],
+    "downloads": [
+      "saveTextFile"
+    ]
+  }
+}
