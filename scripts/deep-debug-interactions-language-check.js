@@ -102,7 +102,14 @@ function hardcodedLabelRegressionTest(appText) {
     /<p class="item-meta">Status:/,
     /<p class="item-meta">Due:/,
     /<p class="item-meta">Completed:/,
-    /aria-label="View /
+    /aria-label="View /,
+    /<strong>Storage warning:/,
+    /const message = info\.level[\s\S]{0,120}Local saved data is/,
+    /setSaveStatus\("unsaved", "Unsaved changes/,
+    /confirm\("Reset local Project State data\?/,
+    /confirm\("Reset all local Project State data\?/,
+    /confirm\("Final confirmation: reset local data/,
+    /setSaveStatus\("saved", "Reset complete/
   ];
   const found = oldPatterns.filter((pattern) => pattern.test(appText)).map((pattern) => String(pattern));
   assert(!found.length, "Old hardcoded labels are still present in render paths.", { found });
@@ -116,7 +123,10 @@ function platformBoundaryTest(appText) {
     "platformAdapter.storage",
     "platformAdapter.files",
     "platformAdapter.downloads",
-    "ProjectStateStorage.usesExternalStore"
+    "ProjectStateStorage.usesExternalStore",
+    "desktopRuntimeReady",
+    "browserDevRuntime",
+    "runtimeWarningHtml"
   ];
   const missing = required.filter((text) => !appText.includes(text));
   assert(!missing.length, "Platform adapter boundary is missing required pieces.", { missing });

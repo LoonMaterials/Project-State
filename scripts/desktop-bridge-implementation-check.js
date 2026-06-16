@@ -65,7 +65,8 @@ async function main() {
   const snapshot = JSON.stringify(store);
   const expectedCounts = countStoreParts(store);
 
-  await bridge.storage.saveStore({ store, manifest, split, snapshot });
+  const saveResult = await bridge.storage.saveStore({ store, manifest, split, snapshot });
+  assert(saveResult.integrity?.ok, "Desktop bridge save did not return a passing integrity report.", saveResult.integrity || {});
 
   const dbPath = path.join(storageRoot, DATABASE_FILE);
   assert(fs.existsSync(dbPath), "Desktop bridge did not create project-state.db.");
@@ -85,6 +86,11 @@ async function main() {
   assert(tableCounts.projects === expectedCounts.projects, "Project table count mismatch.", tableCounts);
   assert(tableCounts.extracts === expectedCounts.extracts, "Extract table count mismatch.", tableCounts);
   assert(tableCounts.attachments === expectedCounts.attachments, "Attachment table count mismatch.", tableCounts);
+
+  const integrity = await bridge.storage.verifyIntegrity();
+  assert(integrity.ok, "Desktop bridge integrity check failed after save.", integrity);
+  assert(integrity.checkedFiles.extracts === expectedCounts.extracts, "Integrity check did not verify all extract files.", integrity.checkedFiles);
+  assert(integrity.checkedFiles.attachments === expectedCounts.attachments, "Integrity check did not verify all attachment files.", integrity.checkedFiles);
 
   const extractFiles = fs.readdirSync(path.join(storageRoot, "extracts"), { recursive: true });
   const attachmentFiles = fs.readdirSync(path.join(storageRoot, "attachments"), { recursive: true });
@@ -110,6 +116,23 @@ async function main() {
 
   await bridge.downloads.saveTextFile({ fileName: "desktop-bridge-backup.json", text: "{\"ok\":true}", type: "application/json" });
   assert(fs.existsSync(path.join(storageRoot, "backups", "desktop-bridge-backup.json")), "Backup/export file was not written.");
+
+  const recoveryBeforeIntegrityDamage = fs.readdirSync(path.join(storageRoot, "recovery")).length;
+  const damageDb = new DatabaseSync(dbPath);
+  const extractRow = damageDb.prepare("SELECT text_path FROM extracts WHERE text_path != '' LIMIT 1").get();
+  damageDb.close();
+  assert(extractRow?.text_path, "Could not find managed extract file to corrupt.");
+  await fsp.writeFile(path.join(storageRoot, extractRow.text_path), "corrupted extract text", "utf8");
+  const damagedIntegrity = await bridge.storage.verifyIntegrity();
+  assert(!damagedIntegrity.ok, "Desktop bridge integrity check did not catch a corrupted managed extract.", damagedIntegrity);
+  assert(damagedIntegrity.errors.some((message) => message.includes("checksum mismatch") || message.includes("byte length mismatch")), "Integrity failure did not include readable corruption details.", damagedIntegrity);
+  assert(fs.readdirSync(path.join(storageRoot, "recovery")).length > recoveryBeforeIntegrityDamage, "Integrity failure was not preserved in recovery records.");
+  const recoveredAfterDamage = await bridge.storage.loadStore();
+  assert(recoveredAfterDamage.source === "desktop-spine-snapshot-recovery", "Corrupted desktop spine did not fall back to snapshot recovery.", recoveredAfterDamage);
+  assert(JSON.stringify(countStoreParts(recoveredAfterDamage.store)) === JSON.stringify(expectedCounts), "Snapshot recovery counts changed after integrity failure.", {
+    recoveredCounts: countStoreParts(recoveredAfterDamage.store),
+    expectedCounts
+  });
 
   await bridge.storage.reset();
   assert(!fs.existsSync(dbPath), "Desktop bridge reset did not remove database file.");

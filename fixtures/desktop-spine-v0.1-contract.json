@@ -146,6 +146,10 @@
       "saveStore",
       "saveMeta",
       "preserveRecoveryRecord",
+      "verifyIntegrity",
+      "importBrowserExport",
+      "createBackupPackage",
+      "restoreBackupPackage",
       "reset"
     ],
     "files": [

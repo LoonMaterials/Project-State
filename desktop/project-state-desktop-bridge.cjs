@@ -12,6 +12,30 @@ const DEFAULT_STORAGE_ROOT = path.join(os.homedir(), "Project State Storage");
 const DATABASE_FILE = "project-state.db";
 const FOLDERS = ["sources", "extracts", "attachments", "backups", "recovery", "manifests", "logs", "temp"];
 const SPLIT_TABLES = ["projects", "changes", "sources", "extracts", "attachments", "draft_projects"];
+const BACKUP_MANAGED_FOLDERS = ["sources", "extracts", "attachments", "manifests", "recovery"];
+const REQUIRED_TABLES = [
+  "meta",
+  "actors",
+  "projects",
+  "decisions",
+  "facts",
+  "open_questions",
+  "next_actions",
+  "relationships",
+  "changes",
+  "sources",
+  "extracts",
+  "extract_chunks",
+  "attachments",
+  "source_links",
+  "intake_batches",
+  "intake_items",
+  "proposed_projects",
+  "proposal_items",
+  "draft_projects",
+  "approval_records",
+  "recovery_records"
+];
 
 function createProjectStateDesktopBridge(options = {}) {
   const storageRoot = path.resolve(options.storageRoot || process.env.PROJECT_STATE_STORAGE_ROOT || DEFAULT_STORAGE_ROOT);
@@ -35,6 +59,18 @@ function createProjectStateDesktopBridge(options = {}) {
       },
       async preserveRecoveryRecord(issue = {}) {
         return preserveRecoveryRecord({ storageRoot, dbPath, issue });
+      },
+      async verifyIntegrity(options = {}) {
+        return verifyIntegrity({ storageRoot, dbPath, ...options });
+      },
+      async importBrowserExport(payload = {}) {
+        return importBrowserExport({ storageRoot, dbPath, payload });
+      },
+      async createBackupPackage(payload = {}) {
+        return createBackupPackage({ storageRoot, dbPath, payload });
+      },
+      async restoreBackupPackage(payload = {}) {
+        return restoreBackupPackage({ storageRoot, dbPath, payload });
       },
       async reset() {
         return resetSpine({ storageRoot, dbPath });
@@ -78,6 +114,8 @@ async function loadStore({ storageRoot, dbPath }) {
   try {
     const metaRecord = readMeta(db, "store");
     if (!metaRecord) return { source: "desktop-spine", store: null, raw: "", meta: null };
+    const integrity = await verifyIntegrity({ storageRoot, dbPath, preserveOnFailure: false });
+    if (!integrity.ok) throw new Error(`Desktop spine integrity check failed: ${integrity.errors.join("; ")}`);
     const split = readSplitRecords(db);
     const store = await rebuildStoreFromSplitRecords(storageRoot, split);
     const manifest = readMeta(db, "manifest") || {};
@@ -89,6 +127,12 @@ async function loadStore({ storageRoot, dbPath }) {
     };
   } catch (error) {
     const snapshot = readMeta(db, "snapshot");
+    await preserveRecoveryRecordWithOpenDb(db, storageRoot, {
+      stage: "desktop-load",
+      message: error.message,
+      stack: error.stack || "",
+      raw: snapshot?.store ? JSON.stringify(snapshot.store) : ""
+    });
     if (snapshot?.store) {
       return {
         source: "desktop-spine-snapshot-recovery",
@@ -111,6 +155,7 @@ async function saveStore({ storageRoot, dbPath, payload }) {
   const splitMeta = Array.isArray(split.meta) ? split.meta[0] : split.meta;
   const snapshot = payload.snapshot || JSON.stringify(store);
   const db = openDatabase(dbPath);
+  let committed = false;
 
   try {
     db.exec("BEGIN IMMEDIATE TRANSACTION");
@@ -133,23 +178,728 @@ async function saveStore({ storageRoot, dbPath, payload }) {
     const manifestPath = await writeManifestFile(storageRoot, manifest, store);
     writeMeta(db, "latest_manifest_file", { path: manifestPath });
     db.exec("COMMIT");
-    return { ok: true, source: "desktop-spine", manifestPath };
+    committed = true;
+    const integrity = await verifyIntegrity({ storageRoot, dbPath, preserveOnFailure: true });
+    if (!integrity.ok) throw new Error(`Desktop spine integrity check failed after save: ${integrity.errors.join("; ")}`);
+    return { ok: true, source: "desktop-spine", manifestPath, integrity };
   } catch (error) {
-    db.exec("ROLLBACK");
-    await preserveRecoveryRecord({
-      storageRoot,
-      dbPath,
-      issue: {
-        stage: "desktop-save",
-        message: error.message,
-        stack: error.stack || "",
-        raw: snapshot
-      }
-    });
+    if (!committed) {
+      try {
+        db.exec("ROLLBACK");
+      } catch {}
+    }
+    const issue = {
+      stage: "desktop-save",
+      message: error.message,
+      stack: error.stack || "",
+      raw: snapshot
+    };
+    await preserveRecoveryRecordWithOpenDb(db, storageRoot, issue);
     throw error;
   } finally {
     db.close();
   }
+}
+
+async function importBrowserExport({ storageRoot, dbPath, payload = {} }) {
+  await ensureSpine(storageRoot);
+  const raw = browserExportRawText(payload);
+  let parsed = null;
+  let stagingRoot = "";
+
+  try {
+    parsed = browserExportParsedPayload(payload, raw);
+    const store = extractStoreFromBrowserExport(parsed);
+    const validation = validateMigrationStore(store);
+    if (validation.errors.length) {
+      await preserveRecoveryRecord({
+        storageRoot,
+        dbPath,
+        issue: {
+          stage: "browser-json-import-validation",
+          message: "Browser export failed migration validation.",
+          raw: JSON.stringify({ errors: validation.errors, exportSummary: describeBrowserExport(parsed) }, null, 2)
+        }
+      });
+      throw new Error(`Browser export failed migration validation: ${validation.errors.join("; ")}`);
+    }
+
+    await preserveRecoveryRecord({
+      storageRoot,
+      dbPath,
+      issue: {
+        stage: "browser-json-import-source",
+        message: "Browser JSON export preserved before desktop spine import.",
+        raw
+      }
+    });
+
+    const manifest = buildMigrationManifest(store, {
+      source: describeBrowserExport(parsed),
+      reason: payload.reason || "",
+      actorId: payload.actorId || "",
+      sourceFile: payload.sourceFile || ""
+    });
+    const split = splitStoreRecordsForBridge(store, manifest);
+    const snapshot = JSON.stringify(store);
+
+    stagingRoot = path.join(storageRoot, "temp", `browser-json-import-${safeStamp()}-${crypto.randomBytes(3).toString("hex")}`);
+    const stagingDbPath = path.join(stagingRoot, DATABASE_FILE);
+    const stagingSave = await saveStore({
+      storageRoot: stagingRoot,
+      dbPath: stagingDbPath,
+      payload: { store, manifest, split, snapshot }
+    });
+    if (!stagingSave.integrity?.ok) throw new Error("Browser export failed staging integrity verification.");
+
+    const liveSave = await saveStore({
+      storageRoot,
+      dbPath,
+      payload: { store, manifest, split, snapshot }
+    });
+    const loaded = await loadStore({ storageRoot, dbPath });
+    const afterValidation = validateMigrationStore(loaded.store);
+    if (afterValidation.errors.length) {
+      throw new Error(`Desktop spine import verification failed: ${afterValidation.errors.join("; ")}`);
+    }
+
+    return {
+      ok: true,
+      source: "browser-json-import",
+      importedAt: manifest.importedAt,
+      counts: manifest.counts,
+      idCount: validation.idCount,
+      historyCount: manifest.counts.changes,
+      sourceLinksPreserved: validation.sourceLinks,
+      liveIntegrity: liveSave.integrity || null
+    };
+  } catch (error) {
+    await preserveRecoveryRecord({
+      storageRoot,
+      dbPath,
+      issue: {
+        stage: "browser-json-import",
+        message: error.message,
+        stack: error.stack || "",
+        raw: raw || JSON.stringify(payload || {}, null, 2)
+      }
+    });
+    throw error;
+  } finally {
+    if (stagingRoot) await fsp.rm(stagingRoot, { recursive: true, force: true });
+  }
+}
+
+async function createBackupPackage({ storageRoot, dbPath, payload = {} }) {
+  await ensureSpine(storageRoot);
+  const actor = String(payload.actorId || payload.actorName || payload.actor || "").trim();
+  const reason = String(payload.reason || "").trim();
+  const timestamp = String(payload.timestamp || nowIso()).trim();
+  if (!actor) throw new Error("Backup package requires an actor.");
+  if (!reason) throw new Error("Backup package requires a reason.");
+  if (!timestamp || Number.isNaN(Date.parse(timestamp))) throw new Error("Backup package requires a valid timestamp.");
+
+  const integrity = await verifyIntegrity({ storageRoot, dbPath, preserveOnFailure: true });
+  if (!integrity.ok) throw new Error(`Backup package blocked by integrity errors: ${integrity.errors.join("; ")}`);
+
+  const packageId = payload.id || makeId("backup");
+  const packageName = safeFileName(`project-state-backup-package-${timestamp.replace(/[:.]/g, "-")}-${packageId}`);
+  const packagePath = path.join(storageRoot, "backups", packageName);
+  const managedPath = path.join(packagePath, "managed");
+  await fsp.rm(packagePath, { recursive: true, force: true });
+  await fsp.mkdir(managedPath, { recursive: true });
+
+  const dbSnapshotPath = path.join(packagePath, DATABASE_FILE);
+  await writeDatabaseSnapshot(dbPath, dbSnapshotPath);
+
+  const managedFiles = [];
+  for (const folder of BACKUP_MANAGED_FOLDERS) {
+    const sourceFolder = path.join(storageRoot, folder);
+    const targetFolder = path.join(managedPath, folder);
+    if (!fs.existsSync(sourceFolder)) continue;
+    await fsp.cp(sourceFolder, targetFolder, { recursive: true, force: true });
+    const files = await listPackageFiles(targetFolder);
+    for (const filePath of files) {
+      managedFiles.push({
+        role: folder,
+        path: relativeManagedPath(packagePath, filePath),
+        bytes: fs.statSync(filePath).size,
+        checksum: await checksumFile(filePath)
+      });
+    }
+  }
+
+  const dbStat = fs.statSync(dbSnapshotPath);
+  const manifest = {
+    app: "Project State",
+    packageType: "desktop-backup-package",
+    packageVersion: "0.1",
+    packageId,
+    createdAt: timestamp,
+    createdBy: actor,
+    actorId: payload.actorId || "",
+    actorName: payload.actorName || payload.actor || "",
+    reason,
+    storageEngine: "sqlite-plus-managed-folders",
+    database: {
+      fileName: DATABASE_FILE,
+      path: DATABASE_FILE,
+      bytes: dbStat.size,
+      checksum: await checksumFile(dbSnapshotPath)
+    },
+    managedFolders: BACKUP_MANAGED_FOLDERS,
+    managedFiles,
+    sourceIntegrity: integrity,
+    sourceStorageRoot: storageRoot
+  };
+  const manifestPath = path.join(packagePath, "manifest.json");
+  await fsp.writeFile(manifestPath, JSON.stringify(manifest, null, 2), "utf8");
+
+  return {
+    ok: true,
+    source: "desktop-backup-package",
+    packageId,
+    packagePath,
+    manifestPath,
+    dbSnapshotPath,
+    manifest
+  };
+}
+
+async function restoreBackupPackage({ storageRoot, dbPath, payload = {} }) {
+  await ensureSpine(storageRoot);
+  const actor = String(payload.actorId || payload.actorName || payload.actor || "").trim();
+  const reason = String(payload.reason || "").trim();
+  const timestamp = String(payload.timestamp || nowIso()).trim();
+  if (!actor) throw new Error("Restore package requires an actor.");
+  if (!reason) throw new Error("Restore package requires a reason.");
+  if (!timestamp || Number.isNaN(Date.parse(timestamp))) throw new Error("Restore package requires a valid timestamp.");
+
+  const packagePath = path.resolve(String(payload.packagePath || payload.path || ""));
+  if (!packagePath) throw new Error("Restore package requires a package path.");
+  const validation = await validateBackupPackage({ packagePath });
+  if (!validation.ok) throw new Error(`Restore package validation failed: ${validation.errors.join("; ")}`);
+
+  const beforeIntegrity = await verifyIntegrity({ storageRoot, dbPath, preserveOnFailure: true });
+  const recoverySnapshot = await preserveCurrentSpineForRestore({
+    storageRoot,
+    dbPath,
+    actor,
+    actorId: payload.actorId || "",
+    actorName: payload.actorName || payload.actor || "",
+    reason,
+    timestamp,
+    packagePath,
+    beforeIntegrity
+  });
+
+  await replaceLiveSpineFromBackupPackage({ storageRoot, dbPath, packagePath, manifest: validation.manifest });
+  const afterIntegrity = await verifyIntegrity({ storageRoot, dbPath, preserveOnFailure: true });
+  if (!afterIntegrity.ok) {
+    throw new Error(`Restored spine failed integrity: ${afterIntegrity.errors.join("; ")}`);
+  }
+
+  await preserveRecoveryRecord({
+    storageRoot,
+    dbPath,
+    issue: {
+      stage: "desktop-restore-complete",
+      message: "Desktop backup package restored.",
+      raw: JSON.stringify({
+        restoredAt: timestamp,
+        restoredBy: actor,
+        actorId: payload.actorId || "",
+        actorName: payload.actorName || payload.actor || "",
+        reason,
+        packagePath,
+        packageId: validation.manifest.packageId || "",
+        recoverySnapshot,
+        afterIntegrity
+      }, null, 2)
+    }
+  });
+
+  return {
+    ok: true,
+    source: "desktop-backup-package-restore",
+    restoredAt: timestamp,
+    restoredBy: actor,
+    reason,
+    packagePath,
+    packageId: validation.manifest.packageId || "",
+    recoverySnapshot,
+    integrity: afterIntegrity
+  };
+}
+
+async function validateBackupPackage({ packagePath }) {
+  const errors = [];
+  if (!packagePath || !fs.existsSync(packagePath)) {
+    return { ok: false, errors: ["Backup package folder does not exist."], manifest: null };
+  }
+  const manifestPath = path.join(packagePath, "manifest.json");
+  if (!fs.existsSync(manifestPath)) {
+    return { ok: false, errors: ["Backup package manifest is missing."], manifest: null };
+  }
+
+  let manifest = null;
+  try {
+    manifest = JSON.parse(await fsp.readFile(manifestPath, "utf8"));
+  } catch (error) {
+    return { ok: false, errors: [`Backup package manifest is not readable JSON: ${error.message}`], manifest: null };
+  }
+
+  if (manifest.app !== "Project State") errors.push("Backup package app mismatch.");
+  if (manifest.packageType !== "desktop-backup-package") errors.push("Backup package type mismatch.");
+  if (!manifest.createdBy) errors.push("Backup package missing createdBy.");
+  if (!manifest.createdAt) errors.push("Backup package missing createdAt.");
+  if (!manifest.reason) errors.push("Backup package missing reason.");
+
+  const dbRelativePath = manifest.database?.path || DATABASE_FILE;
+  let dbPath = "";
+  try {
+    dbPath = resolvePackagePath(packagePath, dbRelativePath);
+  } catch (error) {
+    errors.push(`Backup DB path is unsafe: ${error.message}`);
+  }
+  if (dbPath && !fs.existsSync(dbPath)) errors.push("Backup package DB snapshot is missing.");
+  if (dbPath && fs.existsSync(dbPath) && manifest.database?.checksum && await checksumFile(dbPath) !== manifest.database.checksum) errors.push("Backup package DB checksum mismatch.");
+
+  for (const folder of BACKUP_MANAGED_FOLDERS) {
+    const folderPath = path.join(packagePath, "managed", folder);
+    if (!fs.existsSync(folderPath)) errors.push(`Backup package missing managed folder ${folder}.`);
+  }
+  for (const file of manifest.managedFiles || []) {
+    let filePath = "";
+    try {
+      filePath = resolvePackagePath(packagePath, file.path);
+    } catch (error) {
+      errors.push(`Managed file path is unsafe: ${file.path}: ${error.message}`);
+      continue;
+    }
+    if (!fs.existsSync(filePath)) {
+      errors.push(`Backup package missing managed file ${file.path}.`);
+      continue;
+    }
+    if (file.checksum && await checksumFile(filePath) !== file.checksum) errors.push(`Managed file checksum mismatch: ${file.path}`);
+  }
+
+  if (dbPath && fs.existsSync(dbPath)) {
+    let db = null;
+    try {
+      db = new DatabaseSync(dbPath, { readOnly: true });
+      for (const table of REQUIRED_TABLES) {
+        if (!tableExists(db, table)) errors.push(`Backup package DB missing table ${table}.`);
+      }
+    } catch (error) {
+      errors.push(`Backup package DB is not readable: ${error.message}`);
+    } finally {
+      if (db) db.close();
+    }
+  }
+
+  return { ok: errors.length === 0, errors, manifest, manifestPath, dbPath };
+}
+
+async function preserveCurrentSpineForRestore({ storageRoot, dbPath, actor, actorId, actorName, reason, timestamp, packagePath, beforeIntegrity }) {
+  const snapshotId = makeId("restore_recovery");
+  const snapshotPath = path.join(storageRoot, "recovery", snapshotId);
+  const tempSnapshotPath = path.join(storageRoot, "temp", snapshotId);
+  await fsp.mkdir(snapshotPath, { recursive: true });
+  await fsp.mkdir(tempSnapshotPath, { recursive: true });
+
+  try {
+    if (fs.existsSync(dbPath)) await writeDatabaseSnapshot(dbPath, path.join(tempSnapshotPath, DATABASE_FILE));
+    const managedRoot = path.join(tempSnapshotPath, "managed");
+    for (const folder of BACKUP_MANAGED_FOLDERS) {
+      const sourceFolder = path.join(storageRoot, folder);
+      const targetFolder = path.join(managedRoot, folder);
+      if (fs.existsSync(sourceFolder)) await fsp.cp(sourceFolder, targetFolder, { recursive: true, force: true });
+    }
+    await fsp.cp(tempSnapshotPath, snapshotPath, { recursive: true, force: true });
+  } finally {
+    await fsp.rm(tempSnapshotPath, { recursive: true, force: true });
+  }
+
+  const manifest = {
+    app: "Project State",
+    packageType: "desktop-restore-recovery-snapshot",
+    packageVersion: "0.1",
+    snapshotId,
+    createdAt: timestamp,
+    createdBy: actor,
+    actorId,
+    actorName,
+    reason,
+    restoringPackagePath: packagePath,
+    sourceIntegrity: beforeIntegrity,
+    database: fs.existsSync(path.join(snapshotPath, DATABASE_FILE))
+      ? {
+        path: DATABASE_FILE,
+        bytes: fs.statSync(path.join(snapshotPath, DATABASE_FILE)).size,
+        checksum: await checksumFile(path.join(snapshotPath, DATABASE_FILE))
+      }
+      : null
+  };
+  await fsp.writeFile(path.join(snapshotPath, "manifest.json"), JSON.stringify(manifest, null, 2), "utf8");
+
+  await preserveRecoveryRecord({
+    storageRoot,
+    dbPath,
+    issue: {
+      stage: "desktop-restore-preflight",
+      message: "Current desktop spine preserved before restore.",
+      managedPath: relativeManagedPath(storageRoot, snapshotPath),
+      raw: JSON.stringify(manifest, null, 2)
+    }
+  });
+
+  return {
+    id: snapshotId,
+    path: snapshotPath,
+    managedPath: relativeManagedPath(storageRoot, snapshotPath)
+  };
+}
+
+async function replaceLiveSpineFromBackupPackage({ storageRoot, dbPath, packagePath, manifest }) {
+  const incomingDbPath = resolvePackagePath(packagePath, manifest.database?.path || DATABASE_FILE);
+  const tempRestorePath = path.join(storageRoot, "temp", `restore-${safeStamp()}-${crypto.randomBytes(3).toString("hex")}`);
+  await fsp.mkdir(tempRestorePath, { recursive: true });
+  try {
+    await fsp.copyFile(incomingDbPath, path.join(tempRestorePath, DATABASE_FILE));
+    for (const folder of BACKUP_MANAGED_FOLDERS) {
+      const sourceFolder = path.join(packagePath, "managed", folder);
+      const targetFolder = path.join(tempRestorePath, folder);
+      if (fs.existsSync(sourceFolder)) await fsp.cp(sourceFolder, targetFolder, { recursive: true, force: true });
+      else await fsp.mkdir(targetFolder, { recursive: true });
+    }
+
+    if (fs.existsSync(dbPath)) await fsp.rm(dbPath, { force: true });
+    await fsp.copyFile(path.join(tempRestorePath, DATABASE_FILE), dbPath);
+
+    for (const folder of BACKUP_MANAGED_FOLDERS) {
+      const liveFolder = path.join(storageRoot, folder);
+      if (folder === "recovery") {
+        await fsp.mkdir(liveFolder, { recursive: true });
+        await fsp.cp(path.join(tempRestorePath, folder), liveFolder, { recursive: true, force: true });
+        continue;
+      }
+      await fsp.rm(liveFolder, { recursive: true, force: true });
+      await fsp.cp(path.join(tempRestorePath, folder), liveFolder, { recursive: true, force: true });
+    }
+  } finally {
+    await fsp.rm(tempRestorePath, { recursive: true, force: true });
+    await ensureSpine(storageRoot);
+  }
+}
+
+function resolvePackagePath(packagePath, relativePath) {
+  const root = path.resolve(packagePath);
+  const target = path.resolve(root, relativePath || "");
+  if (target !== root && !target.startsWith(`${root}${path.sep}`)) throw new Error("Package path escaped backup package root.");
+  return target;
+}
+
+async function writeDatabaseSnapshot(dbPath, targetPath) {
+  await fsp.mkdir(path.dirname(targetPath), { recursive: true });
+  const db = openDatabase(dbPath);
+  try {
+    db.exec("PRAGMA wal_checkpoint(FULL)");
+    db.exec(`VACUUM INTO ${sqlString(targetPath)}`);
+  } finally {
+    db.close();
+  }
+}
+
+function sqlString(value) {
+  return `'${String(value).replace(/'/g, "''")}'`;
+}
+
+async function listPackageFiles(root) {
+  if (!fs.existsSync(root)) return [];
+  const entries = await fsp.readdir(root, { withFileTypes: true });
+  const files = [];
+  for (const entry of entries) {
+    const entryPath = path.join(root, entry.name);
+    if (entry.isDirectory()) files.push(...await listPackageFiles(entryPath));
+    else if (entry.isFile()) files.push(entryPath);
+  }
+  return files;
+}
+
+async function checksumFile(filePath) {
+  return new Promise((resolve, reject) => {
+    const hash = crypto.createHash("sha256");
+    const stream = fs.createReadStream(filePath);
+    stream.on("data", (chunk) => hash.update(chunk));
+    stream.on("error", reject);
+    stream.on("end", () => resolve(hash.digest("hex")));
+  });
+}
+
+function browserExportRawText(payload = {}) {
+  if (typeof payload === "string") return payload;
+  if (typeof payload.raw === "string") return payload.raw;
+  if (payload.data) return JSON.stringify(payload.data);
+  if (payload.browserExport) return JSON.stringify(payload.browserExport);
+  return JSON.stringify(payload);
+}
+
+function browserExportParsedPayload(payload = {}, raw = "") {
+  if (payload && typeof payload === "object" && !payload.raw && !payload.data && !payload.browserExport && (payload.store || Array.isArray(payload.projects))) return payload;
+  if (payload.data) return payload.data;
+  if (payload.browserExport) return payload.browserExport;
+  try {
+    return JSON.parse(raw);
+  } catch (error) {
+    throw new Error(`Browser export is not readable JSON: ${error.message}`);
+  }
+}
+
+function extractStoreFromBrowserExport(parsed) {
+  if (parsed?.app === "Project State" && parsed?.backupType === "full-storage-spine" && parsed.store) return parsed.store;
+  if (parsed?.app === "Project State" && parsed?.exportType === "raw-current-store" && parsed.store) return parsed.store;
+  if (parsed?.app === "Project State" && parsed.project) throw new Error("Single-project exports cannot be migrated into the desktop spine.");
+  if (parsed && Array.isArray(parsed.projects)) return parsed;
+  throw new Error("Browser export does not contain a full Project State store.");
+}
+
+function describeBrowserExport(parsed) {
+  return {
+    app: parsed?.app || "",
+    backupType: parsed?.backupType || "",
+    exportType: parsed?.exportType || "",
+    exportedAt: parsed?.exportedAt || "",
+    schemaVersion: parsed?.schemaVersion || parsed?.store?.schemaVersion || "",
+    storageMode: parsed?.storage?.storageMode || parsed?.storageMode || ""
+  };
+}
+
+function buildMigrationManifest(store, context = {}) {
+  const counts = countStorePartsForBridge(store);
+  const snapshot = JSON.stringify(store);
+  return {
+    spineVersion: "0.2.0-desktop",
+    layoutVersion: "desktop-sqlite-managed-files-v1",
+    migrationType: "browser-json-to-desktop-spine",
+    importedAt: nowIso(),
+    importedBy: context.actorId || "",
+    importReason: context.reason || "",
+    sourceFile: context.sourceFile || "",
+    source: context.source || {},
+    snapshotBytes: Buffer.byteLength(snapshot, "utf8"),
+    counts,
+    largeContent: {
+      attachments: counts.attachments,
+      attachmentDataCharacters: collectAttachments(store).reduce((total, item) => total + String(item.dataUrl || "").length, 0),
+      extractTextCharacters: (store.projects || []).reduce((total, project) => total + (project.sources || []).reduce((sourceTotal, source) => sourceTotal + (source.extracts || []).reduce((extractTotal, extract) => extractTotal + String(extract.text || "").length, 0), 0), 0)
+    },
+    splitTargets: {
+      meta: 1,
+      projects: counts.projects,
+      history: counts.changes,
+      sources: counts.sources,
+      extracts: counts.extracts,
+      attachments: counts.attachments,
+      drafts: counts.drafts,
+      recovery: 0
+    }
+  };
+}
+
+function countStorePartsForBridge(store = {}) {
+  const counts = {
+    actors: (store.actors || []).length,
+    intakeItems: (store.intakeItems || []).length,
+    projects: (store.projects || []).length,
+    archivedProjects: 0,
+    decisions: 0,
+    facts: 0,
+    sources: 0,
+    extracts: 0,
+    drafts: 0,
+    relationships: 0,
+    openQuestions: 0,
+    nextActions: 0,
+    changes: 0,
+    attachments: 0,
+    projectSourceLinks: 0,
+    objectSourceLinks: 0
+  };
+
+  for (const project of store.projects || []) {
+    if (project.archived) counts.archivedProjects += 1;
+    counts.decisions += (project.decisions || []).length;
+    counts.facts += (project.facts || []).length;
+    counts.sources += (project.sources || []).length;
+    counts.extracts += (project.sources || []).reduce((total, source) => total + (source.extracts || []).length, 0);
+    counts.drafts += (project.draftProjects || []).length;
+    counts.relationships += (project.relationships || []).length;
+    counts.openQuestions += (project.openQuestions || []).length;
+    counts.nextActions += (project.nextActions || []).length;
+    counts.changes += (project.changes || []).length;
+    counts.attachments += collectProjectAttachments(project).length;
+    counts.projectSourceLinks += (project.sourceLinks || []).length;
+
+    for (const list of [project.decisions, project.facts, project.relationships, project.openQuestions, project.nextActions, project.draftProjects, project.changes]) {
+      for (const item of list || []) counts.objectSourceLinks += (item.sourceLinks || []).length;
+    }
+    for (const source of project.sources || []) {
+      counts.objectSourceLinks += (source.sourceLinks || []).length;
+      for (const extract of source.extracts || []) counts.objectSourceLinks += (extract.sourceLinks || []).length;
+    }
+  }
+
+  return counts;
+}
+
+function validateMigrationStore(store = {}) {
+  const errors = [];
+  const ids = new Set();
+  const projectIds = new Set((store.projects || []).map((project) => project.id).filter(Boolean));
+  const actorIds = new Set((store.actors || []).map((actor) => actor.id).filter(Boolean));
+  const sourceIds = new Set();
+  const extractIds = new Set();
+  let sourceLinks = 0;
+
+  if (!store || !Array.isArray(store.projects)) errors.push("Store missing projects array.");
+  const addId = (id, label) => {
+    if (!id) {
+      errors.push(`${label} missing id.`);
+      return;
+    }
+    if (ids.has(id)) errors.push(`Duplicate id: ${label}:${id}`);
+    ids.add(id);
+  };
+
+  for (const actor of store.actors || []) addId(actor.id, "Actor");
+  for (const intake of store.intakeItems || []) addId(intake.id, "Intake item");
+
+  for (const project of store.projects || []) {
+    addId(project.id, "Project");
+    if (!project.name) errors.push(`Project ${project.id || "(missing id)"} missing name.`);
+    if (project.updatedBy && !actorIds.has(project.updatedBy)) errors.push(`Project ${project.id} updatedBy missing actor ${project.updatedBy}.`);
+    sourceLinks += (project.sourceLinks || []).length;
+
+    for (const decision of project.decisions || []) validateProjectObject(errors, ids, project, decision, "Decision", "decision");
+    for (const fact of project.facts || []) validateProjectObject(errors, ids, project, fact, "Fact", "fact");
+    for (const question of project.openQuestions || []) validateProjectObject(errors, ids, project, question, "OpenQuestion", "question");
+    for (const action of project.nextActions || []) validateProjectObject(errors, ids, project, action, "NextAction", "action");
+    for (const relationship of project.relationships || []) {
+      validateProjectObject(errors, ids, project, relationship, "Relationship", "relationship");
+      if (relationship.targetProjectId && !projectIds.has(relationship.targetProjectId)) errors.push(`Relationship ${relationship.id} missing target project ${relationship.targetProjectId}.`);
+    }
+
+    for (const source of project.sources || []) {
+      validateProjectObject(errors, ids, project, source, "Source", "source");
+      if (source.id) sourceIds.add(source.id);
+      sourceLinks += (source.sourceLinks || []).length;
+      for (const extract of source.extracts || []) {
+        validateProjectObject(errors, ids, project, extract, "Extract", "extract");
+        if (extract.sourceId !== source.id) errors.push(`Extract ${extract.id} sourceId mismatch.`);
+        if (extract.id) extractIds.add(extract.id);
+        sourceLinks += (extract.sourceLinks || []).length;
+      }
+    }
+
+    for (const draft of project.draftProjects || []) {
+      validateProjectObject(errors, ids, project, draft, "DraftProject", "draft");
+      if (draft.sourceId && !sourceIds.has(draft.sourceId)) errors.push(`Draft ${draft.id} missing source ${draft.sourceId}.`);
+      if (draft.extractId && !extractIds.has(draft.extractId)) errors.push(`Draft ${draft.id} missing extract ${draft.extractId}.`);
+    }
+
+    for (const change of project.changes || []) {
+      validateProjectObject(errors, ids, project, change, "Change", "change");
+      if (!change.actorId && !change.actorName) errors.push(`Change ${change.id} missing actor.`);
+      if (!change.timestamp) errors.push(`Change ${change.id} missing timestamp.`);
+      if (!change.reason) errors.push(`Change ${change.id} missing reason.`);
+      if (!change.details?.objectType && !change.details?.objectId) errors.push(`Change ${change.id} missing changed object detail.`);
+    }
+
+    for (const attachment of collectProjectAttachments(project)) {
+      addId(attachment.id, "Attachment");
+      if (attachment.projectId !== project.id) errors.push(`Attachment ${attachment.id} projectId mismatch.`);
+      if (!attachment.attachedToType || !attachment.attachedToId) errors.push(`Attachment ${attachment.id} missing attachment target.`);
+    }
+  }
+
+  return { errors, idCount: ids.size, sourceLinks };
+}
+
+function validateProjectObject(errors, ids, project, record, label, duplicateLabel) {
+  if (!record.id) errors.push(`${label} missing id.`);
+  else if (ids.has(record.id)) errors.push(`Duplicate id: ${duplicateLabel}:${record.id}`);
+  else ids.add(record.id);
+  if (record.projectId && record.projectId !== project.id) errors.push(`${label} ${record.id} projectId mismatch.`);
+}
+
+function tableExists(db, table) {
+  return Boolean(db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?").get(table));
+}
+
+function countRows(db, table) {
+  return db.prepare(`SELECT COUNT(*) AS count FROM ${table}`).get().count;
+}
+
+function compareManifestCount(report, manifest, key, actual) {
+  const expected = manifest?.counts?.[key];
+  if (typeof expected === "number" && expected !== actual) {
+    report.errors.push(`Manifest count mismatch for ${key}: expected ${expected}, found ${actual}`);
+  }
+}
+
+function compareManifestLargeCount(report, manifest, key, actual) {
+  const expected = manifest?.largeContent?.[key] ?? manifest?.splitTargets?.[key];
+  if (typeof expected === "number" && expected !== actual) {
+    report.errors.push(`Manifest large-content count mismatch for ${key}: expected ${expected}, found ${actual}`);
+  }
+}
+
+function verifyManagedTextRows(report, db, storageRoot, options) {
+  const { table, idColumn, pathColumn, checksumColumn, bytesColumn, label } = options;
+  const rows = db.prepare(`
+    SELECT ${idColumn} AS id, ${pathColumn} AS managedPath, ${checksumColumn} AS checksum${bytesColumn ? `, ${bytesColumn} AS expectedBytes` : ""}
+    FROM ${table}
+    WHERE ${pathColumn} IS NOT NULL AND ${pathColumn} != ''
+  `).all();
+
+  for (const row of rows) {
+    let filePath = "";
+    try {
+      filePath = resolveManagedPath(storageRoot, row.managedPath);
+    } catch (error) {
+      report.errors.push(`${label} ${row.id} has unsafe managed path: ${error.message}`);
+      continue;
+    }
+    if (!fs.existsSync(filePath)) {
+      report.errors.push(`${label} ${row.id} is missing managed file: ${row.managedPath}`);
+      continue;
+    }
+    const text = fs.readFileSync(filePath, "utf8");
+    if (row.checksum && checksumText(text) !== row.checksum) {
+      report.errors.push(`${label} ${row.id} checksum mismatch.`);
+    }
+    if (bytesColumn && typeof row.expectedBytes === "number" && Buffer.byteLength(text, "utf8") !== row.expectedBytes) {
+      report.errors.push(`${label} ${row.id} byte length mismatch.`);
+    }
+    report.checkedFiles[label] += 1;
+  }
+}
+
+async function finalizeIntegrityReport(report, { storageRoot, dbPath, preserveOnFailure }) {
+  report.ok = report.errors.length === 0;
+  if (!report.ok && preserveOnFailure) {
+    await preserveRecoveryRecord({
+      storageRoot,
+      dbPath,
+      issue: {
+        stage: "desktop-integrity",
+        message: "Desktop spine integrity check failed.",
+        raw: JSON.stringify(report, null, 2)
+      }
+    });
+  }
+  return report;
 }
 
 async function saveMeta({ storageRoot, dbPath, payload }) {
@@ -209,6 +959,114 @@ async function preserveRecoveryRecord({ storageRoot, dbPath, issue }) {
     db.close();
   }
   return { ok: true, id, managedPath };
+}
+
+async function preserveRecoveryRecordWithOpenDb(db, storageRoot, issue = {}) {
+  await ensureSpine(storageRoot);
+  const id = issue.id || makeId("recovery");
+  const raw = issue.raw || issue.store || "";
+  let managedPath = issue.managedPath || "";
+  if (raw) {
+    const filePath = path.join(storageRoot, "recovery", `${id}.json`);
+    await fsp.writeFile(filePath, typeof raw === "string" ? raw : JSON.stringify(raw, null, 2), "utf8");
+    managedPath = relativeManagedPath(storageRoot, filePath);
+  }
+  const record = {
+    id,
+    date: issue.date || nowIso(),
+    ...issue,
+    managedPath
+  };
+  insertJson(db, "recovery_records", {
+    id: record.id,
+    date: record.date,
+    stage: record.stage || "",
+    message: record.message || "",
+    managed_path: record.managedPath || "",
+    record_json: JSON.stringify(record)
+  });
+  return { ok: true, id, managedPath };
+}
+
+async function verifyIntegrity({ storageRoot, dbPath, preserveOnFailure = true } = {}) {
+  await ensureSpine(storageRoot);
+  const report = {
+    ok: true,
+    checkedAt: nowIso(),
+    storageRoot,
+    databaseFile: dbPath,
+    counts: {},
+    checkedFiles: {
+      extracts: 0,
+      attachments: 0,
+      manifests: 0
+    },
+    errors: []
+  };
+
+  let db = null;
+  try {
+    for (const folder of FOLDERS) {
+      if (!fs.existsSync(path.join(storageRoot, folder))) report.errors.push(`Missing managed folder: ${folder}`);
+    }
+    if (!fs.existsSync(dbPath)) {
+      report.errors.push("Missing project-state.db.");
+      return finalizeIntegrityReport(report, { storageRoot, dbPath, preserveOnFailure });
+    }
+
+    db = openDatabase(dbPath);
+    for (const table of REQUIRED_TABLES) {
+      if (!tableExists(db, table)) report.errors.push(`Missing SQLite table: ${table}`);
+    }
+    if (report.errors.length) return finalizeIntegrityReport(report, { storageRoot, dbPath, preserveOnFailure });
+
+    report.counts = {
+      projects: countRows(db, "projects"),
+      changes: countRows(db, "changes"),
+      sources: countRows(db, "sources"),
+      extracts: countRows(db, "extracts"),
+      attachments: countRows(db, "attachments"),
+      drafts: countRows(db, "draft_projects")
+    };
+
+    const manifest = readMeta(db, "manifest") || {};
+    compareManifestCount(report, manifest, "projects", report.counts.projects);
+    compareManifestCount(report, manifest, "changes", report.counts.changes);
+    compareManifestCount(report, manifest, "sources", report.counts.sources);
+    compareManifestCount(report, manifest, "extracts", report.counts.extracts);
+    compareManifestCount(report, manifest, "drafts", report.counts.drafts);
+    compareManifestLargeCount(report, manifest, "attachments", report.counts.attachments);
+
+    verifyManagedTextRows(report, db, storageRoot, {
+      table: "extracts",
+      idColumn: "id",
+      pathColumn: "text_path",
+      checksumColumn: "checksum",
+      bytesColumn: "text_bytes",
+      label: "extracts"
+    });
+    verifyManagedTextRows(report, db, storageRoot, {
+      table: "attachments",
+      idColumn: "id",
+      pathColumn: "managed_path",
+      checksumColumn: "checksum",
+      bytesColumn: "",
+      label: "attachments"
+    });
+
+    const latestManifest = readMeta(db, "latest_manifest_file");
+    if (latestManifest?.path) {
+      const manifestPath = resolveManagedPath(storageRoot, latestManifest.path);
+      if (!fs.existsSync(manifestPath)) report.errors.push(`Latest manifest file is missing: ${latestManifest.path}`);
+      else report.checkedFiles.manifests += 1;
+    }
+  } catch (error) {
+    report.errors.push(error.message);
+  } finally {
+    if (db) db.close();
+  }
+
+  return finalizeIntegrityReport(report, { storageRoot, dbPath, preserveOnFailure });
 }
 
 async function resetSpine({ storageRoot, dbPath }) {
@@ -590,8 +1448,7 @@ function findAttachmentTarget(project, objectType, objectId) {
 
 async function readManagedText(storageRoot, managedPath) {
   if (!managedPath) return "";
-  const filePath = path.join(storageRoot, managedPath);
-  if (!filePath.startsWith(storageRoot)) throw new Error("Managed path escaped storage root.");
+  const filePath = resolveManagedPath(storageRoot, managedPath);
   if (!fs.existsSync(filePath)) return "";
   return fsp.readFile(filePath, "utf8");
 }
@@ -641,22 +1498,26 @@ function splitStoreRecordsForBridge(store, manifest = {}) {
 
 function collectAttachments(store) {
   const attachments = [];
+  for (const project of store.projects || []) attachments.push(...collectProjectAttachments(project));
+  return attachments;
+}
+
+function collectProjectAttachments(project) {
+  const attachments = [];
   const collect = (project, ownerType, ownerId, links = []) => {
     for (const image of links || []) attachments.push({ ...image, projectId: image.projectId || project.id, attachedToType: image.attachedToType || ownerType, attachedToId: image.attachedToId || ownerId });
   };
-  for (const project of store.projects || []) {
-    collect(project, "Project", project.id, project.imageLinks);
-    for (const decision of project.decisions || []) collect(project, "Decision", decision.id, decision.imageLinks);
-    for (const fact of project.facts || []) collect(project, "Fact", fact.id, fact.imageLinks);
-    for (const relationship of project.relationships || []) collect(project, "Relationship", relationship.id, relationship.imageLinks);
-    for (const question of project.openQuestions || []) collect(project, "OpenQuestion", question.id, question.imageLinks);
-    for (const action of project.nextActions || []) collect(project, "NextAction", action.id, action.imageLinks);
-    for (const change of project.changes || []) collect(project, "Change", change.id, change.imageLinks);
-    for (const draft of project.draftProjects || []) collect(project, "DraftProject", draft.id, draft.imageLinks);
-    for (const source of project.sources || []) {
-      collect(project, "Source", source.id, source.imageLinks);
-      for (const extract of source.extracts || []) collect(project, "Extract", extract.id, extract.imageLinks);
-    }
+  collect(project, "Project", project.id, project.imageLinks);
+  for (const decision of project.decisions || []) collect(project, "Decision", decision.id, decision.imageLinks);
+  for (const fact of project.facts || []) collect(project, "Fact", fact.id, fact.imageLinks);
+  for (const relationship of project.relationships || []) collect(project, "Relationship", relationship.id, relationship.imageLinks);
+  for (const question of project.openQuestions || []) collect(project, "OpenQuestion", question.id, question.imageLinks);
+  for (const action of project.nextActions || []) collect(project, "NextAction", action.id, action.imageLinks);
+  for (const change of project.changes || []) collect(project, "Change", change.id, change.imageLinks);
+  for (const draft of project.draftProjects || []) collect(project, "DraftProject", draft.id, draft.imageLinks);
+  for (const source of project.sources || []) {
+    collect(project, "Source", source.id, source.imageLinks);
+    for (const extract of source.extracts || []) collect(project, "Extract", extract.id, extract.imageLinks);
   }
   return attachments;
 }
@@ -848,6 +1709,13 @@ function relativeManagedPath(storageRoot, filePath) {
   return path.relative(storageRoot, filePath).replace(/\\/g, "/");
 }
 
+function resolveManagedPath(storageRoot, managedPath) {
+  const root = path.resolve(storageRoot);
+  const filePath = path.resolve(root, managedPath);
+  if (filePath !== root && !filePath.startsWith(`${root}${path.sep}`)) throw new Error("Managed path escaped storage root.");
+  return filePath;
+}
+
 function nowIso() {
   return new Date().toISOString();
 }
@@ -867,6 +1735,9 @@ function makeId(prefix) {
 module.exports = {
   createProjectStateDesktopBridge,
   ensureSpine,
+  verifyIntegrity,
   FOLDERS,
+  BACKUP_MANAGED_FOLDERS,
+  REQUIRED_TABLES,
   DATABASE_FILE
 };

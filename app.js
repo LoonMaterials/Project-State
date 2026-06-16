@@ -217,6 +217,24 @@ const LANGUAGES = {
     platformAdapterLabel: "Platform Adapter",
     primaryStorage: "Primary Storage",
     localBrowserStorageSpine: "Local browser storage spine",
+    desktopRuntime: "Desktop App Runtime",
+    desktopRuntimeReady: "Desktop storage spine active.",
+    browserDevRuntime: "Browser / Dev Runtime",
+    browserRuntimeWarning: "Project State is running without the desktop bridge. Browser mode is for legacy export, migration, and development only; use the desktop app for full storage, backup, restore, intake, and API work.",
+    saveBlockedApproval: "Unsaved changes: approval gate blocked save",
+    saveStorageFailed: "Unsaved changes: {message}",
+    storageFailed: "storage failed",
+    savedAt: "Saved {time}",
+    unsavedChanges: "Unsaved changes",
+    storageWarningTitle: "Storage warning",
+    storageWarningDanger: "Local saved data is very large. Browser storage may fail soon, especially with images or long extracts.",
+    storageWarningNotice: "Local saved data is getting large. Images and long extracts can make saves slower.",
+    currentSizeSentence: "Current size: {size}.",
+    resetFailedDataConfirmFirst: "Reset local Project State data? Export the failed data first. This clears only this app's local saved data.",
+    resetFailedDataConfirmSecond: "Final confirmation: reset local data and start with an empty Project State store?",
+    resetAllDataConfirmFirst: "Reset all local Project State data? Export a full backup first. This clears only this app's local saved data.",
+    resetAllDataConfirmSecond: "Final confirmation: reset local data and return to first-run setup?",
+    resetComplete: "Reset complete",
     currentMode: "Current Mode",
     currentSize: "Current Size",
     storageOverrideAcknowledged: "Record that a storage override or migration exception has been acknowledged.",
@@ -610,6 +628,24 @@ const LANGUAGES = {
     platformAdapterLabel: "Adaptateur de plateforme",
     primaryStorage: "Stockage principal",
     localBrowserStorageSpine: "Axe de stockage local du navigateur",
+    desktopRuntime: "Runtime d’application de bureau",
+    desktopRuntimeReady: "Axe de stockage de bureau actif.",
+    browserDevRuntime: "Runtime navigateur / développement",
+    browserRuntimeWarning: "Project State fonctionne sans le pont de bureau. Le mode navigateur sert uniquement à l’export hérité, à la migration et au développement ; utilisez l’application de bureau pour le stockage complet, la sauvegarde, la restauration, l’entrée et les API.",
+    saveBlockedApproval: "Changements non enregistrés : la porte d’approbation a bloqué l’enregistrement",
+    saveStorageFailed: "Changements non enregistrés : {message}",
+    storageFailed: "échec du stockage",
+    savedAt: "Enregistré {time}",
+    unsavedChanges: "Changements non enregistrés",
+    storageWarningTitle: "Avertissement de stockage",
+    storageWarningDanger: "Les données locales enregistrées sont très volumineuses. Le stockage navigateur peut bientôt échouer, surtout avec des images ou de longs extraits.",
+    storageWarningNotice: "Les données locales enregistrées deviennent volumineuses. Les images et les longs extraits peuvent ralentir les enregistrements.",
+    currentSizeSentence: "Taille actuelle : {size}.",
+    resetFailedDataConfirmFirst: "Réinitialiser les données locales Project State ? Exportez d’abord les données en échec. Cela efface uniquement les données locales enregistrées par cette application.",
+    resetFailedDataConfirmSecond: "Confirmation finale : réinitialiser les données locales et repartir avec un espace Project State vide ?",
+    resetAllDataConfirmFirst: "Réinitialiser toutes les données locales Project State ? Exportez d’abord une sauvegarde complète. Cela efface uniquement les données locales enregistrées par cette application.",
+    resetAllDataConfirmSecond: "Confirmation finale : réinitialiser les données locales et revenir à la configuration initiale ?",
+    resetComplete: "Réinitialisation terminée",
     currentMode: "Mode actuel",
     currentSize: "Taille actuelle",
     storageOverrideAcknowledged: "Enregistrer qu’une exception de stockage ou de migration a été reconnue.",
@@ -1003,6 +1039,24 @@ const LANGUAGES = {
     platformAdapterLabel: "Plattformadapter",
     primaryStorage: "Primärspeicher",
     localBrowserStorageSpine: "Lokaler Browser-Speicher-Spine",
+    desktopRuntime: "Desktop-App-Laufzeit",
+    desktopRuntimeReady: "Desktop-Speicher-Spine aktiv.",
+    browserDevRuntime: "Browser-/Entwicklungs-Laufzeit",
+    browserRuntimeWarning: "Project State läuft ohne Desktop-Bridge. Der Browsermodus ist nur für Legacy-Export, Migration und Entwicklung gedacht; verwenden Sie die Desktop-App für vollständigen Speicher, Sicherung, Wiederherstellung, Eingang und API-Arbeit.",
+    saveBlockedApproval: "Nicht gespeicherte Änderungen: Genehmigungssperre hat das Speichern blockiert",
+    saveStorageFailed: "Nicht gespeicherte Änderungen: {message}",
+    storageFailed: "Speichern fehlgeschlagen",
+    savedAt: "Gespeichert {time}",
+    unsavedChanges: "Nicht gespeicherte Änderungen",
+    storageWarningTitle: "Speicherwarnung",
+    storageWarningDanger: "Die lokal gespeicherten Daten sind sehr groß. Browser-Speicher kann bald fehlschlagen, besonders mit Bildern oder langen Auszügen.",
+    storageWarningNotice: "Die lokal gespeicherten Daten werden groß. Bilder und lange Auszüge können das Speichern verlangsamen.",
+    currentSizeSentence: "Aktuelle Größe: {size}.",
+    resetFailedDataConfirmFirst: "Lokale Project-State-Daten zurücksetzen? Exportieren Sie zuerst die fehlerhaften Daten. Dies löscht nur die lokal gespeicherten Daten dieser App.",
+    resetFailedDataConfirmSecond: "Letzte Bestätigung: lokale Daten zurücksetzen und mit einem leeren Project-State-Speicher beginnen?",
+    resetAllDataConfirmFirst: "Alle lokalen Project-State-Daten zurücksetzen? Exportieren Sie zuerst eine vollständige Sicherung. Dies löscht nur die lokal gespeicherten Daten dieser App.",
+    resetAllDataConfirmSecond: "Letzte Bestätigung: lokale Daten zurücksetzen und zur Ersteinrichtung zurückkehren?",
+    resetComplete: "Zurücksetzen abgeschlossen",
     currentMode: "Aktueller Modus",
     currentSize: "Aktuelle Größe",
     storageOverrideAcknowledged: "Speicher-Override oder Migrationsausnahme als bestätigt erfassen.",
@@ -1396,6 +1450,24 @@ const LANGUAGES = {
     platformAdapterLabel: "Adaptador de plataforma",
     primaryStorage: "Almacenamiento principal",
     localBrowserStorageSpine: "Columna de almacenamiento local del navegador",
+    desktopRuntime: "Entorno de app de escritorio",
+    desktopRuntimeReady: "Columna de almacenamiento de escritorio activa.",
+    browserDevRuntime: "Entorno navegador / desarrollo",
+    browserRuntimeWarning: "Project State se está ejecutando sin el puente de escritorio. El modo navegador es solo para exportación heredada, migración y desarrollo; usa la app de escritorio para almacenamiento completo, copias, restauración, entrada y trabajo de API.",
+    saveBlockedApproval: "Cambios sin guardar: la puerta de aprobación bloqueó el guardado",
+    saveStorageFailed: "Cambios sin guardar: {message}",
+    storageFailed: "fallo de almacenamiento",
+    savedAt: "Guardado {time}",
+    unsavedChanges: "Cambios sin guardar",
+    storageWarningTitle: "Advertencia de almacenamiento",
+    storageWarningDanger: "Los datos locales guardados son muy grandes. El almacenamiento del navegador puede fallar pronto, especialmente con imágenes o extractos largos.",
+    storageWarningNotice: "Los datos locales guardados están creciendo. Las imágenes y los extractos largos pueden ralentizar los guardados.",
+    currentSizeSentence: "Tamaño actual: {size}.",
+    resetFailedDataConfirmFirst: "¿Restablecer los datos locales de Project State? Exporta primero los datos fallidos. Esto borra solo los datos locales guardados por esta app.",
+    resetFailedDataConfirmSecond: "Confirmación final: ¿restablecer los datos locales y empezar con un almacén Project State vacío?",
+    resetAllDataConfirmFirst: "¿Restablecer todos los datos locales de Project State? Exporta primero una copia completa. Esto borra solo los datos locales guardados por esta app.",
+    resetAllDataConfirmSecond: "Confirmación final: ¿restablecer los datos locales y volver a la configuración inicial?",
+    resetComplete: "Restablecimiento terminado",
     currentMode: "Modo actual",
     currentSize: "Tamaño actual",
     storageOverrideAcknowledged: "Registrar que se reconoció una excepción de almacenamiento o migración.",
@@ -1846,7 +1918,7 @@ function createDesktopPlatformAdapter(bridge) {
     storage: {
       externalStore: typeof storage.loadStore === "function" && typeof storage.saveStore === "function",
       supported() {
-        return (typeof storage.loadStore === "function" && typeof storage.saveStore === "function") || browserFallback.storage.supported();
+        return typeof storage.loadStore === "function" && typeof storage.saveStore === "function";
       },
       async loadStore(context) {
         return storage.loadStore(context);
@@ -1864,6 +1936,22 @@ function createDesktopPlatformAdapter(bridge) {
       },
       async preserveRecoveryRecord(issue) {
         if (typeof storage.preserveRecoveryRecord === "function") return storage.preserveRecoveryRecord(issue);
+        return null;
+      },
+      async verifyIntegrity(options) {
+        if (typeof storage.verifyIntegrity === "function") return storage.verifyIntegrity(options);
+        return null;
+      },
+      async importBrowserExport(payload) {
+        if (typeof storage.importBrowserExport === "function") return storage.importBrowserExport(payload);
+        return null;
+      },
+      async createBackupPackage(payload) {
+        if (typeof storage.createBackupPackage === "function") return storage.createBackupPackage(payload);
+        return null;
+      },
+      async restoreBackupPackage(payload) {
+        if (typeof storage.restoreBackupPackage === "function") return storage.restoreBackupPackage(payload);
         return null;
       },
       async reset() {
@@ -2215,11 +2303,11 @@ const ProjectStateStorage = {
       await this.writeSplitStore(nextStore, manifest);
       await this.verifySplitStore(nextStore, manifest);
       platformAdapter.storage.removeLegacyItem(STORAGE_KEY);
-      storageMode = "indexeddb-split";
+      storageMode = "browser-dev-indexeddb-split";
       return;
     }
     platformAdapter.storage.setLegacyItem(STORAGE_KEY, JSON.stringify(nextStore, null, 2));
-    storageMode = "legacy-json-fallback";
+    storageMode = "browser-dev-legacy-json";
   },
   async ensureMeta(nextStore) {
     const snapshot = JSON.stringify(nextStore);
@@ -2378,10 +2466,27 @@ const ProjectStateStorage = {
   }
 };
 
+function desktopRuntimeReady() {
+  return ProjectStateStorage.usesExternalStore();
+}
+
+function browserDevRuntime() {
+  return !desktopRuntimeReady();
+}
+
 function currentStorageModeName() {
   if (ProjectStateStorage.usesExternalStore()) return "desktop-spine";
-  if (ProjectStateStorage.browserDbSupported()) return "indexeddb-split";
-  return "legacy-json-fallback";
+  if (ProjectStateStorage.browserDbSupported()) return "browser-dev-indexeddb-split";
+  return "browser-dev-legacy-json";
+}
+
+function storageModeForLoadedSource(source = "") {
+  if (ProjectStateStorage.usesExternalStore()) return source || "desktop-spine";
+  if (source === "legacy-json" && ProjectStateStorage.browserDbSupported()) return "browser-dev-migrated-to-indexeddb-split";
+  if (source === "legacy-json") return "browser-dev-legacy-json";
+  if (source === "empty") return currentStorageModeName();
+  if (String(source).startsWith("indexeddb")) return `browser-dev-${source}`;
+  return source || currentStorageModeName();
 }
 
 function cloneRecord(record) {
@@ -2838,7 +2943,7 @@ async function loadStore() {
     const parsed = loaded.store || JSON.parse(loaded.raw);
     const normalized = normalizeStore(parsed);
     storageSnapshotText = JSON.stringify(normalized);
-    storageMode = loaded.source === "legacy-json" && ProjectStateStorage.supported() ? "migrated-to-indexeddb-split" : loaded.source;
+    storageMode = storageModeForLoadedSource(loaded.source);
     if (loaded.source === "legacy-json") await ProjectStateStorage.preserveLegacyRaw(loaded.raw);
     if (migrationNeeded || loaded.source !== "indexeddb-split") await ProjectStateStorage.save(normalized);
     else await ProjectStateStorage.ensureMeta(normalized);
@@ -3285,7 +3390,7 @@ function normalizeChangeDetails(details, project) {
 function saveStore(options = {}) {
   const hasApprovedCoreWrite = pendingApprovedCoreWrites > 0;
   if (!options.allowWithoutCoreApproval && !hasApprovedCoreWrite) {
-    setSaveStatus("unsaved", "Unsaved changes: approval gate blocked save");
+    setSaveStatus("unsaved", t("saveBlockedApproval"));
     console.error("Project State blocked a save because no approved core change was recorded first.");
     return;
   }
@@ -3293,12 +3398,12 @@ function saveStore(options = {}) {
   pendingApprovedCoreWrites = 0;
   ProjectStateStorage.save(store)
     .then(() => {
-      setSaveStatus("saved", `Saved ${formatDate(nowIso())}`);
+      setSaveStatus("saved", tFormat("savedAt", { time: formatDate(nowIso()) }));
       renderStorageWarning();
     })
     .catch((error) => {
       pendingApprovedCoreWrites += approvedWriteCount;
-      setSaveStatus("unsaved", `Unsaved changes: ${error?.message || "storage failed"}`);
+      setSaveStatus("unsaved", tFormat("saveStorageFailed", { message: error?.message || t("storageFailed") }));
       console.error("Project State could not save through the storage spine.", error);
     });
 }
@@ -3326,7 +3431,16 @@ function textByteSize(value = "") {
 function renderStorageWarning() {
   const warning = document.querySelector("[data-storage-warning-slot]");
   if (!warning) return;
-  warning.innerHTML = storageWarningHtml();
+  warning.innerHTML = `${runtimeWarningHtml()}${storageWarningHtml()}`;
+}
+
+function runtimeWarningHtml() {
+  if (!browserDevRuntime()) return "";
+  return `
+    <div class="storage-warning warning" role="status">
+      <strong>${escapeHtml(t("browserDevRuntime"))}:</strong> ${escapeHtml(t("browserRuntimeWarning"))}
+    </div>
+  `;
 }
 
 function storageWarningHtml(raw) {
@@ -3334,11 +3448,11 @@ function storageWarningHtml(raw) {
   const info = storageSizeInfo(raw);
   if (info.level === "ok") return "";
   const message = info.level === "danger"
-    ? "Local saved data is very large. Browser storage may fail soon, especially with images or long extracts."
-    : "Local saved data is getting large. Images and long extracts can make saves slower.";
+    ? t("storageWarningDanger")
+    : t("storageWarningNotice");
   return `
     <div class="storage-warning ${info.level}" role="status">
-      <strong>Storage warning:</strong> ${escapeHtml(message)} Current size: ${escapeHtml(info.label)}.
+      <strong>${escapeHtml(t("storageWarningTitle"))}:</strong> ${escapeHtml(message)} ${escapeHtml(tFormat("currentSizeSentence", { size: info.label }))}
     </div>
   `;
 }
@@ -3832,7 +3946,7 @@ function recordChange(project, actor, reason, summary, details = {}) {
     objectTitle,
     objectText: details.objectText || objectTitle
   };
-  setSaveStatus("unsaved", "Unsaved changes");
+  setSaveStatus("unsaved", t("unsavedChanges"));
   const change = {
     id: uid("change"),
     projectId: project.id,
@@ -3943,7 +4057,7 @@ function shell(inner) {
         <button class="btn" data-action="create-project">${escapeHtml(t("createProject"))}</button>
       </div>
     </header>
-    <div data-storage-warning-slot>${storageWarningHtml()}</div>
+    <div data-storage-warning-slot>${runtimeWarningHtml()}${storageWarningHtml()}</div>
     <main class="main">${inner}</main>
   `;
 }
@@ -4101,6 +4215,8 @@ function renderArchivedProjectList() {
 function renderSettings() {
   const info = storageSizeInfo();
   const diagnostics = settingsDiagnostics();
+  const runtimeStatus = desktopRuntimeReady() ? t("desktopRuntimeReady") : t("browserRuntimeWarning");
+  const runtimeLabel = desktopRuntimeReady() ? t("desktopRuntime") : t("browserDevRuntime");
   shell(`
     <section class="view-head">
       <div>
@@ -4207,6 +4323,10 @@ function renderSettings() {
         <form class="form" data-settings-storage>
           <div class="meta-grid">
             <div>
+              <p class="meta-label">${escapeHtml(t("desktopRuntime"))}</p>
+              <p>${escapeHtml(runtimeLabel)}</p>
+            </div>
+            <div>
               <p class="meta-label">${escapeHtml(t("primaryStorage"))}</p>
               <p>${escapeHtml(t("platformStorageSpine"))}</p>
             </div>
@@ -4223,6 +4343,7 @@ function renderSettings() {
               <p>${escapeHtml(info.label)} (${escapeHtml(info.level)})</p>
             </div>
           </div>
+          <p class="notice">${escapeHtml(runtimeStatus)}</p>
           <p class="notice">${escapeHtml(t("storageMigrationNotice"))}</p>
           <label class="check-field">
             <input name="storageOverrideAcknowledged" type="checkbox" ${store.settings?.storageOverrideAcknowledged ? "checked" : ""}>
@@ -5405,9 +5526,9 @@ function exportFailedData() {
 
 async function resetFailedData() {
   if (!loadFailure) return;
-  const first = confirm("Reset local Project State data? Export the failed data first. This clears only this app's local saved data.");
+  const first = confirm(t("resetFailedDataConfirmFirst"));
   if (!first) return;
-  const second = confirm("Final confirmation: reset local data and start with an empty Project State store?");
+  const second = confirm(t("resetFailedDataConfirmSecond"));
   if (!second) return;
   await ProjectStateStorage.reset();
   loadFailure = null;
@@ -5420,14 +5541,14 @@ async function resetFailedData() {
   activeHistoryFilter = null;
   activeHistoryEventType = "all";
   searchQuery = "";
-  setSaveStatus("saved", "Reset complete");
+  setSaveStatus("saved", t("resetComplete"));
   render();
 }
 
 async function resetLocalDataFromSettings() {
-  const first = confirm("Reset all local Project State data? Export a full backup first. This clears only this app's local saved data.");
+  const first = confirm(t("resetAllDataConfirmFirst"));
   if (!first) return;
-  const second = confirm("Final confirmation: reset local data and return to first-run setup?");
+  const second = confirm(t("resetAllDataConfirmSecond"));
   if (!second) return;
   await ProjectStateStorage.reset();
   loadFailure = null;
@@ -5441,7 +5562,7 @@ async function resetLocalDataFromSettings() {
   activeHistoryFilter = null;
   activeHistoryEventType = "all";
   searchQuery = "";
-  setSaveStatus("saved", "Reset complete");
+  setSaveStatus("saved", t("resetComplete"));
   render();
 }
 

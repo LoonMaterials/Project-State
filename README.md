@@ -94,10 +94,10 @@ Storage and Backup
 
 Project State separates primary storage from backup:
 
-Primary storage: the platform storage spine. The current prototype uses a browser adapter with IndexedDB when available, but the app now routes storage, file reads, and exports through a platform boundary so a desktop package can replace that adapter later.
+Primary storage: the desktop platform storage spine. Browser storage remains available only as a development and legacy migration harness; full Project State mode requires the desktop bridge.
 Backup storage: a user-controlled Project State backup JSON file exported from the app.
 
-The backup file should live somewhere outside the browser storage location, such as a local folder, external drive, cloud drive folder, or mobile Files location. Without a server, primary storage and backup must not be treated as the same location.
+The backup file should live somewhere outside the primary storage location, such as a separate local folder or an external drive. Without a server, primary storage and backup must not be treated as the same location.
 
 The planned desktop storage spine is SQLite plus managed local folders. The current contract lives in `DESKTOP_STORAGE_SPINE.md` and `fixtures/desktop-spine-v0.1-contract.json`.
 

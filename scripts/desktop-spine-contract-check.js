@@ -43,7 +43,7 @@ const REQUIRED_SAFETY_PHRASES = [
   "append-only"
 ];
 const REQUIRED_BRIDGE_METHODS = {
-  storage: ["loadStore", "saveStore", "saveMeta", "preserveRecoveryRecord", "reset"],
+  storage: ["loadStore", "saveStore", "saveMeta", "preserveRecoveryRecord", "verifyIntegrity", "importBrowserExport", "createBackupPackage", "restoreBackupPackage", "reset"],
   files: ["metadata", "localPath", "readAsDataUrl", "readAsText", "readAsArrayBuffer", "extractText", "inflateRaw"],
   downloads: ["saveTextFile"]
 };
