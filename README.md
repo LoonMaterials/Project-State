@@ -73,6 +73,19 @@ Humans remain the authority.
 
 AI acts as a contributor.
 
+Approval Queue
+
+The Intake Airlock includes an approval queue for outside inputs from files, notes, chat, email, AI, APIs, Codex, and other arms.
+
+Queue review is separate from approval:
+
+New
+Needs Review
+Ready
+Blocked
+
+Only items marked Ready can be approved into Project State. Approval still requires a human actor, timestamp, reason, and explicit confirmation that the proposal was reviewed and that outside inputs are not authority.
+
 Long-Term Vision
 
 The long-term goal is a system where:

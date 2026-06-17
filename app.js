@@ -15,6 +15,7 @@ const EXTRACT_TEXT_LIMIT = 5000;
 const PROJECT_HEALTH_FLAGS = ["active", "blocked", "at_risk", "complete", "on_hold"];
 const ARM_TYPES = ["calendar", "meeting", "api", "ai", "codex", "notes", "chat", "email", "file", "manual", "other"];
 const INTAKE_STATUSES = ["pending", "approved", "rejected", "archived"];
+const INTAKE_QUEUE_STATES = ["new", "needs_review", "ready", "blocked"];
 const APPROVED_CORE_ORIGINS = ["human_ui", "migration"];
 const ACTOR_ROLES = ["owner", "admin", "project_lead", "approver", "editor", "contributor", "reviewer", "auditor", "viewer", "ai_tool"];
 const ACTOR_STATUSES = ["active", "archived"];
@@ -168,6 +169,23 @@ const LANGUAGES = {
     search: "Search",
     searchPlaceholder: "Search projects and records",
     projects: "Projects",
+    workInbox: "Work Inbox",
+    workInboxSubtitle: "Items that need human attention across Project State.",
+    inboxEmpty: "Nothing needs attention right now.",
+    inboxEmptyDetail: "Pending reviews, blocked work, source issues, and due actions will appear here.",
+    readyToApprove: "Ready to Approve",
+    needsReview: "Needs Review",
+    blockedWork: "Blocked",
+    dueSoon: "Due Soon",
+    overdue: "Overdue",
+    missingSource: "Missing Source",
+    integrityWarning: "Integrity Warning",
+    draftWaiting: "Draft Waiting",
+    openQuestionNeedsAction: "Question Needs Action",
+    goToProject: "Go to Project",
+    goToIntake: "Go to Intake",
+    goToSettings: "Go to Settings",
+    openItem: "Open Item",
     archivedProjects: "Archived Projects",
     intake: "Intake",
     backup: "Backup",
@@ -395,6 +413,23 @@ const LANGUAGES = {
     roleDefinitions: "Role Definitions",
     intakeAirlock: "Intake Airlock",
     intakeAirlockSubtitle: "Outside arms can propose changes here. Human approval is required before anything reaches Project State.",
+    approvalQueueSummary: "Approval Queue Summary",
+    approvalQueueReview: "Queue Review",
+    approvalQueueReviewNotice: "Queue review triages an intake item. It does not approve the change or write it to Project State.",
+    approvalChecklist: "Approval Checklist",
+    queueState: "Queue State",
+    queueNew: "New",
+    queueNeedsReview: "Needs Review",
+    queueReady: "Ready",
+    queueBlocked: "Blocked",
+    reviewQueueItem: "Review Queue Item",
+    saveQueueReview: "Save Queue Review",
+    queueReviewNotes: "Review Notes",
+    approvalQueueReadyRequired: "Queue review must mark this item ready before approval.",
+    confirmProposalReviewed: "I reviewed the proposal and target project.",
+    confirmApprovalWritesCore: "I understand approval writes this proposal to Project State.",
+    confirmInputsNotAuthority: "I understand outside conversations, files, and AI suggestions are inputs, not authority.",
+    age: "Age",
     pendingReview: "Pending Review",
     reviewedIntake: "Reviewed Intake",
     currentState: "Current State",
@@ -669,6 +704,23 @@ const LANGUAGES = {
     search: "Rechercher",
     searchPlaceholder: "Rechercher des projets et des enregistrements",
     projects: "Projets",
+    workInbox: "Boîte de travail",
+    workInboxSubtitle: "Éléments qui demandent une attention humaine dans Project State.",
+    inboxEmpty: "Rien ne demande d’attention pour le moment.",
+    inboxEmptyDetail: "Les révisions en attente, travaux bloqués, problèmes de sources et actions à échéance apparaîtront ici.",
+    readyToApprove: "Prêt à approuver",
+    needsReview: "À réviser",
+    blockedWork: "Bloqué",
+    dueSoon: "Bientôt dû",
+    overdue: "En retard",
+    missingSource: "Source manquante",
+    integrityWarning: "Avertissement d’intégrité",
+    draftWaiting: "Brouillon en attente",
+    openQuestionNeedsAction: "Question sans action",
+    goToProject: "Aller au projet",
+    goToIntake: "Aller à l’entrée",
+    goToSettings: "Aller aux paramètres",
+    openItem: "Ouvrir l’élément",
     archivedProjects: "Projets archivés",
     intake: "Entrée",
     backup: "Sauvegarde",
@@ -896,6 +948,23 @@ const LANGUAGES = {
     roleDefinitions: "Définitions des rôles",
     intakeAirlock: "Airlock d’entrée",
     intakeAirlockSubtitle: "Les bras externes peuvent proposer des changements ici. Une approbation humaine est requise avant toute entrée dans Project State.",
+    approvalQueueSummary: "Résumé de la file d’approbation",
+    approvalQueueReview: "Révision de la file",
+    approvalQueueReviewNotice: "La révision de file trie une entrée. Elle n’approuve pas le changement et ne l’écrit pas dans Project State.",
+    approvalChecklist: "Liste de vérification d’approbation",
+    queueState: "État de la file",
+    queueNew: "Nouveau",
+    queueNeedsReview: "À réviser",
+    queueReady: "Prêt",
+    queueBlocked: "Bloqué",
+    reviewQueueItem: "Réviser l’entrée",
+    saveQueueReview: "Enregistrer la révision",
+    queueReviewNotes: "Notes de révision",
+    approvalQueueReadyRequired: "La révision de file doit marquer cette entrée comme prête avant l’approbation.",
+    confirmProposalReviewed: "J’ai révisé la proposition et le projet cible.",
+    confirmApprovalWritesCore: "Je comprends que l’approbation écrit cette proposition dans Project State.",
+    confirmInputsNotAuthority: "Je comprends que les conversations, fichiers et suggestions IA externes sont des entrées, pas l’autorité.",
+    age: "Âge",
     pendingReview: "En attente de révision",
     reviewedIntake: "Entrées révisées",
     currentState: "État actuel",
@@ -1170,6 +1239,23 @@ const LANGUAGES = {
     search: "Suchen",
     searchPlaceholder: "Projekte und Einträge suchen",
     projects: "Projekte",
+    workInbox: "Arbeits-Eingang",
+    workInboxSubtitle: "Elemente, die menschliche Aufmerksamkeit in Project State benötigen.",
+    inboxEmpty: "Im Moment benötigt nichts Aufmerksamkeit.",
+    inboxEmptyDetail: "Ausstehende Prüfungen, blockierte Arbeit, Quellenprobleme und fällige Aktionen erscheinen hier.",
+    readyToApprove: "Bereit zur Genehmigung",
+    needsReview: "Benötigt Prüfung",
+    blockedWork: "Blockiert",
+    dueSoon: "Bald fällig",
+    overdue: "Überfällig",
+    missingSource: "Fehlende Quelle",
+    integrityWarning: "Integritätswarnung",
+    draftWaiting: "Entwurf wartet",
+    openQuestionNeedsAction: "Frage ohne Aktion",
+    goToProject: "Zum Projekt",
+    goToIntake: "Zum Eingang",
+    goToSettings: "Zu Einstellungen",
+    openItem: "Element öffnen",
     archivedProjects: "Archivierte Projekte",
     intake: "Eingang",
     backup: "Sicherung",
@@ -1397,6 +1483,23 @@ const LANGUAGES = {
     roleDefinitions: "Rollendefinitionen",
     intakeAirlock: "Eingangs-Airlock",
     intakeAirlockSubtitle: "Externe Arme können hier Änderungen vorschlagen. Menschliche Genehmigung ist erforderlich, bevor etwas Project State erreicht.",
+    approvalQueueSummary: "Übersicht der Genehmigungswarteschlange",
+    approvalQueueReview: "Warteschlangenprüfung",
+    approvalQueueReviewNotice: "Die Warteschlangenprüfung sortiert einen Eingang. Sie genehmigt die Änderung nicht und schreibt sie nicht in Project State.",
+    approvalChecklist: "Genehmigungscheckliste",
+    queueState: "Warteschlangenstatus",
+    queueNew: "Neu",
+    queueNeedsReview: "Benötigt Prüfung",
+    queueReady: "Bereit",
+    queueBlocked: "Blockiert",
+    reviewQueueItem: "Eintrag prüfen",
+    saveQueueReview: "Prüfung speichern",
+    queueReviewNotes: "Prüfnotizen",
+    approvalQueueReadyRequired: "Die Warteschlangenprüfung muss diesen Eintrag vor der Genehmigung als bereit markieren.",
+    confirmProposalReviewed: "Ich habe den Vorschlag und das Zielprojekt geprüft.",
+    confirmApprovalWritesCore: "Ich verstehe, dass die Genehmigung diesen Vorschlag in Project State schreibt.",
+    confirmInputsNotAuthority: "Ich verstehe, dass externe Gespräche, Dateien und KI-Vorschläge Eingaben sind, nicht die Autorität.",
+    age: "Alter",
     pendingReview: "Ausstehende Prüfung",
     reviewedIntake: "Geprüfter Eingang",
     currentState: "Aktueller Stand",
@@ -1671,6 +1774,23 @@ const LANGUAGES = {
     search: "Buscar",
     searchPlaceholder: "Buscar proyectos y registros",
     projects: "Proyectos",
+    workInbox: "Bandeja de trabajo",
+    workInboxSubtitle: "Elementos que necesitan atención humana en Project State.",
+    inboxEmpty: "Nada necesita atención ahora.",
+    inboxEmptyDetail: "Las revisiones pendientes, trabajo bloqueado, problemas de fuentes y acciones vencidas aparecerán aquí.",
+    readyToApprove: "Listo para aprobar",
+    needsReview: "Necesita revisión",
+    blockedWork: "Bloqueado",
+    dueSoon: "Vence pronto",
+    overdue: "Vencido",
+    missingSource: "Fuente faltante",
+    integrityWarning: "Advertencia de integridad",
+    draftWaiting: "Borrador en espera",
+    openQuestionNeedsAction: "Pregunta sin acción",
+    goToProject: "Ir al proyecto",
+    goToIntake: "Ir a entrada",
+    goToSettings: "Ir a ajustes",
+    openItem: "Abrir elemento",
     archivedProjects: "Proyectos archivados",
     intake: "Entrada",
     backup: "Copia de seguridad",
@@ -1898,6 +2018,23 @@ const LANGUAGES = {
     roleDefinitions: "Definiciones de roles",
     intakeAirlock: "Airlock de entrada",
     intakeAirlockSubtitle: "Los brazos externos pueden proponer cambios aquí. Se requiere aprobación humana antes de que algo llegue a Project State.",
+    approvalQueueSummary: "Resumen de la cola de aprobación",
+    approvalQueueReview: "Revisión de cola",
+    approvalQueueReviewNotice: "La revisión de cola clasifica una entrada. No aprueba el cambio ni lo escribe en Project State.",
+    approvalChecklist: "Lista de aprobación",
+    queueState: "Estado de cola",
+    queueNew: "Nuevo",
+    queueNeedsReview: "Necesita revisión",
+    queueReady: "Listo",
+    queueBlocked: "Bloqueado",
+    reviewQueueItem: "Revisar entrada",
+    saveQueueReview: "Guardar revisión",
+    queueReviewNotes: "Notas de revisión",
+    approvalQueueReadyRequired: "La revisión de cola debe marcar esta entrada como lista antes de aprobarla.",
+    confirmProposalReviewed: "Revisé la propuesta y el proyecto objetivo.",
+    confirmApprovalWritesCore: "Entiendo que aprobar escribe esta propuesta en Project State.",
+    confirmInputsNotAuthority: "Entiendo que conversaciones, archivos y sugerencias de IA externas son entradas, no autoridad.",
+    age: "Antigüedad",
     pendingReview: "Revisión pendiente",
     reviewedIntake: "Entrada revisada",
     currentState: "Estado actual",
@@ -3668,10 +3805,16 @@ function normalizeIntakeItem(item, context) {
   const id = ensureId(item, "intake", context);
   const status = INTAKE_STATUSES.includes(item.status) ? item.status : "pending";
   if (!INTAKE_STATUSES.includes(item.status)) migrationNeeded = true;
+  const queueState = normalizeIntakeQueueState(item.queueState, context);
   return {
     id,
     armType: normalizeArmType(item.armType),
     status,
+    queueState,
+    queueNotes: item.queueNotes || "",
+    queueReviewedAt: item.queueReviewedAt || "",
+    queueReviewedBy: item.queueReviewedBy || "",
+    queueReviewReason: item.queueReviewReason || "",
     title: item.title || t("untitledIntake"),
     projectId: item.projectId || "",
     createdAt: item.createdAt || nowIso(),
@@ -3685,11 +3828,22 @@ function normalizeIntakeItem(item, context) {
   };
 }
 
+function normalizeIntakeQueueState(value, context = {}) {
+  if (INTAKE_QUEUE_STATES.includes(value)) return value;
+  migrationNeeded = true;
+  return "new";
+}
+
 function createIntakeItem(input = {}) {
   const item = {
     id: uid("intake"),
     armType: normalizeArmType(input.armType),
     status: "pending",
+    queueState: "new",
+    queueNotes: "",
+    queueReviewedAt: "",
+    queueReviewedBy: "",
+    queueReviewReason: "",
     title: input.title || t("untitledIntake"),
     projectId: input.projectId || "",
     createdAt: nowIso(),
@@ -3711,6 +3865,7 @@ function approveIntakeItem(intakeId, actor, reason, applyApprovedChange) {
   const intake = store.intakeItems?.find((item) => item.id === intakeId);
   requireHumanApproval(actor, reason, { origin: "intake" });
   if (!intake || intake.status !== "pending" || typeof applyApprovedChange !== "function") return null;
+  if (intake.queueState !== "ready") return null;
   const approval = {
     approvedAt: nowIso(),
     approvedBy: actor.id,
@@ -4407,7 +4562,8 @@ function render() {
   }
 
   if (!activeProjectId) {
-    if (activeRootView === "intake") renderIntakeQueue();
+    if (activeRootView === "inbox") renderWorkInbox();
+    else if (activeRootView === "intake") renderIntakeQueue();
     else if (activeRootView === "archived") renderArchivedProjectList();
     else if (activeRootView === "settings") renderSettings();
     else renderProjectList();
@@ -4437,6 +4593,10 @@ function openProjectNow(projectId, view = "dashboard") {
   searchQuery = "";
 }
 
+function workInboxCount() {
+  return buildWorkInboxItems().length;
+}
+
 function renderLoadingScreen() {
   app.innerHTML = `
     <main class="main recovery-screen">
@@ -4462,6 +4622,7 @@ function shell(inner) {
       <div class="button-row">
         ${activeProjectId ? `<button class="btn secondary" data-action="back">${escapeHtml(t("backToProjects"))}</button>` : ""}
         ${!activeProjectId ? `<button class="btn secondary" data-action="show-projects">${escapeHtml(t("projects"))}</button>` : ""}
+        ${!activeProjectId ? `<button class="btn secondary" data-action="show-inbox">${escapeHtml(t("workInbox"))}${workInboxCount() ? ` (${workInboxCount()})` : ""}</button>` : ""}
         ${!activeProjectId ? `<button class="btn secondary" data-action="show-archived-projects">${escapeHtml(t("archivedProjects"))}${archivedProjectCount() ? ` (${archivedProjectCount()})` : ""}</button>` : ""}
         ${!activeProjectId ? `<button class="btn secondary" data-action="show-intake">${escapeHtml(t("intake"))}${pendingIntakeCount() ? ` (${pendingIntakeCount()})` : ""}</button>` : ""}
         ${!activeProjectId ? `<button class="btn secondary" data-action="show-settings">${escapeHtml(t("settings"))}</button>` : ""}
@@ -5404,10 +5565,77 @@ function pendingIntakeCount() {
   return (store.intakeItems || []).filter((item) => item.status === "pending" && !item.archived).length;
 }
 
+function intakeQueueStateLabel(state = "new") {
+  const labels = {
+    new: t("queueNew"),
+    needs_review: t("queueNeedsReview"),
+    ready: t("queueReady"),
+    blocked: t("queueBlocked")
+  };
+  return labels[state] || t("queueNew");
+}
+
+function intakeQueueStateClass(state = "new") {
+  const classes = {
+    new: "review-open",
+    needs_review: "health-at_risk",
+    ready: "review-done",
+    blocked: "health-blocked"
+  };
+  return classes[state] || "review-open";
+}
+
+function intakeQueueStateRank(state = "new") {
+  const ranks = { ready: 0, needs_review: 1, new: 2, blocked: 3 };
+  return ranks[state] ?? 4;
+}
+
+function intakeQueueAgeLabel(createdAt) {
+  const created = Date.parse(createdAt || "");
+  if (!Number.isFinite(created)) return formatDate(createdAt);
+  const days = Math.max(0, Math.floor((Date.now() - created) / 86400000));
+  return `${days}d`;
+}
+
+function approvalQueueStats(intakeItems = []) {
+  const active = intakeItems.filter((item) => !item.archived);
+  const pending = active.filter((item) => item.status === "pending");
+  return {
+    pending: pending.length,
+    ready: pending.filter((item) => item.queueState === "ready").length,
+    blocked: pending.filter((item) => item.queueState === "blocked").length,
+    reviewed: intakeItems.filter((item) => item.status !== "pending" && !item.archived).length,
+    archived: intakeItems.filter((item) => item.archived).length
+  };
+}
+
+function renderApprovalQueueSummary(stats) {
+  const cards = [
+    [t("pendingReview"), stats.pending],
+    [t("queueReady"), stats.ready],
+    [t("queueBlocked"), stats.blocked],
+    [t("reviewedIntake"), stats.reviewed],
+    [t("archived"), stats.archived]
+  ];
+  return `
+    <section class="meta-grid">
+      ${cards.map(([label, value]) => `
+        <div class="meta-card">
+          <p class="meta-label">${escapeHtml(label)}</p>
+          <p class="meta-value">${escapeHtml(String(value))}</p>
+        </div>
+      `).join("")}
+    </section>
+  `;
+}
+
 function renderIntakeQueue() {
   const intakeItems = sortNewest(store.intakeItems || [], "createdAt");
-  const pending = intakeItems.filter((item) => item.status === "pending" && !item.archived);
+  const pending = intakeItems
+    .filter((item) => item.status === "pending" && !item.archived)
+    .sort((a, b) => intakeQueueStateRank(a.queueState) - intakeQueueStateRank(b.queueState) || Date.parse(b.createdAt || "") - Date.parse(a.createdAt || ""));
   const reviewed = intakeItems.filter((item) => item.status !== "pending" || item.archived);
+  const stats = approvalQueueStats(intakeItems);
 
   shell(`
     <section class="view-head">
@@ -5417,6 +5645,13 @@ function renderIntakeQueue() {
       </div>
       <button class="btn" data-action="create-intake">${escapeHtml(t("addIntake"))}</button>
     </section>
+
+    <article class="panel">
+      <div class="panel-head">
+        <h2 class="panel-title">${escapeHtml(t("approvalQueueSummary"))}</h2>
+      </div>
+      ${renderApprovalQueueSummary(stats)}
+    </article>
 
     <section class="dashboard-grid">
       <div class="stack">
@@ -5442,19 +5677,28 @@ function renderIntakeQueue() {
 function renderIntakeItem(item) {
   const projectName = item.projectId ? projectNameById(item.projectId) || t("missingProject") : t("noTargetProject");
   const proposed = item.proposedChange || {};
+  const isPending = item.status === "pending" && !item.archived;
+  const isReady = item.queueState === "ready";
   return `
     <div class="item">
       <p class="item-title">${escapeDisplay(item.title, DISPLAY_META_LIMIT)}</p>
-      <p class="item-meta">${escapeHtml(armTypeLabel(item.armType))} · ${escapeHtml(proposedObjectTypeLabel(item.proposedObjectType))} · ${escapeHtml(intakeStatusLabel(item))}</p>
-      <p class="item-meta">${escapeHtml(t("target"))}: ${escapeDisplay(projectName, DISPLAY_META_LIMIT)} · ${escapeHtml(t("created"))} ${escapeHtml(formatDate(item.createdAt))}</p>
+      <div class="review-flags">
+        <span class="pill ${escapeHtml(intakeQueueStateClass(item.queueState))}">${escapeHtml(intakeQueueStateLabel(item.queueState))}</span>
+        <span class="pill">${escapeHtml(intakeStatusLabel(item))}</span>
+      </div>
+      <p class="item-meta">${escapeHtml(armTypeLabel(item.armType))} · ${escapeHtml(proposedObjectTypeLabel(item.proposedObjectType))}</p>
+      <p class="item-meta">${escapeHtml(t("target"))}: ${escapeDisplay(projectName, DISPLAY_META_LIMIT)} · ${escapeHtml(t("created"))} ${escapeHtml(formatDate(item.createdAt))} · ${escapeHtml(t("age"))}: ${escapeHtml(intakeQueueAgeLabel(item.createdAt))}</p>
       ${item.sourceLabel ? `<p class="item-meta">${escapeHtml(t("source"))}: ${escapeDisplay(item.sourceLabel, DISPLAY_META_LIMIT)}</p>` : ""}
       ${proposed.text ? `<p class="item-body">${escapeDisplay(proposed.text)}</p>` : ""}
       ${proposed.summary ? `<p class="item-body">${escapeHtml(t("summary"))}: ${escapeDisplay(proposed.summary)}</p>` : ""}
+      ${item.queueNotes ? `<p class="item-meta">${escapeHtml(t("queueReviewNotes"))}: ${escapeDisplay(item.queueNotes, DISPLAY_META_LIMIT)}</p>` : ""}
+      ${item.queueReviewedAt ? `<p class="item-meta">${escapeHtml(t("reviewedBy"))} ${escapeHtml(actorDisplay(item.queueReviewedBy))} · ${escapeHtml(formatDate(item.queueReviewedAt))}</p>` : ""}
       ${item.review ? `<p class="item-meta">${escapeHtml(t("reviewedBy"))} ${escapeHtml(actorDisplay(item.review.actorId, item.review.actorName))} · ${escapeHtml(formatDate(item.review.reviewedAt))}</p>` : ""}
       ${item.approval ? `<p class="item-meta">${escapeHtml(t("approvedBy"))} ${escapeHtml(actorDisplay(item.approval.approvedBy))} · ${escapeHtml(formatDate(item.approval.approvedAt))}</p>` : ""}
       <div class="item-actions">
-        ${item.status === "pending" && !item.archived ? `<button class="btn secondary compact" data-action="approve-intake" data-intake-id="${item.id}">${escapeHtml(t("approve"))}</button>` : ""}
-        ${item.status === "pending" && !item.archived ? `<button class="btn secondary compact" data-action="reject-intake" data-intake-id="${item.id}">${escapeHtml(t("reject"))}</button>` : ""}
+        ${isPending ? `<button class="btn secondary compact" data-action="review-intake-queue" data-intake-id="${item.id}">${escapeHtml(t("reviewQueueItem"))}</button>` : ""}
+        ${isPending ? `<button class="btn secondary compact" data-action="approve-intake" data-intake-id="${item.id}" ${isReady ? "" : "disabled"} title="${isReady ? "" : escapeHtml(t("approvalQueueReadyRequired"))}">${escapeHtml(t("approve"))}</button>` : ""}
+        ${isPending ? `<button class="btn secondary compact" data-action="reject-intake" data-intake-id="${item.id}">${escapeHtml(t("reject"))}</button>` : ""}
         ${!item.archived ? `<button class="btn secondary compact" data-action="archive-intake" data-intake-id="${item.id}">${escapeHtml(t("archive"))}</button>` : ""}
       </div>
     </div>
@@ -7168,18 +7412,62 @@ function openCreateIntakeModal() {
 function openApproveIntakeModal(intakeId) {
   const intake = findIntakeItem(intakeId);
   if (!intake || intake.status !== "pending" || intake.archived) return;
+  if (intake.queueState !== "ready") {
+    window.alert(t("approvalQueueReadyRequired"));
+    return;
+  }
   showModal({
     title: t("approveIntake"),
     submitText: t("approveToProjectState"),
     body: `
       <p class="notice">${escapeHtml(t("approvalAppliesChangeNotice"))}</p>
       ${renderIntakeApprovalPreview(intake)}
+      <div class="field">
+        <label>${escapeHtml(t("approvalChecklist"))}</label>
+        ${confirmationField("confirmProposalReviewed", t("confirmProposalReviewed"))}
+        ${confirmationField("confirmApprovalWritesCore", t("confirmApprovalWritesCore"))}
+        ${confirmationField("confirmInputsNotAuthority", t("confirmInputsNotAuthority"))}
+      </div>
       ${auditFields()}
     `,
     onSubmit(data, form) {
       const actor = getOrCreateActor(data.actorName, "Human");
       const result = approveIntakeItem(intake.id, actor, data.reason, (item, approval) => applyApprovedIntakeToCore(item, actor, data.reason, approval));
       return Boolean(result);
+    }
+  });
+}
+
+function openReviewIntakeQueueModal(intakeId) {
+  const intake = findIntakeItem(intakeId);
+  if (!intake || intake.status !== "pending" || intake.archived) return;
+  showModal({
+    title: t("approvalQueueReview"),
+    submitText: t("saveQueueReview"),
+    body: `
+      <p class="notice">${escapeHtml(t("approvalQueueReviewNotice"))}</p>
+      ${renderIntakeApprovalPreview(intake)}
+      <div class="field">
+        <label for="queueState">${escapeHtml(t("queueState"))}</label>
+        <select id="queueState" name="queueState" required>
+          ${INTAKE_QUEUE_STATES.map((state) => `<option value="${escapeHtml(state)}" ${intake.queueState === state ? "selected" : ""}>${escapeHtml(intakeQueueStateLabel(state))}</option>`).join("")}
+        </select>
+      </div>
+      <div class="field">
+        <label for="queueNotes">${escapeHtml(t("queueReviewNotes"))}</label>
+        <textarea id="queueNotes" name="queueNotes">${escapeHtml(intake.queueNotes || "")}</textarea>
+      </div>
+      ${auditFields({ actorLabel: t("reviewedBy"), reasonLabel: t("reason") })}
+    `,
+    onSubmit(data) {
+      const actor = getOrCreateActor(data.actorName, "Human");
+      intake.queueState = normalizeIntakeQueueState(data.queueState);
+      intake.queueNotes = String(data.queueNotes || "").trim();
+      intake.queueReviewedAt = nowIso();
+      intake.queueReviewedBy = actor.id;
+      intake.queueReviewReason = data.reason.trim();
+      saveStore({ allowWithoutCoreApproval: true, reason: "intake-queue-reviewed" });
+      return true;
     }
   });
 }
@@ -9526,6 +9814,7 @@ app.addEventListener("click", (event) => {
     render();
   }
   if (action === "approve-intake") openApproveIntakeModal(button.dataset.intakeId);
+  if (action === "review-intake-queue") openReviewIntakeQueueModal(button.dataset.intakeId);
   if (action === "reject-intake") openRejectIntakeModal(button.dataset.intakeId);
   if (action === "archive-intake") openArchiveIntakeModal(button.dataset.intakeId);
   if (action === "export-project") exportProjectJson();
