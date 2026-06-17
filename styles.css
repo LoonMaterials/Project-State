@@ -381,6 +381,12 @@ select:focus {
   gap: 10px;
 }
 
+.inbox-groups {
+  display: grid;
+  gap: 14px;
+  margin-top: 14px;
+}
+
 .settings-grid {
   display: grid;
   gap: 18px;

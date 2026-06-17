@@ -4597,6 +4597,241 @@ function workInboxCount() {
   return buildWorkInboxItems().length;
 }
 
+function buildWorkInboxItems() {
+  const items = [];
+  const push = (item) => items.push({
+    id: item.id || uid("inbox"),
+    level: item.level || "warning",
+    category: item.category || t("needsAttention"),
+    title: item.title || t("openItem"),
+    body: item.body || "",
+    meta: item.meta || "",
+    projectId: item.projectId || "",
+    action: item.action || "open-project",
+    actionLabel: item.actionLabel || t("openItem"),
+    sortAt: item.sortAt || nowIso()
+  });
+
+  for (const intake of store.intakeItems || []) {
+    if (intake.archived || intake.status !== "pending") continue;
+    const projectName = intake.projectId ? projectNameById(intake.projectId) || t("missingProject") : t("noTargetProject");
+    const state = normalizeIntakeQueueState(intake.queueState);
+    push({
+      id: `intake-${intake.id}`,
+      level: state === "blocked" ? "needs_attention" : state === "ready" ? "healthy" : "warning",
+      category: state === "ready" ? t("readyToApprove") : state === "blocked" ? t("blockedWork") : t("needsReview"),
+      title: intake.title,
+      body: `${armTypeLabel(intake.armType)} · ${proposedObjectTypeLabel(intake.proposedObjectType)}`,
+      meta: `${t("target")}: ${projectName} · ${t("created")}: ${formatDate(intake.createdAt)}`,
+      action: "show-intake",
+      actionLabel: t("goToIntake"),
+      sortAt: intake.createdAt
+    });
+  }
+
+  for (const project of store.projects || []) {
+    if (project.archived) continue;
+    if (["blocked", "at_risk"].includes(project.healthFlag)) {
+      push({
+        id: `project-health-${project.id}`,
+        level: project.healthFlag === "blocked" ? "needs_attention" : "warning",
+        category: project.healthFlag === "blocked" ? t("blockedWork") : t("atRisk"),
+        title: project.name,
+        body: healthFlagLabel(project.healthFlag),
+        meta: `${t("lastUpdated")}: ${formatDate(project.updatedAt)}`,
+        projectId: project.id,
+        actionLabel: t("goToProject"),
+        sortAt: project.updatedAt
+      });
+    }
+
+    for (const draft of project.draftProjects || []) {
+      if (draft.status === "approved" || draft.status === "archived") continue;
+      if (draft.reviewFlags?.readyForApproval) {
+        push({
+          id: `draft-${draft.id}`,
+          level: "healthy",
+          category: t("draftWaiting"),
+          title: draft.name || t("draftProjectDefault"),
+          body: t("readyToApprove"),
+          meta: `${t("project")}: ${project.name} · ${t("created")}: ${formatDate(draft.createdAt)}`,
+          projectId: project.id,
+          actionLabel: t("goToProject"),
+          sortAt: draft.createdAt
+        });
+      }
+    }
+
+    for (const action of project.nextActions || []) {
+      if (getActionStatus(action) !== "open" || !action.dueDate) continue;
+      const dueState = nextActionDueState(action.dueDate);
+      if (!dueState) continue;
+      push({
+        id: `action-${action.id}`,
+        level: dueState === "overdue" ? "needs_attention" : "warning",
+        category: dueState === "overdue" ? t("overdue") : t("dueSoon"),
+        title: action.action,
+        body: `${t("due")}: ${formatDate(action.dueDate, false)}`,
+        meta: `${t("project")}: ${project.name} · ${t("status")}: ${getActionStatus(action)}`,
+        projectId: project.id,
+        actionLabel: t("goToProject"),
+        sortAt: action.dueDate
+      });
+    }
+
+    const openActions = (project.nextActions || []).filter((action) => getActionStatus(action) === "open");
+    if (!openActions.length) {
+      for (const question of project.openQuestions || []) {
+        if (question.status !== "open") continue;
+        push({
+          id: `question-${question.id}`,
+          level: "warning",
+          category: t("openQuestionNeedsAction"),
+          title: question.question,
+          body: question.context || "",
+          meta: `${t("project")}: ${project.name} · ${t("created")}: ${formatDate(question.createdAt)}`,
+          projectId: project.id,
+          actionLabel: t("goToProject"),
+          sortAt: question.createdAt
+        });
+      }
+    }
+
+    for (const source of project.sources || []) {
+      const status = source.fileVerification?.status || "";
+      if (!["missing", "changed", "unverifiable"].includes(status)) continue;
+      push({
+        id: `source-${source.id}`,
+        level: status === "missing" ? "needs_attention" : "warning",
+        category: t("missingSource"),
+        title: source.title || t("source"),
+        body: sourceFileVerificationMessage(source.fileVerification),
+        meta: `${t("project")}: ${project.name}`,
+        projectId: project.id,
+        actionLabel: t("goToProject"),
+        sortAt: source.fileVerification.checkedAt || source.dateAdded
+      });
+    }
+  }
+
+  const integrity = buildIntegrityDashboard(settingsDiagnostics(), storageSizeInfo());
+  const integrityIssues = Object.values(integrity.groups || {})
+    .flat()
+    .filter((issue) => issue.level !== "ok" && issue.type !== "source-file-verification")
+    .slice(0, 12);
+  for (const issue of integrityIssues) {
+    push({
+      id: `integrity-${issue.type}-${issue.objectId || issue.projectId || issue.message}`,
+      level: issue.level,
+      category: t("integrityWarning"),
+      title: issue.objectTitle || issue.projectName || issue.type,
+      body: issue.message,
+      meta: issue.projectName ? `${t("project")}: ${issue.projectName}` : "",
+      projectId: issue.projectId,
+      action: issue.projectId ? "open-project" : "show-settings",
+      actionLabel: issue.projectId ? t("goToProject") : t("goToSettings"),
+      sortAt: integrity.generatedAt
+    });
+  }
+
+  return items
+    .filter((item, index, all) => all.findIndex((candidate) => candidate.id === item.id) === index)
+    .sort((a, b) => inboxLevelRank(a.level) - inboxLevelRank(b.level) || dateSortValue(b.sortAt) - dateSortValue(a.sortAt));
+}
+
+function nextActionDueState(dueDate) {
+  const due = Date.parse(`${dueDate}T00:00:00`);
+  if (!Number.isFinite(due)) return "";
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const days = Math.floor((due - today.getTime()) / 86400000);
+  if (days < 0) return "overdue";
+  if (days <= 7) return "dueSoon";
+  return "";
+}
+
+function inboxLevelRank(level = "warning") {
+  if (level === "needs_attention") return 0;
+  if (level === "warning") return 1;
+  return 2;
+}
+
+function inboxStats(items = []) {
+  return {
+    total: items.length,
+    ready: items.filter((item) => item.category === t("readyToApprove") || item.category === t("draftWaiting")).length,
+    blocked: items.filter((item) => item.category === t("blockedWork")).length,
+    overdue: items.filter((item) => item.category === t("overdue")).length,
+    warnings: items.filter((item) => item.level === "warning").length
+  };
+}
+
+function renderWorkInbox() {
+  const items = buildWorkInboxItems();
+  const stats = inboxStats(items);
+  shell(`
+    <section class="view-head">
+      <div>
+        <h1 class="view-title">${escapeHtml(t("workInbox"))}</h1>
+        <p class="view-subtitle">${escapeHtml(t("workInboxSubtitle"))}</p>
+      </div>
+    </section>
+    <article class="panel">
+      <div class="meta-grid">
+        ${renderInboxStat(t("needsAttention"), stats.total)}
+        ${renderInboxStat(t("readyToApprove"), stats.ready)}
+        ${renderInboxStat(t("blockedWork"), stats.blocked)}
+        ${renderInboxStat(t("overdue"), stats.overdue)}
+        ${renderInboxStat(t("warning"), stats.warnings)}
+      </div>
+    </article>
+    ${items.length ? `<section class="inbox-groups">${renderInboxGroups(items)}</section>` : `
+      <section class="empty-state">
+        <h2>${escapeHtml(t("inboxEmpty"))}</h2>
+        <p>${escapeHtml(t("inboxEmptyDetail"))}</p>
+      </section>
+    `}
+  `);
+}
+
+function renderInboxStat(label, value) {
+  return `
+    <div class="meta-card">
+      <p class="meta-label">${escapeHtml(label)}</p>
+      <p class="meta-value">${escapeHtml(String(value))}</p>
+    </div>
+  `;
+}
+
+function renderInboxGroups(items) {
+  const groups = new Map();
+  for (const item of items) {
+    if (!groups.has(item.category)) groups.set(item.category, []);
+    groups.get(item.category).push(item);
+  }
+  return [...groups.entries()].map(([category, groupItems]) => `
+    <article class="panel">
+      <div class="panel-head">
+        <h2 class="panel-title">${escapeHtml(category)} (${groupItems.length})</h2>
+      </div>
+      <div class="list">${groupItems.map(renderInboxItem).join("")}</div>
+    </article>
+  `).join("");
+}
+
+function renderInboxItem(item) {
+  return `
+    <div class="item">
+      <p class="item-title"><span class="pill integrity-${escapeHtml(item.level)}">${escapeHtml(integrityStatusLabel(item.level))}</span> ${escapeDisplay(item.title, DISPLAY_META_LIMIT)}</p>
+      ${item.body ? `<p class="item-body">${escapeDisplay(item.body, DISPLAY_META_LIMIT)}</p>` : ""}
+      ${item.meta ? `<p class="item-meta">${escapeDisplay(item.meta, DISPLAY_META_LIMIT)}</p>` : ""}
+      <div class="item-actions">
+        <button class="btn secondary compact" data-action="${escapeHtml(item.action)}" ${item.projectId ? `data-project-id="${escapeHtml(item.projectId)}"` : ""}>${escapeHtml(item.actionLabel)}</button>
+      </div>
+    </div>
+  `;
+}
+
 function renderLoadingScreen() {
   app.innerHTML = `
     <main class="main recovery-screen">
@@ -9795,6 +10030,11 @@ app.addEventListener("click", (event) => {
   if (action === "reset-local-data") resetLocalDataFromSettings();
   if (action === "show-projects") {
     activeRootView = "projects";
+    activeProjectId = null;
+    render();
+  }
+  if (action === "show-inbox") {
+    activeRootView = "inbox";
     activeProjectId = null;
     render();
   }
