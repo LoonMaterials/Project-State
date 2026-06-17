@@ -42,6 +42,9 @@ Facts
 Open Questions
 Next Actions
 Relationships
+Sources
+Extracts
+Conflict Register
 Change History
 Actors
 
@@ -85,6 +88,39 @@ Ready
 Blocked
 
 Only items marked Ready can be approved into Project State. Approval still requires a human actor, timestamp, reason, and explicit confirmation that the proposal was reviewed and that outside inputs are not authority.
+
+Source Trust Levels
+
+Sources now carry a trust level so evidence can be reviewed without turning the source itself into authority:
+
+Primary
+Supporting
+Unverified
+Superseded
+Conflicting
+
+New sources default to Unverified. Changing a source trust level records actor, timestamp, reason, and the changed field in history.
+
+Conflict Register
+
+Projects now include a Conflict Register for contradictions, disputed facts, and mismatched source claims. A conflict records:
+
+Title
+Description
+Linked items
+Status
+Resolution
+Actor and timestamp
+Reason for creation or update
+
+Conflict statuses are:
+
+Unresolved
+Under Review
+Resolved
+Archived
+
+Unresolved and Under Review conflicts appear in project context and handoff checks so they are visible before approval or outside-arm work continues. Conflicts can be proposed through the Intake Airlock, but they still require human approval before entering Project State.
 
 Long-Term Vision
 

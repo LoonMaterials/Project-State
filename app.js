@@ -19,6 +19,8 @@ const INTAKE_QUEUE_STATES = ["new", "needs_review", "ready", "blocked"];
 const COLLAB_REVIEW_STATES = ["draft", "needs_review", "revision_requested", "ready_for_approval", "approved", "rejected", "archived"];
 const ASSIGNMENT_ROLES = ["owner", "reviewer", "approver", "watcher"];
 const AI_WORK_ORDER_STATUSES = ["submitted", "in_progress", "completed", "archived"];
+const SOURCE_TRUST_LEVELS = ["primary", "supporting", "unverified", "superseded", "conflicting"];
+const CONFLICT_STATUSES = ["unresolved", "under_review", "resolved", "archived"];
 const CONTEXT_PACK_PRESET_KEYS = ["current_state", "recent_decisions", "handoff", "source_research", "codex_implementation", "custom"];
 const CONTEXT_PACK_PRESETS = {
   current_state: {
@@ -564,6 +566,24 @@ const LANGUAGES = {
     blockersAndRisks: "Blockers And Risks",
     whoOwnsWhat: "Who Owns What",
     trustedSources: "Trusted Sources",
+    sourceTrustLevel: "Source Trust Level",
+    sourceTrustPrimary: "Primary",
+    sourceTrustSupporting: "Supporting",
+    sourceTrustUnverified: "Unverified",
+    sourceTrustSuperseded: "Superseded",
+    sourceTrustConflicting: "Conflicting",
+    conflictRegister: "Conflict Register",
+    addConflict: "Add Conflict",
+    editConflict: "Edit Conflict",
+    conflictTitle: "Conflict Title",
+    conflictDescription: "Conflict Description",
+    linkedItems: "Linked Items",
+    conflictStatus: "Conflict Status",
+    conflictUnresolved: "Unresolved",
+    conflictUnderReview: "Under Review",
+    conflictResolved: "Resolved",
+    resolution: "Resolution",
+    noConflictsRecorded: "No conflicts recorded.",
     aiAllowedHelp: "AI Allowed Help",
     doNotTouch: "Do Not Touch",
     handoffNoApprovalItems: "No approval items are waiting.",
@@ -1187,6 +1207,24 @@ const LANGUAGES = {
     blockersAndRisks: "Blocages et risques",
     whoOwnsWhat: "Qui possède quoi",
     trustedSources: "Sources fiables",
+    sourceTrustLevel: "Niveau de confiance de la source",
+    sourceTrustPrimary: "Primaire",
+    sourceTrustSupporting: "Appui",
+    sourceTrustUnverified: "Non vérifiée",
+    sourceTrustSuperseded: "Remplacée",
+    sourceTrustConflicting: "En conflit",
+    conflictRegister: "Registre des conflits",
+    addConflict: "Ajouter un conflit",
+    editConflict: "Modifier le conflit",
+    conflictTitle: "Titre du conflit",
+    conflictDescription: "Description du conflit",
+    linkedItems: "Éléments liés",
+    conflictStatus: "État du conflit",
+    conflictUnresolved: "Non résolu",
+    conflictUnderReview: "En révision",
+    conflictResolved: "Résolu",
+    resolution: "Résolution",
+    noConflictsRecorded: "Aucun conflit enregistré.",
     aiAllowedHelp: "Aide IA autorisée",
     doNotTouch: "Ne pas toucher",
     handoffNoApprovalItems: "Aucun élément n’attend d’approbation.",
@@ -1810,6 +1848,24 @@ const LANGUAGES = {
     blockersAndRisks: "Blockaden und Risiken",
     whoOwnsWhat: "Wer was verantwortet",
     trustedSources: "Vertrauenswürdige Quellen",
+    sourceTrustLevel: "Quellen-Vertrauensstufe",
+    sourceTrustPrimary: "Primär",
+    sourceTrustSupporting: "Unterstützend",
+    sourceTrustUnverified: "Ungeprüft",
+    sourceTrustSuperseded: "Ersetzt",
+    sourceTrustConflicting: "Widersprüchlich",
+    conflictRegister: "Konfliktregister",
+    addConflict: "Konflikt hinzufügen",
+    editConflict: "Konflikt bearbeiten",
+    conflictTitle: "Konflikttitel",
+    conflictDescription: "Konfliktbeschreibung",
+    linkedItems: "Verknüpfte Elemente",
+    conflictStatus: "Konfliktstatus",
+    conflictUnresolved: "Ungelöst",
+    conflictUnderReview: "In Prüfung",
+    conflictResolved: "Gelöst",
+    resolution: "Lösung",
+    noConflictsRecorded: "Keine Konflikte erfasst.",
     aiAllowedHelp: "Erlaubte KI-Hilfe",
     doNotTouch: "Nicht anfassen",
     handoffNoApprovalItems: "Keine Elemente warten auf Genehmigung.",
@@ -2433,6 +2489,24 @@ const LANGUAGES = {
     blockersAndRisks: "Bloqueos y riesgos",
     whoOwnsWhat: "Quién tiene qué",
     trustedSources: "Fuentes confiables",
+    sourceTrustLevel: "Nivel de confianza de fuente",
+    sourceTrustPrimary: "Primaria",
+    sourceTrustSupporting: "De apoyo",
+    sourceTrustUnverified: "No verificada",
+    sourceTrustSuperseded: "Reemplazada",
+    sourceTrustConflicting: "En conflicto",
+    conflictRegister: "Registro de conflictos",
+    addConflict: "Agregar conflicto",
+    editConflict: "Editar conflicto",
+    conflictTitle: "Título del conflicto",
+    conflictDescription: "Descripción del conflicto",
+    linkedItems: "Elementos vinculados",
+    conflictStatus: "Estado del conflicto",
+    conflictUnresolved: "Sin resolver",
+    conflictUnderReview: "En revisión",
+    conflictResolved: "Resuelto",
+    resolution: "Resolución",
+    noConflictsRecorded: "No hay conflictos registrados.",
     aiAllowedHelp: "Ayuda de IA permitida",
     doNotTouch: "No tocar",
     handoffNoApprovalItems: "No hay elementos esperando aprobación.",
@@ -3474,6 +3548,7 @@ function splitStoreRecords(nextStore, manifest) {
     const projectRecord = withoutImageLinks(project);
     projectRecord.decisions = (project.decisions || []).map(withoutImageLinks);
     projectRecord.facts = (project.facts || []).map(withoutImageLinks);
+    projectRecord.conflicts = (project.conflicts || []).map(withoutImageLinks);
     projectRecord.relationships = (project.relationships || []).map(withoutImageLinks);
     projectRecord.openQuestions = (project.openQuestions || []).map(withoutImageLinks);
     projectRecord.nextActions = (project.nextActions || []).map(withoutImageLinks);
@@ -3524,6 +3599,7 @@ function splitStoreRecords(nextStore, manifest) {
     const objectLists = [
       ["Decision", project.decisions || []],
       ["Fact", project.facts || []],
+      ["Conflict", project.conflicts || []],
       ["Relationship", project.relationships || []],
       ["OpenQuestion", project.openQuestions || []],
       ["NextAction", project.nextActions || []]
@@ -3620,6 +3696,7 @@ function findSplitAttachmentTarget(project, objectType, objectId) {
   const lists = {
     Decision: project.decisions || [],
     Fact: project.facts || [],
+    Conflict: project.conflicts || [],
     Relationship: project.relationships || [],
     OpenQuestion: project.openQuestions || [],
     NextAction: project.nextActions || [],
@@ -3675,6 +3752,7 @@ function auditSplitStoreRecords(split = {}) {
     const objectIds = new Set([project.id]);
     for (const decision of project.decisions || []) objectIds.add(decision.id);
     for (const fact of project.facts || []) objectIds.add(fact.id);
+    for (const conflict of project.conflicts || []) objectIds.add(conflict.id);
     for (const relationship of project.relationships || []) objectIds.add(relationship.id);
     for (const question of project.openQuestions || []) objectIds.add(question.id);
     for (const action of project.nextActions || []) objectIds.add(action.id);
@@ -3803,7 +3881,7 @@ function buildStorageSpineManifest(nextStore = emptyStore(), snapshot = "") {
     counts.changes += (project.changes || []).length;
     collectImages(project.imageLinks);
 
-    const imageBearingLists = [project.decisions, project.facts, project.relationships, project.openQuestions, project.nextActions, project.draftProjects, project.changes];
+    const imageBearingLists = [project.decisions, project.facts, project.conflicts, project.relationships, project.openQuestions, project.nextActions, project.draftProjects, project.changes];
     for (const list of imageBearingLists) {
       for (const item of list || []) collectImages(item.imageLinks);
     }
@@ -4060,6 +4138,7 @@ function normalizeProject(project, context) {
     decisions: [],
     facts: [],
     sources: [],
+    conflicts: [],
     draftProjects: [],
     relationships: [],
     openQuestions: [],
@@ -4077,6 +4156,7 @@ function normalizeProject(project, context) {
     decisions: Array.isArray(project.decisions) ? project.decisions.map((decision) => normalizeObject(decision, "decision", project.id, context)) : [],
     facts: Array.isArray(project.facts) ? project.facts.map((fact) => normalizeObject(fact, "fact", project.id, context)) : [],
     sources: Array.isArray(project.sources) ? project.sources.map((source) => normalizeSource(source, project.id, context)) : [],
+    conflicts: Array.isArray(project.conflicts) ? project.conflicts.map((conflict) => normalizeConflict(conflict, project.id, context)) : [],
     draftProjects: Array.isArray(project.draftProjects) ? project.draftProjects.map((draftProject) => normalizeDraftProject(draftProject, project.id, context)) : [],
     relationships: Array.isArray(project.relationships) ? project.relationships.map((relationship) => normalizeRelationship(relationship, project, context)) : [],
     openQuestions: Array.isArray(project.openQuestions) ? project.openQuestions.map((question) => normalizeObject(question, "question", project.id, context)) : [],
@@ -4108,8 +4188,77 @@ function normalizeObject(object, prefix, projectId, context) {
   return normalized;
 }
 
+function normalizeConflict(conflict, projectId, context) {
+  const conflictId = ensureId(conflict, "conflict", context);
+  const status = normalizeConflictStatus(conflict.status);
+  if (!conflict.projectId || !conflict.status) migrationNeeded = true;
+  return {
+    sourceLinks: [],
+    imageLinks: [],
+    assignments: [],
+    comments: [],
+    reviewState: "needs_review",
+    linkedItems: "",
+    resolution: "",
+    ...conflict,
+    id: conflictId,
+    projectId: conflict.projectId || projectId,
+    title: conflict.title || t("conflictTitle"),
+    description: conflict.description || "",
+    linkedItems: conflict.linkedItems || "",
+    status,
+    noticedAt: conflict.noticedAt || conflict.createdAt || nowIso(),
+    noticedBy: conflict.noticedBy || conflict.actorId || "",
+    resolution: conflict.resolution || conflict.resolutionReason || "",
+    reviewState: normalizeReviewState(conflict.reviewState || (status === "resolved" ? "approved" : "needs_review")),
+    assignments: normalizeAssignments(conflict.assignments, context),
+    comments: normalizeComments(conflict.comments, context),
+    sourceLinks: normalizeSourceLinksArray(conflict.sourceLinks, context),
+    imageLinks: normalizeImageLinksArray(conflict.imageLinks, projectId, "Conflict", conflictId, context)
+  };
+}
+
 function normalizeReviewState(state = "approved") {
   return COLLAB_REVIEW_STATES.includes(state) ? state : "approved";
+}
+
+function normalizeSourceTrustLevel(level = "unverified") {
+  return SOURCE_TRUST_LEVELS.includes(level) ? level : "unverified";
+}
+
+function normalizeConflictStatus(status = "unresolved") {
+  return CONFLICT_STATUSES.includes(status) ? status : "unresolved";
+}
+
+function sourceTrustLabel(level = "unverified") {
+  const labels = {
+    primary: t("sourceTrustPrimary"),
+    supporting: t("sourceTrustSupporting"),
+    unverified: t("sourceTrustUnverified"),
+    superseded: t("sourceTrustSuperseded"),
+    conflicting: t("sourceTrustConflicting")
+  };
+  return labels[normalizeSourceTrustLevel(level)] || t("sourceTrustUnverified");
+}
+
+function sourceTrustOptions(selected = "unverified") {
+  const safeSelected = normalizeSourceTrustLevel(selected);
+  return SOURCE_TRUST_LEVELS.map((level) => `<option value="${level}" ${level === safeSelected ? "selected" : ""}>${escapeHtml(sourceTrustLabel(level))}</option>`).join("");
+}
+
+function conflictStatusLabel(status = "unresolved") {
+  const labels = {
+    unresolved: t("conflictUnresolved"),
+    under_review: t("conflictUnderReview"),
+    resolved: t("conflictResolved"),
+    archived: t("archived")
+  };
+  return labels[normalizeConflictStatus(status)] || t("conflictUnresolved");
+}
+
+function conflictStatusOptions(selected = "unresolved") {
+  const safeSelected = normalizeConflictStatus(selected);
+  return CONFLICT_STATUSES.map((status) => `<option value="${status}" ${status === safeSelected ? "selected" : ""}>${escapeHtml(conflictStatusLabel(status))}</option>`).join("");
 }
 
 function normalizeAssignmentRole(role = "watcher") {
@@ -4214,10 +4363,11 @@ function objectTypeFromPrefix(prefix) {
 
 function normalizeSource(source, projectId, context) {
   const sourceId = ensureId(source, "source", context);
-  if (!source.projectId || !Array.isArray(source.linkedActorIds)) migrationNeeded = true;
+  if (!source.projectId || !Array.isArray(source.linkedActorIds) || !source.trustLevel) migrationNeeded = true;
   return {
     extracts: [],
     status: "active",
+    trustLevel: "unverified",
     tags: [],
     linkedActorIds: [],
     assignments: [],
@@ -4226,6 +4376,7 @@ function normalizeSource(source, projectId, context) {
     ...source,
     id: sourceId,
     projectId: source.projectId || projectId,
+    trustLevel: normalizeSourceTrustLevel(source.trustLevel),
     reviewState: normalizeReviewState(source.reviewState || "approved"),
     assignments: normalizeAssignments(source.assignments, context),
     comments: normalizeComments(source.comments, context),
@@ -4669,6 +4820,7 @@ function findObjectByTitle(project, objectType, title = "") {
   if (objectType === "Project") return match(project.name) ? project : null;
   if (objectType === "Decision") return project.decisions.find((item) => match(item.text)) || null;
   if (objectType === "Fact") return project.facts.find((item) => match(item.statement)) || null;
+  if (objectType === "Conflict") return (project.conflicts || []).find((item) => match(item.title)) || null;
   if (objectType === "Source") return project.sources.find((item) => match(item.title)) || null;
   if (objectType === "DraftProject") return project.draftProjects.find((item) => match(item.name)) || null;
   if (objectType === "Relationship") return project.relationships.find((item) => match(item.target)) || null;
@@ -4901,6 +5053,7 @@ function getProjectObject(project, objectType, objectId) {
   if (objectType === "Project") return project;
   if (objectType === "Decision") return project.decisions.find((item) => item.id === objectId) || null;
   if (objectType === "Fact") return project.facts.find((item) => item.id === objectId) || null;
+  if (objectType === "Conflict") return (project.conflicts || []).find((item) => item.id === objectId) || null;
   if (objectType === "Source") return project.sources.find((item) => item.id === objectId) || null;
   if (objectType === "DraftProject") return project.draftProjects.find((item) => item.id === objectId) || null;
   if (objectType === "Extract") {
@@ -4978,7 +5131,7 @@ function normalizeArmType(type = "other") {
 }
 
 function normalizeProposedObjectType(type = "Decision") {
-  const allowed = ["ProjectStatus", "Decision", "Fact", "OpenQuestion", "NextAction", "Source", "Relationship"];
+  const allowed = ["ProjectStatus", "Decision", "Fact", "Conflict", "OpenQuestion", "NextAction", "Source", "Relationship"];
   return allowed.includes(type) ? type : "Decision";
 }
 
@@ -6351,6 +6504,7 @@ function projectIntegrityObjects(project) {
   };
   addList("Decision", project.decisions);
   addList("Fact", project.facts);
+  addList("Conflict", project.conflicts);
   addList("Relationship", project.relationships);
   addList("OpenQuestion", project.openQuestions);
   addList("NextAction", project.nextActions);
@@ -6481,7 +6635,7 @@ function renderIntegrityIssue(issue) {
 
 function countProjectImages(project) {
   let count = Array.isArray(project.imageLinks) ? project.imageLinks.length : 0;
-  const objectLists = [project.decisions, project.facts, project.relationships, project.openQuestions, project.nextActions, project.draftProjects, project.changes];
+  const objectLists = [project.decisions, project.facts, project.conflicts, project.relationships, project.openQuestions, project.nextActions, project.draftProjects, project.changes];
   for (const list of objectLists) count += list.reduce((inner, item) => inner + (Array.isArray(item.imageLinks) ? item.imageLinks.length : 0), 0);
   for (const source of project.sources) {
     count += Array.isArray(source.imageLinks) ? source.imageLinks.length : 0;
@@ -6687,6 +6841,7 @@ function proposedObjectTypeLabel(type = "") {
     ProjectStatus: t("projectStatus"),
     Decision: t("decision"),
     Fact: t("fact"),
+    Conflict: t("conflictRegister"),
     OpenQuestion: t("openQuestion"),
     NextAction: t("nextAction"),
     Source: t("source"),
@@ -6746,8 +6901,12 @@ function buildSearchResults() {
       addSearchResult(results, project, "Fact", fact.id, fact.statement, fact.source, [fact.statement, fact.source, fact.confidence]);
       addImageSearchResults(results, project, "Fact", fact);
     }
+    for (const conflict of project.conflicts || []) {
+      addSearchResult(results, project, "Conflict", conflict.id, conflict.title, conflict.description, [conflict.title, conflict.description, conflict.linkedItems, conflict.resolution, conflictStatusLabel(conflict.status)]);
+      addImageSearchResults(results, project, "Conflict", conflict);
+    }
     for (const source of project.sources) {
-      addSearchResult(results, project, "Source", source.id, source.title, source.summary || source.location, [source.title, source.sourceType, source.location, source.summary, tagsToText(source.tags), linkedActorNames(source.linkedActorIds).join(" ")]);
+      addSearchResult(results, project, "Source", source.id, source.title, source.summary || source.location, [source.title, source.sourceType, sourceTrustLabel(source.trustLevel), source.location, source.summary, tagsToText(source.tags), linkedActorNames(source.linkedActorIds).join(" ")]);
       for (const extract of source.extracts || []) {
         addSearchResult(results, project, "Extract", extract.id, extract.text, extract.summary, [extract.text, extract.summary, extractModeLabel(extract.extractMode), tagsToText(extract.tags), extract.extractedFromFile?.fileName, extract.extractedFromFile?.localPath]);
       }
@@ -6834,6 +6993,7 @@ function renderProject(project) {
   const actions = sortNewest(project.nextActions.filter((action) => getActionStatus(action) === "open"));
   const decisions = sortNewest(project.decisions.filter((decision) => !decision.archived), "date");
   const facts = sortNewest(project.facts.filter((fact) => fact.status !== "archived"));
+  const conflicts = sortNewest((project.conflicts || []).filter((conflict) => conflict.status !== "archived"), "noticedAt");
   const sources = sortNewest(project.sources.filter((source) => source.status !== "archived"));
   const draftProjects = sortNewest(project.draftProjects.filter((draftProject) => draftProject.status !== "archived"));
   const relationships = sortNewest(project.relationships.filter((relationship) => relationship.status !== "archived"));
@@ -6856,7 +7016,7 @@ function renderProject(project) {
       </div>
       <div class="meta-card">
         <p class="meta-label">${escapeHtml(t("currentObjects"))}</p>
-        <p class="meta-value">${decisions.length} decisions, ${facts.length} facts, ${sources.length} sources, ${draftProjects.length} drafts, ${relationships.length} relationships, ${questions.length} questions, ${actions.length} actions</p>
+        <p class="meta-value">${decisions.length} decisions, ${facts.length} facts, ${conflicts.length} conflicts, ${sources.length} sources, ${draftProjects.length} drafts, ${relationships.length} relationships, ${questions.length} questions, ${actions.length} actions</p>
       </div>
       <div class="meta-card">
         <p class="meta-label">${escapeHtml(t("health"))}</p>
@@ -6906,6 +7066,14 @@ function renderProject(project) {
             <button class="btn secondary" data-action="add-fact">${escapeHtml(t("addFact"))}</button>
           </div>
           ${renderFactList(recent(facts, 5))}
+        </article>
+
+        <article class="panel">
+          <div class="panel-head">
+            <h2 class="panel-title">${escapeHtml(t("conflictRegister"))}</h2>
+            <button class="btn secondary" data-action="add-conflict">${escapeHtml(t("addConflict"))}</button>
+          </div>
+          ${renderConflictList(recent(conflicts, 5))}
         </article>
 
         <article class="panel">
@@ -6980,6 +7148,7 @@ function renderProject(project) {
     actions,
     decisions,
     facts,
+    conflicts,
     sources,
     relationships,
     draftProjects,
@@ -6990,6 +7159,7 @@ function renderProject(project) {
     actions,
     decisions,
     facts,
+    conflicts,
     sources,
     relationships,
     draftProjects,
@@ -7013,6 +7183,7 @@ function renderProject(project) {
         <button class="btn secondary" data-action="view-object-history" data-object-type="Project" data-object-id="${project.id}">${escapeHtml(t("viewHistory"))}</button>
         <button class="btn secondary" data-action="add-decision">${escapeHtml(t("addDecision"))}</button>
         <button class="btn secondary" data-action="add-fact">${escapeHtml(t("addFact"))}</button>
+        <button class="btn secondary" data-action="add-conflict">${escapeHtml(t("addConflict"))}</button>
         <button class="btn secondary" data-action="add-source">${escapeHtml(t("addSource"))}</button>
         <button class="btn secondary" data-action="add-relationship">${escapeHtml(t("addRelationship"))}</button>
         <button class="btn secondary" data-action="add-question">${escapeHtml(t("addOpenQuestion"))}</button>
@@ -7143,6 +7314,11 @@ function projectHandoffBlockers(project, collections = {}) {
       items.push({ title: source.title, meta: t("sourceFileVerification"), body: sourceFileVerificationMessage(source.fileVerification) });
     }
   }
+  for (const conflict of collections.conflicts || []) {
+    if (["unresolved", "under_review"].includes(conflict.status)) {
+      items.push({ title: conflict.title, meta: `${t("conflictRegister")} · ${conflictStatusLabel(conflict.status)}`, body: conflict.description || conflict.linkedItems || "" });
+    }
+  }
   for (const question of collections.questions || []) {
     items.push({ title: question.question, meta: t("openQuestion"), body: question.context || "" });
   }
@@ -7178,18 +7354,22 @@ function projectHandoffSources(sources = []) {
     .slice(0, 8)
     .map((source) => ({
       title: source.title,
-      meta: `${source.sourceType || t("source")} · ${sourceFileStatusLabel(source.fileVerification?.status || "unverifiable")}`,
+      meta: `${source.sourceType || t("source")} · ${sourceTrustLabel(source.trustLevel)} · ${sourceFileStatusLabel(source.fileVerification?.status || "unverifiable")}`,
       body: source.summary || source.location || source.localFile?.name || ""
     }));
 }
 
 function sourceTrustRank(source) {
-  const status = source.fileVerification?.status || "";
-  if (status === "verified") return 0;
-  if (!status) return 1;
-  if (status === "changed") return 2;
-  if (status === "unverifiable") return 3;
-  return 4;
+  const ranks = {
+    primary: 0,
+    supporting: 1,
+    unverified: 2,
+    conflicting: 3,
+    superseded: 4
+  };
+  const trustRank = ranks[normalizeSourceTrustLevel(source.trustLevel)] ?? 2;
+  const verificationBonus = source.fileVerification?.status === "verified" ? -0.25 : 0;
+  return trustRank + verificationBonus;
 }
 
 function projectHandoffAiItems(project) {
@@ -7219,6 +7399,7 @@ function renderProjectMap(project, collections) {
         <div class="map-stat-row">
           ${renderMapStat(t("health"), healthFlagLabel(project.healthFlag))}
           ${renderMapStat(t("relationships"), collections.relationships.length)}
+          ${renderMapStat(t("conflictRegister"), (collections.conflicts || []).length)}
           ${renderMapStat(t("sourcesLabel"), sourceCount)}
           ${renderMapStat(t("extractsLabel"), extractCount)}
           ${renderMapStat(t("imagesLabel"), imageCount)}
@@ -7318,7 +7499,7 @@ function renderEvidenceMap(sources) {
         return `
           <div class="map-evidence-item">
             <p class="item-title">${escapeDisplay(source.title, DISPLAY_META_LIMIT)}</p>
-            <p class="item-meta">${escapeDisplay(source.sourceType || t("unknown"), DISPLAY_META_LIMIT)} · ${escapeHtml(formatDate(source.dateAdded))} · ${extracts.length} ${escapeHtml(t("extractsLabel"))}</p>
+            <p class="item-meta">${escapeDisplay(source.sourceType || t("unknown"), DISPLAY_META_LIMIT)} · ${escapeHtml(sourceTrustLabel(source.trustLevel))} · ${escapeHtml(formatDate(source.dateAdded))} · ${extracts.length} ${escapeHtml(t("extractsLabel"))}</p>
             ${source.summary ? `<p class="item-body">${escapeDisplay(source.summary, DISPLAY_META_LIMIT)}</p>` : ""}
           </div>
         `;
@@ -7377,6 +7558,24 @@ function renderFactList(facts) {
   `).join("")}</div>`;
 }
 
+function renderConflictList(conflicts) {
+  if (!conflicts.length) return emptyText(t("noConflictsRecorded"));
+  return `<div class="list">${conflicts.map((conflict) => `
+    <div class="item">
+      <p class="item-title">${escapeDisplay(conflict.title, DISPLAY_META_LIMIT)}</p>
+      <p class="item-meta">${escapeHtml(t("conflictStatus"))}: <span class="pill conflict-${escapeHtml(normalizeConflictStatus(conflict.status))}">${escapeHtml(conflictStatusLabel(conflict.status))}</span> · ${escapeHtml(t("created"))}: ${escapeHtml(formatDate(conflict.noticedAt))}</p>
+      ${conflict.description ? `<p class="item-body">${escapeDisplay(conflict.description)}</p>` : ""}
+      ${conflict.linkedItems ? `<p class="item-meta">${escapeHtml(t("linkedItems"))}: ${escapeDisplay(conflict.linkedItems, DISPLAY_META_LIMIT)}</p>` : ""}
+      ${conflict.resolution ? `<p class="item-body">${escapeHtml(t("resolution"))}: ${escapeDisplay(conflict.resolution)}</p>` : ""}
+      ${renderAssignmentsSummary(conflict)}
+      ${renderCommentsSummary(conflict)}
+      ${renderAttachedSources(conflict)}
+      ${renderAttachedImages(conflict)}
+      ${renderObjectActions("Conflict", conflict.id, conflict.status === "archived")}
+    </div>
+  `).join("")}</div>`;
+}
+
 function renderSourceList(sources, project) {
   if (!sources.length) return emptyText(t("noSourcesRecorded"));
   return `<div class="list">${sources.map((source) => {
@@ -7385,6 +7584,7 @@ function renderSourceList(sources, project) {
       <div class="item">
         <p class="item-title">${escapeDisplay(source.title, DISPLAY_META_LIMIT)}</p>
         <p class="item-meta">${escapeHtml(t("type"))}: ${escapeDisplay(source.sourceType || t("unknown"), DISPLAY_META_LIMIT)}</p>
+        <p class="item-meta">${escapeHtml(t("sourceTrustLevel"))}: <span class="pill source-trust-${escapeHtml(normalizeSourceTrustLevel(source.trustLevel))}">${escapeHtml(sourceTrustLabel(source.trustLevel))}</span></p>
         <p class="item-meta">${escapeHtml(t("dateAdded"))}: ${escapeHtml(formatDate(source.dateAdded))}</p>
         <p class="item-meta">${escapeHtml(t("actor"))}: ${escapeHtml(actorDisplay(source.actorId))}</p>
         ${renderLinkedUsers(source.linkedActorIds)}
@@ -7576,7 +7776,7 @@ function canAttachSource(objectType) {
 }
 
 function canAttachImage(objectType) {
-  return ["Project", "Decision", "Fact", "OpenQuestion", "NextAction", "Relationship", "DraftProject", "Change"].includes(objectType);
+  return ["Project", "Decision", "Fact", "Conflict", "OpenQuestion", "NextAction", "Relationship", "DraftProject", "Change"].includes(objectType);
 }
 
 function renderAttachedSources(object) {
@@ -7684,6 +7884,7 @@ function objectLabel(objectType, object) {
   if (objectType === "Project") return object.name;
   if (objectType === "Decision") return object.text;
   if (objectType === "Fact") return object.statement;
+  if (objectType === "Conflict") return object.title;
   if (objectType === "Source") return object.title;
   if (objectType === "Extract") return object.text;
   if (objectType === "DraftProject") return object.name;
@@ -7747,6 +7948,9 @@ function buildProjectHandoffText(project, pack) {
     "",
     `## ${t("recentDecisions")}`,
     markdownList(pack.recentDecisions, (item) => `${item.text || item.title || ""} - ${item.reason || ""}`),
+    "",
+    `## ${t("conflictRegister")}`,
+    markdownList(pack.conflicts, (item) => `${item.title || ""} - ${item.description || ""} - ${conflictStatusLabel(item.status)}`),
     "",
     `## ${t("openQuestions")}`,
     markdownList(pack.openWork.questions, (item) => `${item.question || item.title || ""} - ${item.context || ""}`),
@@ -7952,6 +8156,7 @@ function buildProjectContextPack(project, options = {}) {
     },
     recentDecisions: includeDecisions ? compactDecisions(project, config) : [],
     keyFacts: includeFacts ? compactFacts(project, config) : [],
+    conflicts: compactConflicts(project, config),
     openWork: includeOpenWork ? compactOpenWork(project, config) : { questions: [], actions: [] },
     relationships: includeRelationships ? compactRelationships(project, config) : [],
     evidence: includeSources ? compactEvidence(project, config) : { sources: [], chunks: [] },
@@ -8013,6 +8218,20 @@ function compactFacts(project, config) {
     }));
 }
 
+function compactConflicts(project, config) {
+  return recent(sortNewest((project.conflicts || []).filter((conflict) => conflict.status !== "archived"), "noticedAt"), config.itemLimit)
+    .map((conflict) => ({
+      id: conflict.id,
+      title: limitText(conflict.title || "", DISPLAY_META_LIMIT),
+      description: limitText(conflict.description || "", config.textLimit),
+      linkedItems: limitText(conflict.linkedItems || "", config.textLimit),
+      status: normalizeConflictStatus(conflict.status),
+      resolution: limitText(conflict.resolution || "", config.textLimit),
+      noticedAt: conflict.noticedAt || "",
+      noticedBy: actorDisplay(conflict.noticedBy)
+    }));
+}
+
 function compactOpenWork(project, config) {
   return {
     questions: recent(sortNewest((project.openQuestions || []).filter((question) => question.status === "open")), config.itemLimit)
@@ -8069,6 +8288,8 @@ function compactEvidence(project, config) {
       id: source.id,
       title: source.title || "",
       type: source.sourceType || "",
+      trustLevel: normalizeSourceTrustLevel(source.trustLevel),
+      trustLabel: sourceTrustLabel(source.trustLevel),
       location: source.location || "",
       dateAdded: source.dateAdded || "",
       actor: actorDisplay(source.actorId),
@@ -8126,7 +8347,7 @@ function contextProposalSchema() {
   return {
     proposals: [
       {
-        type: "Fact | Decision | OpenQuestion | NextAction | Relationship | Source | ProjectStatus",
+        type: "Fact | Decision | Conflict | OpenQuestion | NextAction | Relationship | Source | ProjectStatus",
         title: "Readable proposal title",
         text: "Proposed content",
         reason: "Why this should be reviewed",
@@ -8639,7 +8860,7 @@ function armTypeOptions(selected = "manual") {
 }
 
 function proposedObjectTypeOptions(selected = "Decision") {
-  const types = ["ProjectStatus", "Decision", "Fact", "OpenQuestion", "NextAction", "Source", "Relationship"];
+  const types = ["ProjectStatus", "Decision", "Fact", "Conflict", "OpenQuestion", "NextAction", "Source", "Relationship"];
   return types
     .map((type) => `<option value="${type}" ${selected === type ? "selected" : ""}>${escapeHtml(proposedObjectTypeLabel(type))}</option>`)
     .join("");
@@ -9275,6 +9496,35 @@ function applyApprovedIntakeToCore(intake, actor, reason, approval) {
     return fact;
   }
 
+  if (intake.proposedObjectType === "Conflict") {
+    const conflict = {
+      id: uid("conflict"),
+      projectId: project.id,
+      title: intake.title || text,
+      description: summary || text,
+      linkedItems: proposed.target || "",
+      status: "unresolved",
+      resolution: "",
+      noticedAt: timestamp,
+      noticedBy: actor.id,
+      reviewState: "needs_review",
+      sourceLinks: [],
+      imageLinks: [],
+      assignments: [],
+      comments: []
+    };
+    project.conflicts = Array.isArray(project.conflicts) ? project.conflicts : [];
+    project.conflicts.unshift(conflict);
+    recordChange(project, actor, reason, "Intake approved: Conflict added", {
+      ...baseDetails,
+      objectType: "Conflict",
+      objectId: conflict.id,
+      objectText: conflict.title,
+      fields: { title: conflict.title, description: conflict.description, linkedItems: conflict.linkedItems, status: conflictStatusLabel(conflict.status) }
+    });
+    return conflict;
+  }
+
   if (intake.proposedObjectType === "OpenQuestion") {
     const question = {
       id: uid("question"),
@@ -9325,6 +9575,7 @@ function applyApprovedIntakeToCore(intake, actor, reason, approval) {
       projectId: project.id,
       title: text || intake.title,
       sourceType: armTypeLabel(intake.armType),
+      trustLevel: "unverified",
       dateAdded: timestamp,
       actorId: actor.id,
       location: intake.sourceLabel || "",
@@ -9339,7 +9590,7 @@ function applyApprovedIntakeToCore(intake, actor, reason, approval) {
       objectType: "Source",
       objectId: source.id,
       objectText: source.title,
-      fields: { source: source.title, type: source.sourceType, location: source.location, summary: source.summary }
+      fields: { source: source.title, type: source.sourceType, trustLevel: sourceTrustLabel(source.trustLevel), location: source.location, summary: source.summary }
     });
     return source;
   }
@@ -9413,6 +9664,7 @@ function openCreateProjectModal() {
         imageLinks: [],
         decisions: [],
         facts: [],
+        conflicts: [],
         sources: [],
         draftProjects: [],
         relationships: [],
@@ -9587,6 +9839,11 @@ function openEditObjectModal(objectType, objectId) {
 
   if (objectType === "Fact") {
     openEditFactModal(project, object);
+    return;
+  }
+
+  if (objectType === "Conflict") {
+    openEditConflictModal(project, object);
     return;
   }
 
@@ -9769,6 +10026,72 @@ function openEditFactModal(project, fact) {
   });
 }
 
+function openEditConflictModal(project, conflict) {
+  showModal({
+    title: t("editConflict"),
+    submitText: t("approveEdit"),
+    body: `
+      <div class="field">
+        <label for="title">${escapeHtml(t("conflictTitle"))}</label>
+        <input id="title" name="title" value="${escapeHtml(conflict.title || "")}" required>
+      </div>
+      <div class="field">
+        <label for="status">${escapeHtml(t("conflictStatus"))}</label>
+        <select id="status" name="status">${conflictStatusOptions(conflict.status)}</select>
+      </div>
+      <div class="field">
+        <label for="description">${escapeHtml(t("conflictDescription"))}</label>
+        <textarea id="description" name="description" required>${escapeHtml(conflict.description || "")}</textarea>
+      </div>
+      <div class="field">
+        <label for="linkedItems">${escapeHtml(t("linkedItems"))}</label>
+        <textarea id="linkedItems" name="linkedItems">${escapeHtml(conflict.linkedItems || "")}</textarea>
+      </div>
+      <div class="field">
+        <label for="resolution">${escapeHtml(t("resolution"))}</label>
+        <textarea id="resolution" name="resolution">${escapeHtml(conflict.resolution || "")}</textarea>
+      </div>
+      ${auditFields()}
+    `,
+    onSubmit(data) {
+      const actor = getOrCreateActor(data.actorName, "Human");
+      const previous = {
+        title: conflict.title,
+        status: conflict.status,
+        description: conflict.description,
+        linkedItems: conflict.linkedItems,
+        resolution: conflict.resolution
+      };
+      conflict.title = data.title.trim();
+      conflict.status = normalizeConflictStatus(data.status);
+      conflict.description = data.description.trim();
+      conflict.linkedItems = data.linkedItems.trim();
+      conflict.resolution = data.resolution.trim();
+      conflict.reviewState = conflict.status === "resolved" ? "approved" : "needs_review";
+      conflict.updatedAt = nowIso();
+      conflict.updatedBy = actor.id;
+      recordChange(project, actor, data.reason, "Conflict edited", {
+        objectType: "Conflict",
+        objectId: conflict.id,
+        objectText: conflict.title,
+        fields: {
+          previousTitle: previous.title,
+          newTitle: conflict.title,
+          previousStatus: conflictStatusLabel(previous.status),
+          newStatus: conflictStatusLabel(conflict.status),
+          previousDescription: previous.description,
+          newDescription: conflict.description,
+          previousLinkedItems: previous.linkedItems,
+          newLinkedItems: conflict.linkedItems,
+          previousResolution: previous.resolution,
+          newResolution: conflict.resolution
+        }
+      });
+      saveStore();
+    }
+  });
+}
+
 function openEditSourceModal(project, source) {
   showModal({
     title: t("editSource"),
@@ -9783,6 +10106,12 @@ function openEditSourceModal(project, source) {
           <label for="sourceType">${escapeHtml(t("type"))}</label>
           <input id="sourceType" name="sourceType" value="${escapeHtml(source.sourceType || "")}">
         </div>
+        <div class="field">
+          <label for="trustLevel">${escapeHtml(t("sourceTrustLevel"))}</label>
+          <select id="trustLevel" name="trustLevel">${sourceTrustOptions(source.trustLevel)}</select>
+        </div>
+      </div>
+      <div class="two-col">
         <div class="field">
           <label for="dateAdded">${escapeHtml(t("dateAdded"))}</label>
           <input id="dateAdded" name="dateAdded" type="date" value="${escapeHtml(toDateInputValue(source.dateAdded))}" required>
@@ -9816,6 +10145,7 @@ function openEditSourceModal(project, source) {
       const previous = {
         title: source.title,
         sourceType: source.sourceType,
+        trustLevel: source.trustLevel,
         dateAdded: source.dateAdded,
         location: source.location,
         localFile: source.localFile ? `${source.localFile.name} (${formatBytes(source.localFile.size)})` : "",
@@ -9827,6 +10157,7 @@ function openEditSourceModal(project, source) {
       const linkedActorIds = selectedLinkedActorIds(form);
       source.title = data.title.trim();
       source.sourceType = data.sourceType.trim();
+      source.trustLevel = normalizeSourceTrustLevel(data.trustLevel);
       source.dateAdded = data.dateAdded || source.dateAdded;
       source.location = data.location.trim() || localFile?.name || "";
       source.localFile = localFile || source.localFile || null;
@@ -9844,6 +10175,8 @@ function openEditSourceModal(project, source) {
           newTitle: source.title,
           previousType: previous.sourceType,
           newType: source.sourceType,
+          previousTrustLevel: sourceTrustLabel(previous.trustLevel),
+          newTrustLevel: sourceTrustLabel(source.trustLevel),
           previousDateAdded: previous.dateAdded,
           newDateAdded: source.dateAdded,
           previousLocation: previous.location,
@@ -10183,6 +10516,7 @@ function openApproveDraftProjectModal(draftProjectId) {
         imageLinks: [],
         decisions: [],
         facts: [],
+        conflicts: [],
         sources: [],
         draftProjects: [],
         relationships: [],
@@ -10905,6 +11239,69 @@ function openFactModal() {
   });
 }
 
+function openConflictModal() {
+  const project = getProject();
+  showModal({
+    title: t("addConflict"),
+    submitText: t("approveChange"),
+    body: `
+      <div class="field">
+        <label for="title">${escapeHtml(t("conflictTitle"))}</label>
+        <input id="title" name="title" required>
+      </div>
+      <div class="field">
+        <label for="status">${escapeHtml(t("conflictStatus"))}</label>
+        <select id="status" name="status">${conflictStatusOptions("unresolved")}</select>
+      </div>
+      <div class="field">
+        <label for="description">${escapeHtml(t("conflictDescription"))}</label>
+        <textarea id="description" name="description" required></textarea>
+      </div>
+      <div class="field">
+        <label for="linkedItems">${escapeHtml(t("linkedItems"))}</label>
+        <textarea id="linkedItems" name="linkedItems"></textarea>
+      </div>
+      <div class="field">
+        <label for="resolution">${escapeHtml(t("resolution"))}</label>
+        <textarea id="resolution" name="resolution"></textarea>
+      </div>
+      ${auditFields()}
+    `,
+    onSubmit(data) {
+      const actor = getOrCreateActor(data.actorName, "Human");
+      const conflict = {
+        id: uid("conflict"),
+        projectId: project.id,
+        title: data.title.trim(),
+        description: data.description.trim(),
+        linkedItems: data.linkedItems.trim(),
+        status: normalizeConflictStatus(data.status),
+        resolution: data.resolution.trim(),
+        noticedAt: nowIso(),
+        noticedBy: actor.id,
+        reviewState: data.status === "resolved" ? "approved" : "needs_review",
+        sourceLinks: [],
+        imageLinks: [],
+        assignments: [],
+        comments: []
+      };
+      project.conflicts = Array.isArray(project.conflicts) ? project.conflicts : [];
+      project.conflicts.unshift(conflict);
+      recordChange(project, actor, data.reason, "Conflict added", {
+        objectType: "Conflict",
+        objectId: conflict.id,
+        objectText: conflict.title,
+        fields: {
+          status: conflictStatusLabel(conflict.status),
+          linkedItems: conflict.linkedItems,
+          resolution: conflict.resolution
+        }
+      });
+      saveStore();
+    }
+  });
+}
+
 function openSourceModal() {
   const project = getProject();
   showModal({
@@ -10920,6 +11317,12 @@ function openSourceModal() {
           <label for="sourceType">${escapeHtml(t("type"))}</label>
           <input id="sourceType" name="sourceType">
         </div>
+        <div class="field">
+          <label for="trustLevel">${escapeHtml(t("sourceTrustLevel"))}</label>
+          <select id="trustLevel" name="trustLevel">${sourceTrustOptions("unverified")}</select>
+        </div>
+      </div>
+      <div class="two-col">
         <div class="field">
           <label for="dateAdded">${escapeHtml(t("dateAdded"))}</label>
           <input id="dateAdded" name="dateAdded" type="date" value="${escapeHtml(toDateInputValue(nowIso()))}" required>
@@ -10957,6 +11360,7 @@ function openSourceModal() {
         projectId: project.id,
         title: data.title.trim() || localFile?.name || t("untitledSource"),
         sourceType: data.sourceType.trim(),
+        trustLevel: normalizeSourceTrustLevel(data.trustLevel),
         dateAdded: data.dateAdded || nowIso(),
         actorId: actor.id,
         location: data.location.trim() || localFile?.name || "",
@@ -10975,6 +11379,7 @@ function openSourceModal() {
         fields: {
           title: source.title,
           type: source.sourceType,
+          trustLevel: sourceTrustLabel(source.trustLevel),
           dateAdded: source.dateAdded,
           actor: actor.name,
           project: project.name,
@@ -11606,6 +12011,7 @@ app.addEventListener("click", (event) => {
   if (action === "unarchive-project") openUnarchiveProjectModal(button.dataset.projectId);
   if (action === "add-decision") openDecisionModal();
   if (action === "add-fact") openFactModal();
+  if (action === "add-conflict") openConflictModal();
   if (action === "add-source") openSourceModal();
   if (action === "verify-source-file") openVerifySourceFileModal(button.dataset.sourceId);
   if (action === "verify-all-source-files") openVerifySourceFileModal();
