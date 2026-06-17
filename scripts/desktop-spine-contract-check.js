@@ -38,6 +38,8 @@ const REQUIRED_TABLES = [
 const REQUIRED_SAFETY_PHRASES = [
   "Human approval is required",
   "Preserve all stable IDs",
+  "API arms must plug into the desktop app Intake Airlock",
+  "must not write directly to Core or Spine",
   "recovery mode",
   "Backup location must remain separate",
   "append-only"
@@ -105,6 +107,7 @@ function validateDocs(contract, bridgeDoc, spineDoc, appSource, schemaSource, br
     "SQLite",
     "managed file folders",
     "IntakeBatch",
+    "API Arm Rule",
     "ProposedProject",
     "ApprovalRecord",
     "fixtures/desktop-spine-v0.1-contract.json"

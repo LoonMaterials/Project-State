@@ -19,8 +19,13 @@ function main() {
   const requiredAppPieces = [
     "function desktopRuntimeReady()",
     "function browserDevRuntime()",
+    "function seriousStorageWorkAllowed()",
+    "function renderBrowserDevModeGate()",
+    "function browserDevActionAllowed(action)",
     "function runtimeWarningHtml()",
     "browserRuntimeWarning",
+    "browserDevGateTitle",
+    "browserDevNoSilentStorage",
     "browser-dev-indexeddb-split",
     "browser-dev-legacy-json",
     "storageModeForLoadedSource"
@@ -34,10 +39,20 @@ function main() {
   const desktopAdapterText = appText.slice(desktopAdapterStart, browserAdapterStart);
   assert(desktopAdapterText.includes("return typeof storage.loadStore === \"function\" && typeof storage.saveStore === \"function\";"), "Desktop adapter supported() still appears to allow browser fallback.");
   assert(!desktopAdapterText.includes("|| browserFallback.storage.supported()"), "Desktop adapter still silently falls back to browser storage support.");
+  assert(appText.includes("if (browserDevRuntime()) {\n    renderBrowserDevModeGate();\n    return;\n  }"), "Startup render path does not gate browser/dev mode.");
+  assert(appText.includes("if (!seriousStorageWorkAllowed() && !options.allowInBrowserDev)"), "saveStore does not block serious storage work without the desktop bridge.");
+  assert(appText.includes("if (seriousStorageWorkAllowed()) {\n      if (loaded.source === \"legacy-json\") await ProjectStateStorage.preserveLegacyRaw(loaded.raw);"), "loadStore still appears to allow silent browser migration writes.");
 
   const requiredDocPieces = [
+    "Project State is now app-first",
     "Desktop app runtime",
     "Browser mode is now a development and legacy migration harness",
+    "It must not be expanded into a second production runtime",
+    "New storage, backup, restore, intake, file-reading, and API work must target the desktop bridge",
+    "API arms plug into the desktop app's Intake Airlock",
+    "They must never write directly to Core Project State records",
+    "Startup gate",
+    "Browser/dev mode must not silently save, migrate, back up, restore, intake, read files as authoritative sources, or edit Project State records",
     "Full Project State mode requires the desktop bridge"
   ];
   const missingDocPieces = requiredDocPieces.filter((piece) => !bridgeDoc.includes(piece));

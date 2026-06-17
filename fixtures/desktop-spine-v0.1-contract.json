@@ -97,7 +97,7 @@
     },
     {
       "name": "intake_batches",
-      "purpose": "Batch imports from files, folders, chats, notes, AI, or other arms."
+      "purpose": "Batch imports from APIs, files, folders, chats, notes, AI, or other arms."
     },
     {
       "name": "intake_items",
@@ -134,7 +134,8 @@
   "safetyRules": [
     "Preserve all stable IDs during migration.",
     "Do not write outside arms directly into Project State.",
-    "AI, file reads, chats, and notes create intake or proposal records first.",
+    "API arms must plug into the desktop app Intake Airlock and must not write directly to Core or Spine.",
+    "AI, API output, file reads, chats, and notes create intake or proposal records first.",
     "Human approval is required before proposed records enter core project tables.",
     "Change history is append-only and records actor, timestamp, reason, changed object ID, readable object title, language, and origin.",
     "If load, migration, or integrity checks fail, preserve raw data and enter recovery mode instead of returning a blank store.",

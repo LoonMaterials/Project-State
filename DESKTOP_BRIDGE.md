@@ -1,13 +1,13 @@
 Project State Desktop Bridge
 
-Project State is still a local prototype, but browser-only file and storage calls are now isolated behind a platform adapter in `app.js`.
+Project State is now app-first. The desktop bridge is required for real Project State mode, and browser-only file and storage calls are isolated behind a platform adapter in `app.js`.
 
-Current browser adapter:
+Legacy/dev browser adapter:
 
 - `browser`
 - Uses IndexedDB split stores when available
 - Falls back to the legacy JSON record only when IndexedDB is unavailable
-- Handles browser file reads and download exports
+- Handles legacy/dev file reads and download exports only
 
 Desktop implementation files:
 
@@ -23,7 +23,15 @@ Desktop app runtime:
 
 A desktop wrapper exposes `window.ProjectStateDesktop` before `app.js` loads. When the bridge is present, Project State uses the desktop storage spine as the full app runtime.
 
-Browser mode is now a development and legacy migration harness. It remains useful for export, inspection, and migration testing, but it is not the primary runtime for new storage, backup, restore, intake, file-reading, or API work.
+Browser mode is now a development and legacy migration harness. It remains useful for export, inspection, and migration testing, but it is not the primary runtime for new storage, backup, restore, intake, file-reading, or API work. It must not be expanded into a second production runtime.
+
+App-first rule:
+
+New storage, backup, restore, intake, file-reading, and API work must target the desktop bridge. Browser mode may support legacy import/export, diagnostics, and development checks, but it should not receive new authoritative Project State features.
+
+API arm rule:
+
+API arms plug into the desktop app's Intake Airlock. They may create intake batches, source records, extracts, proposed projects, and proposal items for human review. They must never write directly to Core Project State records or bypass the storage spine through a separate browser path.
 
 Expected shape:
 
@@ -89,8 +97,15 @@ The bridge currently uses Node's built-in SQLite support. If the final packaging
 
 Core rule:
 
-External files, AI, chats, notes, and other arms should still land in the Intake Airlock first. The desktop bridge provides storage and file access only. It must not bypass human approval into Project State.
+External files, APIs, AI, chats, notes, and other arms should still land in the Intake Airlock first. The desktop bridge provides storage and file access only. It must not bypass human approval into Project State.
 
 Runtime rule:
 
 Full Project State mode requires the desktop bridge and desktop storage spine. If `window.ProjectStateDesktop` is missing, the app should show browser/dev mode and avoid treating browser storage as the authoritative spine.
+
+Startup gate:
+
+- If the desktop bridge exists, Project State opens in normal app mode.
+- If the desktop bridge is missing, Project State opens a Browser/dev mode gate.
+- Browser/dev mode may inspect loaded local data and export raw data for migration.
+- Browser/dev mode must not silently save, migrate, back up, restore, intake, read files as authoritative sources, or edit Project State records.

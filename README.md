@@ -95,11 +95,13 @@ Storage and Backup
 Project State separates primary storage from backup:
 
 Primary storage: the desktop platform storage spine. Browser storage remains available only as a development and legacy migration harness; full Project State mode requires the desktop bridge.
-Backup storage: a user-controlled Project State backup JSON file exported from the app.
+Backup storage: a user-controlled Project State desktop backup package exported from the app.
 
 The backup file should live somewhere outside the primary storage location, such as a separate local folder or an external drive. Without a server, primary storage and backup must not be treated as the same location.
 
-The planned desktop storage spine is SQLite plus managed local folders. The current contract lives in `DESKTOP_STORAGE_SPINE.md` and `fixtures/desktop-spine-v0.1-contract.json`.
+The desktop storage spine is SQLite plus managed local folders. New storage, backup, restore, intake, file-reading, and API work should target the desktop bridge instead of expanding browser mode. The current contract lives in `DESKTOP_STORAGE_SPINE.md` and `fixtures/desktop-spine-v0.1-contract.json`.
+
+Startup gate: when the desktop bridge is present, Project State opens normally. When the bridge is missing, the app opens Browser/dev mode for inspection and raw export only. Browser/dev mode must not silently save, migrate, back up, restore, intake, read files as authoritative sources, or edit Project State records.
 
 First-Run Setup
 
@@ -395,6 +397,24 @@ Project State now uses an octopus-style architecture:
 Core: approved Project State records
 Spine: local storage and retrieval
 Airlock: intake/proposed changes awaiting human review
-Arms: future inputs such as AI, Codex, notes, email, meetings, calendars, and files
+Arms: future inputs such as APIs, AI, Codex, notes, email, meetings, calendars, and files
 
 Arms do not write directly to the core. They create intake items. A human must approve intake before it becomes a Decision, Fact, Open Question, Next Action, Source, Relationship, or Project Status change. Rejected and archived intake remains outside the core.
+
+API arms follow the same rule: they plug into the desktop app's Intake Airlock, not directly into Core or Spine. Browser/dev mode is not an equal production target for API work.
+
+Context Pack Foundation
+
+Each project can export a local Context Pack for future API or AI arms. A context pack is a bounded JSON packet containing the current project brief, selected scope, recent decisions, key facts, open work, relationships, evidence/source chunks, recent history, and a standard proposal schema. Context packs are read-only context. They do not change Project State and do not authorize an arm to write to Core or Spine.
+
+Recorded Communications
+
+Recorded chats and emails are treated as Project State source records. They can be linked to Project State users through actor email addresses and chat handles. These records are not private; authorized Project State users should assume recorded project chats, emails, sources, and history are visible inside the app.
+
+Integrity Dashboard
+
+Settings now includes a read-only Integrity Dashboard. It reports storage warnings, broken internal source/extract/image/relationship links, weak source file references, linked-user references that no longer resolve, oversized extract/image content, recovery signals, and object counts. The dashboard does not repair or mutate data; it is an early warning surface for data safety checks before backup, restore, intake, and API work.
+
+Source File Verification
+
+Sources can now verify their recorded local file reference. In desktop mode, Project State checks whether the absolute local path still exists and whether the file size still matches the recorded source metadata. Verification requires actor and reason, saves the result on the source, and records history. Browser/dev mode cannot verify local paths and marks those checks as not verifiable.

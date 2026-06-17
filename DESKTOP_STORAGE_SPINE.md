@@ -82,7 +82,7 @@ manifests/2026-06-15-integrity.json
 
 Intake Airlock Rule
 
-Large files, folders, chats, notes, email exports, AI output, and Codex output must not write directly to Project State Core.
+Large files, folders, chats, notes, email exports, API output, AI output, and Codex output must not write directly to Project State Core.
 
 They should become:
 
@@ -99,6 +99,24 @@ IntakeBatch
 ```
 
 This is the path that lets Project State scan huge mixed data and propose projects without making AI or file parsing authoritative.
+
+API Arm Rule
+
+API arms are desktop app inputs, not alternate storage systems.
+
+They must:
+
+- enter through the desktop bridge
+- create intake batches, source records, extracts, proposed projects, or proposal items
+- wait for human review and approval before anything reaches Core Project State
+- use the storage spine for local persistence
+
+They must not:
+
+- write directly to approved core tables
+- write directly to the spine outside the approved bridge contract
+- use browser mode as an equal production runtime
+- bypass the Intake Airlock because an external system looks trustworthy
 
 Migration Rule
 

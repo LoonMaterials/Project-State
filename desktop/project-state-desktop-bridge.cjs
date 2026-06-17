@@ -79,6 +79,7 @@ function createProjectStateDesktopBridge(options = {}) {
     files: {
       metadata,
       localPath,
+      verifyLocalFile,
       readAsDataUrl,
       readAsText,
       readAsArrayBuffer,
@@ -1544,6 +1545,66 @@ function metadata(file) {
 
 function localPath(file) {
   return pathFromFileLike(file) || file?.webkitRelativePath || file?.name || "";
+}
+
+function verifyLocalFile(reference = {}) {
+  const filePath = pathFromFileLike(reference?.path || reference?.localPath || reference);
+  const expected = reference?.expected || reference || {};
+  const checkedAt = nowIso();
+
+  if (!filePath) {
+    return {
+      status: "unverifiable",
+      exists: false,
+      checkedAt,
+      reason: "No absolute local path is recorded for this source."
+    };
+  }
+
+  if (!fs.existsSync(filePath)) {
+    return {
+      status: "missing",
+      exists: false,
+      path: filePath,
+      checkedAt,
+      reason: "The recorded local file path does not exist."
+    };
+  }
+
+  const stat = fs.statSync(filePath);
+  if (!stat.isFile()) {
+    return {
+      status: "unverifiable",
+      exists: true,
+      path: filePath,
+      checkedAt,
+      reason: "The recorded path exists but is not a file."
+    };
+  }
+
+  const actual = {
+    name: path.basename(filePath),
+    type: mimeFromFileName(filePath),
+    size: stat.size,
+    lastModified: stat.mtime.toISOString()
+  };
+  const expectedSize = Number(expected.size || 0);
+  const changed = expectedSize > 0 && expectedSize !== actual.size;
+
+  return {
+    status: changed ? "changed" : "verified",
+    exists: true,
+    path: filePath,
+    checkedAt,
+    actual,
+    expected: {
+      name: expected.name || "",
+      type: expected.type || "",
+      size: expectedSize || 0,
+      lastModified: expected.lastModified || ""
+    },
+    reason: changed ? "The file exists, but its size differs from the recorded source metadata." : "The file exists and matches recorded size metadata."
+  };
 }
 
 async function readAsText(file) {

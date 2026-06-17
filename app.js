@@ -13,7 +13,7 @@ const DISPLAY_TEXT_LIMIT = 1200;
 const DISPLAY_META_LIMIT = 240;
 const EXTRACT_TEXT_LIMIT = 5000;
 const PROJECT_HEALTH_FLAGS = ["active", "blocked", "at_risk", "complete", "on_hold"];
-const ARM_TYPES = ["calendar", "meeting", "ai", "codex", "notes", "email", "file", "manual", "other"];
+const ARM_TYPES = ["calendar", "meeting", "api", "ai", "codex", "notes", "chat", "email", "file", "manual", "other"];
 const INTAKE_STATUSES = ["pending", "approved", "rejected", "archived"];
 const APPROVED_CORE_ORIGINS = ["human_ui", "migration"];
 const ACTOR_ROLES = ["owner", "admin", "project_lead", "approver", "editor", "contributor", "reviewer", "auditor", "viewer", "ai_tool"];
@@ -181,7 +181,7 @@ const LANGUAGES = {
     setupSubtitle: "This configures local use, backup guidance, and the primary actor for approved changes.",
     primaryActor: "Primary Actor",
     backupLocation: "Backup Location",
-    backupLocationPlaceholder: "Example: iCloud Drive / Project State Backups",
+    backupLocationPlaceholder: "Example: External Drive / Project State Backups",
     backupReminder: "Backup Reminder",
     language: "Language",
     localModeConfirm: "I understand this is single-user local mode and backups are controlled by the user.",
@@ -221,6 +221,12 @@ const LANGUAGES = {
     desktopRuntimeReady: "Desktop storage spine active.",
     browserDevRuntime: "Browser / Dev Runtime",
     browserRuntimeWarning: "Project State is running without the desktop bridge. Browser mode is for legacy export, migration, and development only; use the desktop app for full storage, backup, restore, intake, and API work.",
+    browserDevGateTitle: "Browser/dev mode",
+    browserDevGateSubtitle: "The desktop bridge is required for real Project State mode.",
+    browserDevGateNotice: "This screen can inspect loaded local data and export raw data for migration. It will not silently save, migrate, back up, restore, intake, or edit Project State records.",
+    browserDevGateReadOnly: "Read-only/dev access",
+    browserDevGateCounts: "Loaded records",
+    browserDevNoSilentStorage: "No serious storage work runs without the desktop bridge.",
     saveBlockedApproval: "Unsaved changes: approval gate blocked save",
     saveStorageFailed: "Unsaved changes: {message}",
     storageFailed: "storage failed",
@@ -244,6 +250,11 @@ const LANGUAGES = {
     backupLocationWarning: "Primary storage and backup should not be the same location unless this becomes a server-backed deployment.",
     backupOverrideAcknowledged: "Allow a backup-location override with warning recorded.",
     backupOverrideReason: "Backup Override Reason",
+    desktopBackupPackageNotice: "Create a desktop backup package from the active storage spine. Actor, timestamp, and reason are required.",
+    exportedBy: "Exported By",
+    backupReason: "Backup Reason",
+    backupPackageCreated: "Backup package created",
+    backupPackageUnavailable: "Desktop backup package support is unavailable.",
     exportFullBackup: "Export Full Backup",
     restoreBackup: "Restore Backup",
     saveBackupSettings: "Save Backup Settings",
@@ -259,6 +270,13 @@ const LANGUAGES = {
     diagnostics: "Diagnostics",
     actorName: "Actor Name",
     actorId: "Actor ID",
+    emailAddress: "Email Address",
+    chatHandle: "Chat Handle",
+    linkedUsers: "Linked Users",
+    linkedProjectStateUsers: "Linked Project State Users",
+    noLinkedUsers: "No linked users.",
+    communicationRecordsNotice: "Recorded chats and emails are Project State records. They are not private.",
+    userPrivacyNotice: "Project State users should assume recorded project chats, emails, sources, and history are visible to authorized Project State users.",
     defaultActorPill: "Default Actor",
     saveActor: "Save Actor",
     owner: "Owner",
@@ -384,6 +402,30 @@ const LANGUAGES = {
     recentActivity: "Recent Activity",
     recentDecisions: "Recent Decisions",
     relationships: "Relationships",
+    projectMap: "Project Map",
+    projectMapSubtitle: "Relationships, evidence, and unresolved work around this project.",
+    contextPack: "Context Pack",
+    contextPackNotice: "Export a bounded local context packet for a future API or AI arm. This does not change Project State.",
+    contextScope: "Context Scope",
+    contextScopeProject: "This project only",
+    contextScopeRelated: "This project and related projects",
+    contextScopeSources: "Sources and extracts focus",
+    contextBudget: "Context Budget",
+    budgetQuick: "Quick scan",
+    budgetNormal: "Normal review",
+    budgetDeep: "Deep review",
+    includeSources: "Include sources and extract chunks",
+    includeHistory: "Include recent history",
+    includeOpenWork: "Include open questions and next actions",
+    exportContextPack: "Export Context Pack",
+    linkedProjects: "Linked Projects",
+    incomingLinks: "Incoming Links",
+    outgoingLinks: "Outgoing Links",
+    evidenceTrail: "Evidence Trail",
+    sourceCoverage: "Source Coverage",
+    unresolvedWork: "Unresolved Work",
+    noLinkedProjects: "No linked projects recorded.",
+    noEvidenceRecorded: "No sources or extracts recorded.",
     facts: "Facts",
     sources: "Sources",
     draftProjects: "Draft Projects",
@@ -427,6 +469,17 @@ const LANGUAGES = {
     localFile: "Local File",
     modified: "Modified",
     findLocalFile: "Find Local File",
+    verifyFile: "Verify File",
+    verifySourceFiles: "Verify Source Files",
+    sourceFileVerification: "Source File Verification",
+    fileVerified: "File verified",
+    fileChanged: "File changed",
+    fileMissing: "File missing",
+    fileUnverifiable: "File not verifiable",
+    lastVerified: "Last verified",
+    verificationReasonPlaceholder: "Why are source files being verified?",
+    sourceFileVerificationComplete: "Source file verification complete.",
+    sourceFileVerificationNotice: "Desktop mode can verify absolute local file paths. Browser/dev mode can only mark source files as not verifiable.",
     summary: "Summary",
     tags: "Tags",
     mode: "Mode",
@@ -545,6 +598,8 @@ const LANGUAGES = {
     imageDataUnavailable: "Image data is not available.",
     calendar: "Calendar",
     meeting: "Meeting",
+    api: "API",
+    chat: "Chat",
     email: "Email",
     other: "Other",
     projectStatus: "Project Status",
@@ -568,7 +623,42 @@ const LANGUAGES = {
     changesLabel: "Changes",
     sourcesLabel: "Sources",
     extractsLabel: "Extracts",
-    imagesLabel: "Images"
+    imagesLabel: "Images",
+    integrityDashboard: "Integrity Dashboard",
+    integrityStatus: "Integrity Status",
+    healthy: "Healthy",
+    warning: "Warning",
+    needsAttention: "Needs Attention",
+    objectCounts: "Object Counts",
+    storageHealth: "Storage Health",
+    orphanLinks: "Orphan Links",
+    sourceFileReferences: "Source File References",
+    linkedUserIssues: "Linked User Issues",
+    oversizedContent: "Oversized Content",
+    recoverySignals: "Recovery Signals",
+    noIntegrityIssues: "No integrity issues found.",
+    noStorageWarnings: "No storage warnings.",
+    noBrokenLinks: "No broken internal links found.",
+    noSourceReferenceIssues: "No weak source file references found.",
+    noLinkedUserIssues: "No linked-user issues found.",
+    noOversizedContent: "No oversized content warnings.",
+    noRecoverySignals: "No recovery signals found.",
+    checkGenerated: "Check Generated",
+    projectReference: "Project Reference",
+    missingSourceDetails: "Source is missing location, local file metadata, and summary.",
+    missingLinkedUser: "Source references a user that no longer exists.",
+    missingAttachedSource: "Attached source link points to a missing source.",
+    missingAttachedExtract: "Attached source link points to a missing extract.",
+    missingImageReference: "Image attachment has no stored data or local reference.",
+    missingImageTarget: "Image attachment points to a missing object.",
+    missingRelationshipTarget: "Relationship points to a missing project.",
+    largeExtractWarning: "Extract text is large.",
+    largeAttachmentWarning: "Image attachment data is large.",
+    recoveryModeNotActive: "Recovery mode is not active.",
+    storageWarningStorageSizeDanger: "Storage size is near the browser limit.",
+    storageWarningStorageSizeWarning: "Storage size is growing.",
+    storageWarningAttachmentsDominateMainRecord: "Images are taking most of the main record.",
+    storageWarningExtractsGrowingInMainRecord: "Extract text is growing inside the main record."
   },
   fr: {
     languageName: "Français",
@@ -592,7 +682,7 @@ const LANGUAGES = {
     setupSubtitle: "Ceci configure l’utilisation locale, les indications de sauvegarde et l’acteur principal pour les changements approuvés.",
     primaryActor: "Acteur principal",
     backupLocation: "Emplacement de sauvegarde",
-    backupLocationPlaceholder: "Exemple : iCloud Drive / Sauvegardes Project State",
+    backupLocationPlaceholder: "Exemple : disque externe / sauvegardes Project State",
     backupReminder: "Rappel de sauvegarde",
     language: "Langue",
     localModeConfirm: "Je comprends qu’il s’agit d’un mode local mono-utilisateur et que les sauvegardes sont contrôlées par l’utilisateur.",
@@ -632,6 +722,12 @@ const LANGUAGES = {
     desktopRuntimeReady: "Axe de stockage de bureau actif.",
     browserDevRuntime: "Runtime navigateur / développement",
     browserRuntimeWarning: "Project State fonctionne sans le pont de bureau. Le mode navigateur sert uniquement à l’export hérité, à la migration et au développement ; utilisez l’application de bureau pour le stockage complet, la sauvegarde, la restauration, l’entrée et les API.",
+    browserDevGateTitle: "Mode navigateur/développement",
+    browserDevGateSubtitle: "Le pont de bureau est requis pour le vrai mode Project State.",
+    browserDevGateNotice: "Cet écran peut inspecter les données locales chargées et exporter les données brutes pour migration. Il n’enregistre pas, ne migre pas, ne sauvegarde pas, ne restaure pas, n’intègre pas et ne modifie pas les enregistrements Project State en silence.",
+    browserDevGateReadOnly: "Accès lecture seule/développement",
+    browserDevGateCounts: "Enregistrements chargés",
+    browserDevNoSilentStorage: "Aucun travail de stockage sérieux ne s’exécute sans le pont de bureau.",
     saveBlockedApproval: "Changements non enregistrés : la porte d’approbation a bloqué l’enregistrement",
     saveStorageFailed: "Changements non enregistrés : {message}",
     storageFailed: "échec du stockage",
@@ -655,6 +751,11 @@ const LANGUAGES = {
     backupLocationWarning: "Le stockage principal et la sauvegarde ne doivent pas être au même emplacement, sauf dans un déploiement avec serveur.",
     backupOverrideAcknowledged: "Autoriser une exception d’emplacement de sauvegarde avec avertissement enregistré.",
     backupOverrideReason: "Raison de l’exception de sauvegarde",
+    desktopBackupPackageNotice: "Créer un paquet de sauvegarde de bureau depuis l’axe de stockage actif. L’acteur, l’horodatage et la raison sont obligatoires.",
+    exportedBy: "Exporté par",
+    backupReason: "Raison de la sauvegarde",
+    backupPackageCreated: "Paquet de sauvegarde créé",
+    backupPackageUnavailable: "La prise en charge du paquet de sauvegarde de bureau n’est pas disponible.",
     exportFullBackup: "Exporter la sauvegarde complète",
     restoreBackup: "Restaurer une sauvegarde",
     saveBackupSettings: "Enregistrer les paramètres de sauvegarde",
@@ -670,6 +771,13 @@ const LANGUAGES = {
     diagnostics: "Diagnostics",
     actorName: "Nom de l’acteur",
     actorId: "ID de l’acteur",
+    emailAddress: "Adresse e-mail",
+    chatHandle: "Identifiant de chat",
+    linkedUsers: "Utilisateurs liés",
+    linkedProjectStateUsers: "Utilisateurs Project State liés",
+    noLinkedUsers: "Aucun utilisateur lié.",
+    communicationRecordsNotice: "Les chats et e-mails enregistrés sont des dossiers Project State. Ils ne sont pas privés.",
+    userPrivacyNotice: "Les utilisateurs de Project State doivent considérer que les chats, e-mails, sources et historiques de projet enregistrés sont visibles par les utilisateurs Project State autorisés.",
     defaultActorPill: "Acteur par défaut",
     saveActor: "Enregistrer l’acteur",
     owner: "Propriétaire",
@@ -795,6 +903,30 @@ const LANGUAGES = {
     recentActivity: "Activité récente",
     recentDecisions: "Décisions récentes",
     relationships: "Relations",
+    projectMap: "Carte du projet",
+    projectMapSubtitle: "Relations, preuves et travail non résolu autour de ce projet.",
+    contextPack: "Paquet de contexte",
+    contextPackNotice: "Exporter un paquet de contexte local et borné pour un futur bras API ou IA. Cela ne modifie pas Project State.",
+    contextScope: "Portée du contexte",
+    contextScopeProject: "Ce projet uniquement",
+    contextScopeRelated: "Ce projet et les projets liés",
+    contextScopeSources: "Sources et extraits en priorité",
+    contextBudget: "Budget de contexte",
+    budgetQuick: "Analyse rapide",
+    budgetNormal: "Révision normale",
+    budgetDeep: "Révision approfondie",
+    includeSources: "Inclure les sources et morceaux d’extraits",
+    includeHistory: "Inclure l’historique récent",
+    includeOpenWork: "Inclure les questions ouvertes et prochaines actions",
+    exportContextPack: "Exporter le paquet de contexte",
+    linkedProjects: "Projets liés",
+    incomingLinks: "Liens entrants",
+    outgoingLinks: "Liens sortants",
+    evidenceTrail: "Piste de preuves",
+    sourceCoverage: "Couverture des sources",
+    unresolvedWork: "Travail non résolu",
+    noLinkedProjects: "Aucun projet lié enregistré.",
+    noEvidenceRecorded: "Aucune source ou extrait enregistré.",
     facts: "Faits",
     sources: "Sources",
     draftProjects: "Projets brouillons",
@@ -838,6 +970,17 @@ const LANGUAGES = {
     localFile: "Fichier local",
     modified: "Modifié",
     findLocalFile: "Trouver un fichier local",
+    verifyFile: "Vérifier le fichier",
+    verifySourceFiles: "Vérifier les fichiers source",
+    sourceFileVerification: "Vérification des fichiers source",
+    fileVerified: "Fichier vérifié",
+    fileChanged: "Fichier modifié",
+    fileMissing: "Fichier manquant",
+    fileUnverifiable: "Fichier non vérifiable",
+    lastVerified: "Dernière vérification",
+    verificationReasonPlaceholder: "Pourquoi les fichiers source sont-ils vérifiés ?",
+    sourceFileVerificationComplete: "Vérification des fichiers source terminée.",
+    sourceFileVerificationNotice: "Le mode bureau peut vérifier les chemins locaux absolus. Le mode navigateur/développement peut seulement marquer les fichiers source comme non vérifiables.",
     summary: "Résumé",
     tags: "Étiquettes",
     mode: "Mode",
@@ -956,6 +1099,8 @@ const LANGUAGES = {
     imageDataUnavailable: "Les données de l’image ne sont pas disponibles.",
     calendar: "Calendrier",
     meeting: "Réunion",
+    api: "API",
+    chat: "Chat",
     email: "E-mail",
     other: "Autre",
     projectStatus: "Statut du projet",
@@ -979,7 +1124,42 @@ const LANGUAGES = {
     changesLabel: "Changements",
     sourcesLabel: "Sources",
     extractsLabel: "Extraits",
-    imagesLabel: "Images"
+    imagesLabel: "Images",
+    integrityDashboard: "Tableau d’intégrité",
+    integrityStatus: "État d’intégrité",
+    healthy: "Sain",
+    warning: "Avertissement",
+    needsAttention: "À vérifier",
+    objectCounts: "Comptes d’objets",
+    storageHealth: "Santé du stockage",
+    orphanLinks: "Liens orphelins",
+    sourceFileReferences: "Références de fichiers source",
+    linkedUserIssues: "Problèmes d’utilisateurs liés",
+    oversizedContent: "Contenu volumineux",
+    recoverySignals: "Signaux de récupération",
+    noIntegrityIssues: "Aucun problème d’intégrité trouvé.",
+    noStorageWarnings: "Aucun avertissement de stockage.",
+    noBrokenLinks: "Aucun lien interne cassé trouvé.",
+    noSourceReferenceIssues: "Aucune référence de fichier source faible trouvée.",
+    noLinkedUserIssues: "Aucun problème d’utilisateur lié trouvé.",
+    noOversizedContent: "Aucun avertissement de contenu volumineux.",
+    noRecoverySignals: "Aucun signal de récupération trouvé.",
+    checkGenerated: "Vérification générée",
+    projectReference: "Référence du projet",
+    missingSourceDetails: "La source n’a ni emplacement, ni métadonnées de fichier local, ni résumé.",
+    missingLinkedUser: "La source référence un utilisateur qui n’existe plus.",
+    missingAttachedSource: "Le lien de source attachée pointe vers une source manquante.",
+    missingAttachedExtract: "Le lien de source attachée pointe vers un extrait manquant.",
+    missingImageReference: "La pièce jointe image n’a aucune donnée stockée ni référence locale.",
+    missingImageTarget: "La pièce jointe image pointe vers un objet manquant.",
+    missingRelationshipTarget: "La relation pointe vers un projet manquant.",
+    largeExtractWarning: "Le texte de l’extrait est volumineux.",
+    largeAttachmentWarning: "Les données de la pièce jointe image sont volumineuses.",
+    recoveryModeNotActive: "Le mode de récupération n’est pas actif.",
+    storageWarningStorageSizeDanger: "La taille du stockage approche la limite du navigateur.",
+    storageWarningStorageSizeWarning: "La taille du stockage augmente.",
+    storageWarningAttachmentsDominateMainRecord: "Les images occupent la majeure partie de l’enregistrement principal.",
+    storageWarningExtractsGrowingInMainRecord: "Le texte des extraits augmente dans l’enregistrement principal."
   },
   de: {
     languageName: "Deutsch",
@@ -1003,7 +1183,7 @@ const LANGUAGES = {
     setupSubtitle: "Dies konfiguriert lokale Nutzung, Sicherungshinweise und den primären Akteur für genehmigte Änderungen.",
     primaryActor: "Primärer Akteur",
     backupLocation: "Sicherungsort",
-    backupLocationPlaceholder: "Beispiel: iCloud Drive / Project State Sicherungen",
+    backupLocationPlaceholder: "Beispiel: Externes Laufwerk / Project State Sicherungen",
     backupReminder: "Sicherungserinnerung",
     language: "Sprache",
     localModeConfirm: "Ich verstehe, dass dies ein lokaler Einzelbenutzermodus ist und Sicherungen vom Benutzer verwaltet werden.",
@@ -1043,6 +1223,12 @@ const LANGUAGES = {
     desktopRuntimeReady: "Desktop-Speicher-Spine aktiv.",
     browserDevRuntime: "Browser-/Entwicklungs-Laufzeit",
     browserRuntimeWarning: "Project State läuft ohne Desktop-Bridge. Der Browsermodus ist nur für Legacy-Export, Migration und Entwicklung gedacht; verwenden Sie die Desktop-App für vollständigen Speicher, Sicherung, Wiederherstellung, Eingang und API-Arbeit.",
+    browserDevGateTitle: "Browser-/Entwicklungsmodus",
+    browserDevGateSubtitle: "Die Desktop-Bridge ist für den echten Project-State-Modus erforderlich.",
+    browserDevGateNotice: "Dieser Bildschirm kann geladene lokale Daten prüfen und Rohdaten für die Migration exportieren. Er speichert, migriert, sichert, stellt wieder her, nimmt auf oder bearbeitet Project-State-Datensätze nicht stillschweigend.",
+    browserDevGateReadOnly: "Schreibgeschützter Entwicklungszugriff",
+    browserDevGateCounts: "Geladene Datensätze",
+    browserDevNoSilentStorage: "Ohne Desktop-Bridge wird keine ernsthafte Speicherarbeit ausgeführt.",
     saveBlockedApproval: "Nicht gespeicherte Änderungen: Genehmigungssperre hat das Speichern blockiert",
     saveStorageFailed: "Nicht gespeicherte Änderungen: {message}",
     storageFailed: "Speichern fehlgeschlagen",
@@ -1066,6 +1252,11 @@ const LANGUAGES = {
     backupLocationWarning: "Primärspeicher und Sicherung sollten nicht am selben Ort liegen, außer bei einer servergestützten Bereitstellung.",
     backupOverrideAcknowledged: "Sicherungsort-Override mit aufgezeichneter Warnung erlauben.",
     backupOverrideReason: "Grund für Sicherungs-Override",
+    desktopBackupPackageNotice: "Ein Desktop-Sicherungspaket aus dem aktiven Speicher-Spine erstellen. Akteur, Zeitstempel und Grund sind erforderlich.",
+    exportedBy: "Exportiert von",
+    backupReason: "Sicherungsgrund",
+    backupPackageCreated: "Sicherungspaket erstellt",
+    backupPackageUnavailable: "Desktop-Sicherungspaket-Unterstützung ist nicht verfügbar.",
     exportFullBackup: "Vollständige Sicherung exportieren",
     restoreBackup: "Sicherung wiederherstellen",
     saveBackupSettings: "Sicherungseinstellungen speichern",
@@ -1081,6 +1272,13 @@ const LANGUAGES = {
     diagnostics: "Diagnose",
     actorName: "Akteursname",
     actorId: "Akteur-ID",
+    emailAddress: "E-Mail-Adresse",
+    chatHandle: "Chat-Kennung",
+    linkedUsers: "Verknüpfte Benutzer",
+    linkedProjectStateUsers: "Verknüpfte Project-State-Benutzer",
+    noLinkedUsers: "Keine verknüpften Benutzer.",
+    communicationRecordsNotice: "Erfasste Chats und E-Mails sind Project-State-Datensätze. Sie sind nicht privat.",
+    userPrivacyNotice: "Project-State-Benutzer sollten davon ausgehen, dass erfasste Projekt-Chats, E-Mails, Quellen und Verläufe für berechtigte Project-State-Benutzer sichtbar sind.",
     defaultActorPill: "Standardakteur",
     saveActor: "Akteur speichern",
     owner: "Eigentümer",
@@ -1206,6 +1404,30 @@ const LANGUAGES = {
     recentActivity: "Letzte Aktivität",
     recentDecisions: "Letzte Entscheidungen",
     relationships: "Beziehungen",
+    projectMap: "Projektkarte",
+    projectMapSubtitle: "Beziehungen, Nachweise und offene Arbeit rund um dieses Projekt.",
+    contextPack: "Kontextpaket",
+    contextPackNotice: "Ein begrenztes lokales Kontextpaket für einen künftigen API- oder KI-Arm exportieren. Project State wird dadurch nicht geändert.",
+    contextScope: "Kontextumfang",
+    contextScopeProject: "Nur dieses Projekt",
+    contextScopeRelated: "Dieses Projekt und verknüpfte Projekte",
+    contextScopeSources: "Fokus auf Quellen und Auszüge",
+    contextBudget: "Kontextbudget",
+    budgetQuick: "Schneller Scan",
+    budgetNormal: "Normale Prüfung",
+    budgetDeep: "Tiefe Prüfung",
+    includeSources: "Quellen und Auszugsabschnitte einbeziehen",
+    includeHistory: "Aktuellen Verlauf einbeziehen",
+    includeOpenWork: "Offene Fragen und nächste Aktionen einbeziehen",
+    exportContextPack: "Kontextpaket exportieren",
+    linkedProjects: "Verknüpfte Projekte",
+    incomingLinks: "Eingehende Links",
+    outgoingLinks: "Ausgehende Links",
+    evidenceTrail: "Nachweisspur",
+    sourceCoverage: "Quellenabdeckung",
+    unresolvedWork: "Offene Arbeit",
+    noLinkedProjects: "Keine verknüpften Projekte erfasst.",
+    noEvidenceRecorded: "Keine Quellen oder Auszüge erfasst.",
     facts: "Fakten",
     sources: "Quellen",
     draftProjects: "Projektentwürfe",
@@ -1249,6 +1471,17 @@ const LANGUAGES = {
     localFile: "Lokale Datei",
     modified: "Geändert",
     findLocalFile: "Lokale Datei finden",
+    verifyFile: "Datei prüfen",
+    verifySourceFiles: "Quelldateien prüfen",
+    sourceFileVerification: "Quelldatei-Prüfung",
+    fileVerified: "Datei geprüft",
+    fileChanged: "Datei geändert",
+    fileMissing: "Datei fehlt",
+    fileUnverifiable: "Datei nicht prüfbar",
+    lastVerified: "Zuletzt geprüft",
+    verificationReasonPlaceholder: "Warum werden Quelldateien geprüft?",
+    sourceFileVerificationComplete: "Quelldatei-Prüfung abgeschlossen.",
+    sourceFileVerificationNotice: "Der Desktopmodus kann absolute lokale Dateipfade prüfen. Der Browser-/Entwicklungsmodus kann Quelldateien nur als nicht prüfbar markieren.",
     summary: "Zusammenfassung",
     tags: "Tags",
     mode: "Modus",
@@ -1367,6 +1600,8 @@ const LANGUAGES = {
     imageDataUnavailable: "Bilddaten sind nicht verfügbar.",
     calendar: "Kalender",
     meeting: "Besprechung",
+    api: "API",
+    chat: "Chat",
     email: "E-Mail",
     other: "Sonstiges",
     projectStatus: "Projektstatus",
@@ -1390,7 +1625,42 @@ const LANGUAGES = {
     changesLabel: "Änderungen",
     sourcesLabel: "Quellen",
     extractsLabel: "Auszüge",
-    imagesLabel: "Bilder"
+    imagesLabel: "Bilder",
+    integrityDashboard: "Integritäts-Dashboard",
+    integrityStatus: "Integritätsstatus",
+    healthy: "Gesund",
+    warning: "Warnung",
+    needsAttention: "Prüfen",
+    objectCounts: "Objektzahlen",
+    storageHealth: "Speicherzustand",
+    orphanLinks: "Verwaiste Links",
+    sourceFileReferences: "Quelldatei-Verweise",
+    linkedUserIssues: "Probleme mit verknüpften Benutzern",
+    oversizedContent: "Große Inhalte",
+    recoverySignals: "Wiederherstellungssignale",
+    noIntegrityIssues: "Keine Integritätsprobleme gefunden.",
+    noStorageWarnings: "Keine Speicherwarnungen.",
+    noBrokenLinks: "Keine defekten internen Links gefunden.",
+    noSourceReferenceIssues: "Keine schwachen Quelldatei-Verweise gefunden.",
+    noLinkedUserIssues: "Keine Probleme mit verknüpften Benutzern gefunden.",
+    noOversizedContent: "Keine Warnungen zu großen Inhalten.",
+    noRecoverySignals: "Keine Wiederherstellungssignale gefunden.",
+    checkGenerated: "Prüfung erstellt",
+    projectReference: "Projektverweis",
+    missingSourceDetails: "Quelle hat weder Speicherort noch lokale Dateimetadaten noch Zusammenfassung.",
+    missingLinkedUser: "Quelle verweist auf einen Benutzer, der nicht mehr existiert.",
+    missingAttachedSource: "Angehängter Quellenlink verweist auf eine fehlende Quelle.",
+    missingAttachedExtract: "Angehängter Quellenlink verweist auf einen fehlenden Auszug.",
+    missingImageReference: "Bildanhang hat keine gespeicherten Daten und keinen lokalen Verweis.",
+    missingImageTarget: "Bildanhang verweist auf ein fehlendes Objekt.",
+    missingRelationshipTarget: "Beziehung verweist auf ein fehlendes Projekt.",
+    largeExtractWarning: "Auszugstext ist groß.",
+    largeAttachmentWarning: "Bildanhangsdaten sind groß.",
+    recoveryModeNotActive: "Wiederherstellungsmodus ist nicht aktiv.",
+    storageWarningStorageSizeDanger: "Speichergröße nähert sich der Browsergrenze.",
+    storageWarningStorageSizeWarning: "Speichergröße wächst.",
+    storageWarningAttachmentsDominateMainRecord: "Bilder nehmen den größten Teil des Haupteintrags ein.",
+    storageWarningExtractsGrowingInMainRecord: "Auszugstext wächst im Haupteintrag."
   },
   es: {
     languageName: "Español",
@@ -1414,7 +1684,7 @@ const LANGUAGES = {
     setupSubtitle: "Esto configura el uso local, la guía de copias de seguridad y el actor principal para cambios aprobados.",
     primaryActor: "Actor principal",
     backupLocation: "Ubicación de copia de seguridad",
-    backupLocationPlaceholder: "Ejemplo: iCloud Drive / Copias de Project State",
+    backupLocationPlaceholder: "Ejemplo: unidad externa / copias de Project State",
     backupReminder: "Recordatorio de copia",
     language: "Idioma",
     localModeConfirm: "Entiendo que este es un modo local de un solo usuario y que las copias de seguridad las controla el usuario.",
@@ -1454,6 +1724,12 @@ const LANGUAGES = {
     desktopRuntimeReady: "Columna de almacenamiento de escritorio activa.",
     browserDevRuntime: "Entorno navegador / desarrollo",
     browserRuntimeWarning: "Project State se está ejecutando sin el puente de escritorio. El modo navegador es solo para exportación heredada, migración y desarrollo; usa la app de escritorio para almacenamiento completo, copias, restauración, entrada y trabajo de API.",
+    browserDevGateTitle: "Modo navegador/desarrollo",
+    browserDevGateSubtitle: "El puente de escritorio es obligatorio para el modo real de Project State.",
+    browserDevGateNotice: "Esta pantalla puede inspeccionar datos locales cargados y exportar datos sin procesar para migración. No guarda, migra, crea copias, restaura, ingresa ni edita registros de Project State en silencio.",
+    browserDevGateReadOnly: "Acceso de solo lectura/desarrollo",
+    browserDevGateCounts: "Registros cargados",
+    browserDevNoSilentStorage: "Ningún trabajo serio de almacenamiento se ejecuta sin el puente de escritorio.",
     saveBlockedApproval: "Cambios sin guardar: la puerta de aprobación bloqueó el guardado",
     saveStorageFailed: "Cambios sin guardar: {message}",
     storageFailed: "fallo de almacenamiento",
@@ -1477,6 +1753,11 @@ const LANGUAGES = {
     backupLocationWarning: "El almacenamiento principal y la copia de seguridad no deben estar en la misma ubicación salvo en una implementación con servidor.",
     backupOverrideAcknowledged: "Permitir una excepción de ubicación de copia con advertencia registrada.",
     backupOverrideReason: "Razón de excepción de copia",
+    desktopBackupPackageNotice: "Crear un paquete de copia de escritorio desde la columna de almacenamiento activa. Actor, marca de tiempo y razón son obligatorios.",
+    exportedBy: "Exportado por",
+    backupReason: "Razón de copia",
+    backupPackageCreated: "Paquete de copia creado",
+    backupPackageUnavailable: "La compatibilidad con paquetes de copia de escritorio no está disponible.",
     exportFullBackup: "Exportar copia completa",
     restoreBackup: "Restaurar copia",
     saveBackupSettings: "Guardar configuración de copia",
@@ -1492,6 +1773,13 @@ const LANGUAGES = {
     diagnostics: "Diagnósticos",
     actorName: "Nombre del actor",
     actorId: "ID del actor",
+    emailAddress: "Correo electrónico",
+    chatHandle: "Identificador de chat",
+    linkedUsers: "Usuarios vinculados",
+    linkedProjectStateUsers: "Usuarios de Project State vinculados",
+    noLinkedUsers: "No hay usuarios vinculados.",
+    communicationRecordsNotice: "Los chats y correos registrados son registros de Project State. No son privados.",
+    userPrivacyNotice: "Los usuarios de Project State deben asumir que los chats, correos, fuentes e historial de proyecto registrados son visibles para usuarios autorizados de Project State.",
     defaultActorPill: "Actor predeterminado",
     saveActor: "Guardar actor",
     owner: "Propietario",
@@ -1617,6 +1905,30 @@ const LANGUAGES = {
     recentActivity: "Actividad reciente",
     recentDecisions: "Decisiones recientes",
     relationships: "Relaciones",
+    projectMap: "Mapa del proyecto",
+    projectMapSubtitle: "Relaciones, evidencia y trabajo sin resolver alrededor de este proyecto.",
+    contextPack: "Paquete de contexto",
+    contextPackNotice: "Exporta un paquete de contexto local y acotado para un futuro brazo API o IA. Esto no cambia Project State.",
+    contextScope: "Alcance de contexto",
+    contextScopeProject: "Solo este proyecto",
+    contextScopeRelated: "Este proyecto y proyectos vinculados",
+    contextScopeSources: "Enfoque en fuentes y extractos",
+    contextBudget: "Presupuesto de contexto",
+    budgetQuick: "Escaneo rápido",
+    budgetNormal: "Revisión normal",
+    budgetDeep: "Revisión profunda",
+    includeSources: "Incluir fuentes y fragmentos de extracto",
+    includeHistory: "Incluir historial reciente",
+    includeOpenWork: "Incluir preguntas abiertas y próximas acciones",
+    exportContextPack: "Exportar paquete de contexto",
+    linkedProjects: "Proyectos vinculados",
+    incomingLinks: "Enlaces entrantes",
+    outgoingLinks: "Enlaces salientes",
+    evidenceTrail: "Rastro de evidencia",
+    sourceCoverage: "Cobertura de fuentes",
+    unresolvedWork: "Trabajo sin resolver",
+    noLinkedProjects: "No hay proyectos vinculados registrados.",
+    noEvidenceRecorded: "No hay fuentes ni extractos registrados.",
     facts: "Hechos",
     sources: "Fuentes",
     draftProjects: "Proyectos borrador",
@@ -1660,6 +1972,17 @@ const LANGUAGES = {
     localFile: "Archivo local",
     modified: "Modificado",
     findLocalFile: "Buscar archivo local",
+    verifyFile: "Verificar archivo",
+    verifySourceFiles: "Verificar archivos fuente",
+    sourceFileVerification: "Verificación de archivos fuente",
+    fileVerified: "Archivo verificado",
+    fileChanged: "Archivo cambiado",
+    fileMissing: "Archivo faltante",
+    fileUnverifiable: "Archivo no verificable",
+    lastVerified: "Última verificación",
+    verificationReasonPlaceholder: "¿Por qué se verifican los archivos fuente?",
+    sourceFileVerificationComplete: "Verificación de archivos fuente completa.",
+    sourceFileVerificationNotice: "El modo de escritorio puede verificar rutas locales absolutas. El modo navegador/desarrollo solo puede marcar archivos fuente como no verificables.",
     summary: "Resumen",
     tags: "Etiquetas",
     mode: "Modo",
@@ -1778,6 +2101,8 @@ const LANGUAGES = {
     imageDataUnavailable: "Los datos de la imagen no están disponibles.",
     calendar: "Calendario",
     meeting: "Reunión",
+    api: "API",
+    chat: "Chat",
     email: "Correo",
     other: "Otro",
     projectStatus: "Estado del proyecto",
@@ -1801,7 +2126,42 @@ const LANGUAGES = {
     changesLabel: "Cambios",
     sourcesLabel: "Fuentes",
     extractsLabel: "Extractos",
-    imagesLabel: "Imágenes"
+    imagesLabel: "Imágenes",
+    integrityDashboard: "Panel de integridad",
+    integrityStatus: "Estado de integridad",
+    healthy: "Sano",
+    warning: "Advertencia",
+    needsAttention: "Requiere atención",
+    objectCounts: "Conteo de objetos",
+    storageHealth: "Salud del almacenamiento",
+    orphanLinks: "Enlaces huérfanos",
+    sourceFileReferences: "Referencias de archivos fuente",
+    linkedUserIssues: "Problemas de usuarios vinculados",
+    oversizedContent: "Contenido grande",
+    recoverySignals: "Señales de recuperación",
+    noIntegrityIssues: "No se encontraron problemas de integridad.",
+    noStorageWarnings: "No hay advertencias de almacenamiento.",
+    noBrokenLinks: "No se encontraron enlaces internos rotos.",
+    noSourceReferenceIssues: "No se encontraron referencias débiles de archivos fuente.",
+    noLinkedUserIssues: "No se encontraron problemas de usuarios vinculados.",
+    noOversizedContent: "No hay advertencias de contenido grande.",
+    noRecoverySignals: "No se encontraron señales de recuperación.",
+    checkGenerated: "Revisión generada",
+    projectReference: "Referencia del proyecto",
+    missingSourceDetails: "La fuente no tiene ubicación, metadatos de archivo local ni resumen.",
+    missingLinkedUser: "La fuente hace referencia a un usuario que ya no existe.",
+    missingAttachedSource: "El enlace de fuente adjunta apunta a una fuente faltante.",
+    missingAttachedExtract: "El enlace de fuente adjunta apunta a un extracto faltante.",
+    missingImageReference: "El adjunto de imagen no tiene datos guardados ni referencia local.",
+    missingImageTarget: "El adjunto de imagen apunta a un objeto faltante.",
+    missingRelationshipTarget: "La relación apunta a un proyecto faltante.",
+    largeExtractWarning: "El texto del extracto es grande.",
+    largeAttachmentWarning: "Los datos del adjunto de imagen son grandes.",
+    recoveryModeNotActive: "El modo de recuperación no está activo.",
+    storageWarningStorageSizeDanger: "El tamaño de almacenamiento está cerca del límite del navegador.",
+    storageWarningStorageSizeWarning: "El tamaño de almacenamiento está creciendo.",
+    storageWarningAttachmentsDominateMainRecord: "Las imágenes ocupan la mayor parte del registro principal.",
+    storageWarningExtractsGrowingInMainRecord: "El texto de extractos está creciendo dentro del registro principal."
   }
 };
 const DRAFT_REVIEW_FLAGS = [
@@ -1983,6 +2343,10 @@ function createDesktopPlatformAdapter(bridge) {
         if (typeof files.localPath === "function") return files.localPath(file);
         return browserLocalFilePath(file);
       },
+      async verifyLocalFile(reference) {
+        if (typeof files.verifyLocalFile === "function") return files.verifyLocalFile(reference);
+        return browserVerifyLocalFile(reference);
+      },
       async readAsDataUrl(file) {
         if (typeof files.readAsDataUrl === "function") return files.readAsDataUrl(file);
         return browserReadFileAsDataUrl(file);
@@ -2048,6 +2412,7 @@ function createBrowserPlatformAdapter() {
     files: {
       metadata: browserFileMetadata,
       localPath: browserLocalFilePath,
+      verifyLocalFile: browserVerifyLocalFile,
       readAsDataUrl: browserReadFileAsDataUrl,
       readAsText: browserReadFileAsText,
       readAsArrayBuffer: browserReadFileAsArrayBuffer,
@@ -2073,6 +2438,15 @@ function browserFileMetadata(file) {
     type: file.type || "",
     size: file.size || 0,
     lastModified: file.lastModified ? new Date(file.lastModified).toISOString() : ""
+  };
+}
+
+async function browserVerifyLocalFile() {
+  return {
+    status: "unverifiable",
+    exists: false,
+    checkedAt: nowIso(),
+    reason: "Browser/dev mode cannot verify local file paths."
   };
 }
 
@@ -2472,6 +2846,10 @@ function desktopRuntimeReady() {
 
 function browserDevRuntime() {
   return !desktopRuntimeReady();
+}
+
+function seriousStorageWorkAllowed() {
+  return desktopRuntimeReady();
 }
 
 function currentStorageModeName() {
@@ -2944,9 +3322,13 @@ async function loadStore() {
     const normalized = normalizeStore(parsed);
     storageSnapshotText = JSON.stringify(normalized);
     storageMode = storageModeForLoadedSource(loaded.source);
-    if (loaded.source === "legacy-json") await ProjectStateStorage.preserveLegacyRaw(loaded.raw);
-    if (migrationNeeded || loaded.source !== "indexeddb-split") await ProjectStateStorage.save(normalized);
-    else await ProjectStateStorage.ensureMeta(normalized);
+    if (seriousStorageWorkAllowed()) {
+      if (loaded.source === "legacy-json") await ProjectStateStorage.preserveLegacyRaw(loaded.raw);
+      if (migrationNeeded || loaded.source !== "indexeddb-split") await ProjectStateStorage.save(normalized);
+      else await ProjectStateStorage.ensureMeta(normalized);
+    } else {
+      storageSpineMeta = buildStorageSpineManifest(normalized, storageSnapshotText);
+    }
     return normalized;
   } catch (error) {
     loadFailure = {
@@ -3081,13 +3463,17 @@ function ensureId(object, prefix, context) {
 function normalizeActor(actor, context) {
   const role = normalizeActorRole(actor.role, actor.type);
   const status = normalizeActorStatus(actor.status);
-  if (actor.role !== role || actor.status !== status) migrationNeeded = true;
+  if (actor.role !== role || actor.status !== status || actor.emailAddress === undefined || actor.chatHandle === undefined) migrationNeeded = true;
   return {
     type: "Human",
+    emailAddress: "",
+    chatHandle: "",
     ...actor,
     id: ensureId(actor, "actor", context),
     role,
-    status
+    status,
+    emailAddress: String(actor.emailAddress || actor.email || "").trim(),
+    chatHandle: String(actor.chatHandle || actor.chat || "").trim()
   };
 }
 
@@ -3102,7 +3488,9 @@ function ensureActorIdByName(name, context) {
     name: String(name).trim(),
     type: "Human",
     role: "contributor",
-    status: "active"
+    status: "active",
+    emailAddress: "",
+    chatHandle: ""
   };
   context.actors.push(actor);
   context.actorNameToId.set(key, actor.id);
@@ -3198,17 +3586,24 @@ function objectTypeFromPrefix(prefix) {
 
 function normalizeSource(source, projectId, context) {
   const sourceId = ensureId(source, "source", context);
-  if (!source.projectId) migrationNeeded = true;
+  if (!source.projectId || !Array.isArray(source.linkedActorIds)) migrationNeeded = true;
   return {
     extracts: [],
     status: "active",
     tags: [],
+    linkedActorIds: [],
     ...source,
     id: sourceId,
     projectId: source.projectId || projectId,
     extracts: Array.isArray(source.extracts) ? source.extracts.map((extract) => normalizeExtract(extract, projectId, sourceId, context)) : [],
-    tags: Array.isArray(source.tags) ? source.tags : tagsFromText(source.tags || "")
+    tags: Array.isArray(source.tags) ? source.tags : tagsFromText(source.tags || ""),
+    linkedActorIds: normalizeLinkedActorIds(source.linkedActorIds || source.participantActorIds || source.actorIds || [])
   };
+}
+
+function normalizeLinkedActorIds(actorIds = []) {
+  if (!Array.isArray(actorIds)) return [];
+  return [...new Set(actorIds.map((actorId) => String(actorId || "").trim()).filter(Boolean))];
 }
 
 function normalizeExtract(extract, projectId, sourceId, context) {
@@ -3388,6 +3783,11 @@ function normalizeChangeDetails(details, project) {
 }
 
 function saveStore(options = {}) {
+  if (!seriousStorageWorkAllowed() && !options.allowInBrowserDev) {
+    setSaveStatus("unsaved", t("browserDevNoSilentStorage"));
+    console.error("Project State blocked a serious storage write because the desktop bridge is missing.");
+    return;
+  }
   const hasApprovedCoreWrite = pendingApprovedCoreWrites > 0;
   if (!options.allowWithoutCoreApproval && !hasApprovedCoreWrite) {
     setSaveStatus("unsaved", t("saveBlockedApproval"));
@@ -3615,6 +4015,15 @@ function fileMetadata(file) {
   return platformAdapter.files.metadata(file);
 }
 
+function sourceLocalFileMetadata(file) {
+  const metadata = fileMetadata(file);
+  if (!metadata) return null;
+  return {
+    ...metadata,
+    localPath: platformAdapter.files.localPath(file)
+  };
+}
+
 function supportedImageTypes() {
   return ["image/png", "image/jpeg", "image/webp", "image/gif"];
 }
@@ -3803,7 +4212,9 @@ function getOrCreateActor(name, type = "Human") {
     name: normalized,
     type,
     role: normalizeActorRole("", type),
-    status: "active"
+    status: "active",
+    emailAddress: "",
+    chatHandle: ""
   };
   store.actors.push(actor);
   return actor;
@@ -3980,6 +4391,11 @@ function render() {
     return;
   }
 
+  if (browserDevRuntime()) {
+    renderBrowserDevModeGate();
+    return;
+  }
+
   if (needsFirstRunSetup()) {
     renderFirstRunSetup();
     return;
@@ -4089,6 +4505,59 @@ function renderRecoveryScreen() {
   `;
 }
 
+function renderBrowserDevModeGate() {
+  const manifest = buildStorageSpineManifest(store, storageSnapshotText || JSON.stringify(store));
+  const counts = manifest.counts || {};
+  const countRows = [
+    [t("projects"), counts.projects || 0],
+    [t("changeHistory"), counts.changes || 0],
+    [t("sourcesLabel"), counts.sources || 0],
+    [t("extractsLabel"), counts.extracts || 0],
+    [t("imagesLabel"), manifest.largeContent?.attachments || 0],
+    [t("draftProjects"), counts.drafts || 0]
+  ];
+  app.innerHTML = `
+    <main class="main recovery-screen">
+      <section class="panel strong">
+        <div class="view-head">
+          <div>
+            <h1 class="view-title">${escapeHtml(t("browserDevGateTitle"))}</h1>
+            <p class="view-subtitle">${escapeHtml(t("browserDevGateSubtitle"))}</p>
+          </div>
+        </div>
+        ${runtimeWarningHtml()}
+        ${storageWarningHtml()}
+        <div class="stack">
+          <p class="notice">${escapeHtml(t("browserDevGateNotice"))}</p>
+          <p class="notice">${escapeHtml(t("browserDevNoSilentStorage"))}</p>
+          <div>
+            <p class="meta-label">${escapeHtml(t("browserDevGateReadOnly"))}</p>
+            <p>${escapeHtml(t("currentMode"))}: ${escapeHtml(currentStorageModeName())}</p>
+          </div>
+          <div>
+            <p class="meta-label">${escapeHtml(t("browserDevGateCounts"))}</p>
+            <div class="summary-grid">
+              ${countRows.map(([label, value]) => `
+                <div>
+                  <span>${escapeHtml(label)}</span>
+                  <strong>${escapeHtml(value)}</strong>
+                </div>
+              `).join("")}
+            </div>
+          </div>
+          <div class="button-row">
+            <button class="btn" data-action="export-current-raw-data">${escapeHtml(t("exportRawCurrentData"))}</button>
+          </div>
+        </div>
+      </section>
+    </main>
+  `;
+}
+
+function browserDevActionAllowed(action) {
+  return ["export-current-raw-data", "export-failed-data"].includes(action);
+}
+
 function renderFirstRunSetup() {
   const existingActor = store.settings?.primaryActorId ? getActor(store.settings.primaryActorId) : store.actors[0];
   app.innerHTML = `
@@ -4100,6 +4569,7 @@ function renderFirstRunSetup() {
             <p class="view-subtitle">${escapeHtml(t("setupSubtitle"))}</p>
           </div>
         </div>
+        <p class="notice">${escapeHtml(t("userPrivacyNotice"))}</p>
         <form class="form" data-first-run-setup>
           <div class="field">
             <label for="setupActorName">${escapeHtml(t("primaryActor"))}</label>
@@ -4215,6 +4685,7 @@ function renderArchivedProjectList() {
 function renderSettings() {
   const info = storageSizeInfo();
   const diagnostics = settingsDiagnostics();
+  const integrity = buildIntegrityDashboard(diagnostics, info);
   const runtimeStatus = desktopRuntimeReady() ? t("desktopRuntimeReady") : t("browserRuntimeWarning");
   const runtimeLabel = desktopRuntimeReady() ? t("desktopRuntime") : t("browserDevRuntime");
   shell(`
@@ -4263,6 +4734,9 @@ function renderSettings() {
         <div class="panel-head">
           <h2 class="panel-title">${escapeHtml(t("usersActors"))}</h2>
         </div>
+        <div class="form">
+          <p class="notice">${escapeHtml(t("userPrivacyNotice"))}</p>
+        </div>
         <div class="settings-list">
           ${store.actors.length ? store.actors.map(renderActorSettingsItem).join("") : emptyText(t("noActorsRecorded"))}
         </div>
@@ -4275,6 +4749,16 @@ function renderSettings() {
             <div class="field">
               <label for="newActorRole">${escapeHtml(t("role"))}</label>
               <select id="newActorRole" name="role">${actorRoleOptions("contributor")}</select>
+            </div>
+          </div>
+          <div class="two-col">
+            <div class="field">
+              <label for="newActorEmail">${escapeHtml(t("emailAddress"))}</label>
+              <input id="newActorEmail" name="emailAddress" type="email">
+            </div>
+            <div class="field">
+              <label for="newActorChat">${escapeHtml(t("chatHandle"))}</label>
+              <input id="newActorChat" name="chatHandle">
             </div>
           </div>
           <div class="field">
@@ -4427,16 +4911,9 @@ function renderSettings() {
 
       <section class="panel">
         <div class="panel-head">
-          <h2 class="panel-title">${escapeHtml(t("diagnostics"))}</h2>
+          <h2 class="panel-title">${escapeHtml(t("integrityDashboard"))}</h2>
         </div>
-        <div class="meta-grid settings-diagnostics">
-          ${Object.entries(diagnostics).map(([label, value]) => `
-            <div>
-              <p class="meta-label">${escapeHtml(label)}</p>
-              <p>${escapeHtml(value)}</p>
-            </div>
-          `).join("")}
-        </div>
+        ${renderIntegrityDashboard(integrity, diagnostics)}
       </section>
     </section>
   `);
@@ -4550,6 +5027,16 @@ function renderActorSettingsItem(actor) {
           ${isPrimary ? `<span class="pill">${escapeHtml(t("defaultActorPill"))}</span>` : ""}
         </div>
       </div>
+      <div class="two-col">
+        <div class="field">
+          <label for="actorEmail-${escapeHtml(actor.id)}">${escapeHtml(t("emailAddress"))}</label>
+          <input id="actorEmail-${escapeHtml(actor.id)}" name="emailAddress" type="email" value="${escapeHtml(actor.emailAddress || "")}">
+        </div>
+        <div class="field">
+          <label for="actorChat-${escapeHtml(actor.id)}">${escapeHtml(t("chatHandle"))}</label>
+          <input id="actorChat-${escapeHtml(actor.id)}" name="chatHandle" value="${escapeHtml(actor.chatHandle || "")}">
+        </div>
+      </div>
       <div class="field">
         <label for="actorReason-${escapeHtml(actor.id)}">${escapeHtml(t("reason"))}</label>
         <textarea id="actorReason-${escapeHtml(actor.id)}" name="reason" required placeholder="${escapeHtml(t("actorReasonPlaceholder"))}"></textarea>
@@ -4567,6 +5054,46 @@ function actorSelectOptions(selectedActorId = "") {
   return actors
     .map((actor) => `<option value="${actor.id}" ${selectedActorId === actor.id ? "selected" : ""}>${escapeHtml(actor.name)} (${escapeHtml(actorRoleLabel(actor.role, actor.type))})</option>`)
     .join("");
+}
+
+function linkedActorCheckboxes(selectedActorIds = []) {
+  const selected = new Set(normalizeLinkedActorIds(selectedActorIds));
+  const actors = store.actors.filter((actor) => normalizeActorStatus(actor.status) === "active");
+  if (!actors.length) return emptyText(t("noActorsRecorded"));
+  return `
+    <div class="check-list">
+      ${actors.map((actor) => `
+        <label class="check-field">
+          <input name="linkedActorIds" type="checkbox" value="${escapeHtml(actor.id)}" ${selected.has(actor.id) ? "checked" : ""}>
+          <span>${escapeHtml(actorContactLabel(actor))}</span>
+        </label>
+      `).join("")}
+    </div>
+  `;
+}
+
+function selectedLinkedActorIds(form) {
+  return [...form.querySelectorAll('[name="linkedActorIds"]:checked')]
+    .map((field) => field.value)
+    .filter((actorId) => getActor(actorId));
+}
+
+function actorContactLabel(actor) {
+  const details = [actor.emailAddress, actor.chatHandle].map((value) => String(value || "").trim()).filter(Boolean);
+  return details.length ? `${actor.name} (${details.join(" / ")})` : actor.name;
+}
+
+function linkedActorNames(actorIds = []) {
+  return normalizeLinkedActorIds(actorIds)
+    .map((actorId) => getActor(actorId))
+    .filter(Boolean)
+    .map(actorContactLabel);
+}
+
+function renderLinkedUsers(actorIds = []) {
+  const names = linkedActorNames(actorIds);
+  if (!names.length) return "";
+  return `<p class="item-meta">${escapeHtml(t("linkedUsers"))}: ${escapeDisplay(names.join(", "), DISPLAY_META_LIMIT)}</p>`;
 }
 
 function settingsDiagnostics() {
@@ -4599,6 +5126,240 @@ function settingsDiagnostics() {
     [t("lastBackupExport")]: store.settings?.lastBackupExportedAt ? formatDate(store.settings.lastBackupExportedAt) : t("notRecorded"),
     [t("lastRestore")]: store.settings?.lastRestoreAt ? formatDate(store.settings.lastRestoreAt) : t("notRecorded")
   };
+}
+
+function buildIntegrityDashboard(diagnostics = settingsDiagnostics(), info = storageSizeInfo()) {
+  const manifest = storageSpineMeta || buildStorageSpineManifest(store, storageSnapshotText || JSON.stringify(store));
+  const groups = {
+    storageHealth: integrityStorageIssues(manifest, info),
+    orphanLinks: [],
+    sourceFileReferences: [],
+    linkedUserIssues: [],
+    oversizedContent: integrityLargeContentIssues(manifest),
+    recoverySignals: loadFailure ? [integrityIssue("recovery", "needs_attention", loadFailure.message || t("savedDataNeedsRecovery"))] : []
+  };
+
+  for (const project of store.projects || []) {
+    scanProjectIntegrity(project, groups);
+  }
+
+  if (!groups.recoverySignals.length) {
+    groups.recoverySignals.push(integrityIssue("recovery", "ok", t("recoveryModeNotActive")));
+  }
+
+  const allIssues = Object.values(groups).flat();
+  const status = allIssues.some((issue) => issue.level === "needs_attention")
+    ? "needs_attention"
+    : allIssues.some((issue) => issue.level === "warning")
+      ? "warning"
+      : "healthy";
+
+  return {
+    status,
+    generatedAt: nowIso(),
+    manifest,
+    diagnostics,
+    groups
+  };
+}
+
+function integrityStorageIssues(manifest, info) {
+  const issues = [];
+  if (!desktopRuntimeReady()) issues.push(integrityIssue("storage", "warning", t("browserRuntimeWarning")));
+  if (info.level === "danger") issues.push(integrityIssue("storage", "needs_attention", t("storageWarningStorageSizeDanger")));
+  else if (info.level === "warning") issues.push(integrityIssue("storage", "warning", t("storageWarningStorageSizeWarning")));
+
+  for (const warning of manifest.warnings || []) {
+    const key = storageWarningKey(warning);
+    const level = warning === "storage-size-danger" ? "needs_attention" : "warning";
+    if (!issues.some((issue) => issue.message === t(key))) issues.push(integrityIssue("storage", level, t(key)));
+  }
+  return issues;
+}
+
+function storageWarningKey(warning = "") {
+  const keys = {
+    "storage-size-danger": "storageWarningStorageSizeDanger",
+    "storage-size-warning": "storageWarningStorageSizeWarning",
+    "attachments-dominate-main-record": "storageWarningAttachmentsDominateMainRecord",
+    "extracts-growing-in-main-record": "storageWarningExtractsGrowingInMainRecord"
+  };
+  return keys[warning] || "storageWarningStorageSizeWarning";
+}
+
+function integrityLargeContentIssues(manifest) {
+  const issues = [];
+  const large = manifest.largeContent || {};
+  if ((large.largestExtractCharacters || 0) > 250000) {
+    issues.push(integrityIssue("large-content", "warning", `${t("largeExtractWarning")} ${large.largestExtractCharacters} ${t("extractTextCharacters")}.`));
+  }
+  if ((large.largestAttachmentCharacters || 0) > 1024 * 1024) {
+    issues.push(integrityIssue("large-content", "warning", `${t("largeAttachmentWarning")} ${formatBytes(large.largestAttachmentCharacters)}.`));
+  }
+  return issues;
+}
+
+function scanProjectIntegrity(project, groups) {
+  for (const source of project.sources || []) {
+    if (!source.location && !source.summary && !source.localFile?.name) {
+      groups.sourceFileReferences.push(integrityIssue("source-reference", "warning", t("missingSourceDetails"), project, "Source", source));
+    }
+    if (source.fileVerification && ["missing", "changed", "unverifiable"].includes(source.fileVerification.status)) {
+      const level = source.fileVerification.status === "missing" ? "needs_attention" : "warning";
+      groups.sourceFileReferences.push(integrityIssue("source-file-verification", level, sourceFileVerificationMessage(source.fileVerification), project, "Source", source));
+    }
+    for (const actorId of source.linkedActorIds || []) {
+      if (!getActor(actorId)) {
+        groups.linkedUserIssues.push(integrityIssue("linked-user", "needs_attention", `${t("missingLinkedUser")} ${actorId}`, project, "Source", source));
+      }
+    }
+  }
+
+  for (const relationship of project.relationships || []) {
+    if (relationship.targetProjectId && !getProject(relationship.targetProjectId)) {
+      groups.orphanLinks.push(integrityIssue("relationship", "needs_attention", t("missingRelationshipTarget"), project, "Relationship", relationship));
+    }
+  }
+
+  for (const item of projectIntegrityObjects(project)) {
+    scanSourceLinks(project, item, groups);
+    scanImageLinks(project, item, groups);
+  }
+}
+
+function projectIntegrityObjects(project) {
+  const items = [{ objectType: "Project", object: project }];
+  const addList = (objectType, list = []) => {
+    for (const object of list || []) items.push({ objectType, object });
+  };
+  addList("Decision", project.decisions);
+  addList("Fact", project.facts);
+  addList("Relationship", project.relationships);
+  addList("OpenQuestion", project.openQuestions);
+  addList("NextAction", project.nextActions);
+  addList("DraftProject", project.draftProjects);
+  addList("Change", project.changes);
+  addList("Source", project.sources);
+  for (const source of project.sources || []) addList("Extract", source.extracts);
+  return items;
+}
+
+function scanSourceLinks(project, item, groups) {
+  const links = Array.isArray(item.object.sourceLinks) ? item.object.sourceLinks : [];
+  for (const link of links) {
+    const sourceProject = getProject(link.sourceProjectId || project.id);
+    const source = sourceProject?.sources?.find((candidate) => candidate.id === link.sourceId);
+    if (!source) {
+      groups.orphanLinks.push(integrityIssue("source-link", "needs_attention", t("missingAttachedSource"), project, item.objectType, item.object));
+      continue;
+    }
+    if (link.extractId && !source.extracts?.some((extract) => extract.id === link.extractId)) {
+      groups.orphanLinks.push(integrityIssue("extract-link", "needs_attention", t("missingAttachedExtract"), project, item.objectType, item.object));
+    }
+  }
+}
+
+function scanImageLinks(project, item, groups) {
+  const images = Array.isArray(item.object.imageLinks) ? item.object.imageLinks : [];
+  for (const image of images) {
+    if (!image.dataUrl && !image.localPath && !image.localReference) {
+      groups.orphanLinks.push(integrityIssue("image-reference", "needs_attention", t("missingImageReference"), project, item.objectType, item.object));
+    }
+    const target = getProjectObject(project, image.attachedToType || item.objectType, image.attachedToId || item.object.id);
+    if (!target) {
+      groups.orphanLinks.push(integrityIssue("image-target", "needs_attention", t("missingImageTarget"), project, item.objectType, item.object));
+    }
+  }
+}
+
+function integrityIssue(type, level, message, project = null, objectType = "", object = null) {
+  return {
+    type,
+    level,
+    message,
+    projectId: project?.id || "",
+    projectName: project?.name || "",
+    objectType,
+    objectId: object?.id || "",
+    objectTitle: object && objectType ? objectLabel(objectType, object) : ""
+  };
+}
+
+function renderIntegrityDashboard(integrity, diagnostics) {
+  return `
+    <div class="form integrity-dashboard">
+      <div class="meta-grid settings-diagnostics">
+        <div>
+          <p class="meta-label">${escapeHtml(t("integrityStatus"))}</p>
+          <p><span class="pill integrity-${escapeHtml(integrity.status)}">${escapeHtml(integrityStatusLabel(integrity.status))}</span></p>
+        </div>
+        <div>
+          <p class="meta-label">${escapeHtml(t("checkGenerated"))}</p>
+          <p>${escapeHtml(formatDate(integrity.generatedAt))}</p>
+        </div>
+        <div>
+          <p class="meta-label">${escapeHtml(t("storageLayout"))}</p>
+          <p>${escapeHtml(integrity.manifest.layoutVersion || t("notRecorded"))}</p>
+        </div>
+        <div>
+          <p class="meta-label">${escapeHtml(t("storageSizeLabel"))}</p>
+          <p>${escapeHtml(diagnostics[t("storageSizeLabel")] || t("notRecorded"))}</p>
+        </div>
+      </div>
+      <p class="notice">${escapeHtml(t("sourceFileVerificationNotice"))}</p>
+      <div class="button-row">
+        <button class="btn secondary" data-action="verify-all-source-files">${escapeHtml(t("verifySourceFiles"))}</button>
+      </div>
+      ${renderIntegrityGroup(t("storageHealth"), integrity.groups.storageHealth, t("noStorageWarnings"))}
+      ${renderIntegrityGroup(t("orphanLinks"), integrity.groups.orphanLinks, t("noBrokenLinks"))}
+      ${renderIntegrityGroup(t("sourceFileReferences"), integrity.groups.sourceFileReferences, t("noSourceReferenceIssues"))}
+      ${renderIntegrityGroup(t("linkedUserIssues"), integrity.groups.linkedUserIssues, t("noLinkedUserIssues"))}
+      ${renderIntegrityGroup(t("oversizedContent"), integrity.groups.oversizedContent, t("noOversizedContent"))}
+      ${renderIntegrityGroup(t("recoverySignals"), integrity.groups.recoverySignals, t("noRecoverySignals"))}
+      <details class="diagnostic-details">
+        <summary>${escapeHtml(t("objectCounts"))}</summary>
+        <div class="meta-grid settings-diagnostics">
+          ${Object.entries(diagnostics).map(([label, value]) => `
+            <div>
+              <p class="meta-label">${escapeHtml(label)}</p>
+              <p>${escapeHtml(value)}</p>
+            </div>
+          `).join("")}
+        </div>
+      </details>
+    </div>
+  `;
+}
+
+function integrityStatusLabel(status) {
+  if (status === "needs_attention") return t("needsAttention");
+  if (status === "warning") return t("warning");
+  return t("healthy");
+}
+
+function renderIntegrityGroup(title, issues, emptyMessage) {
+  const visible = (issues || []).filter((issue) => issue.level !== "ok");
+  return `
+    <section class="integrity-group">
+      <h3 class="item-title">${escapeHtml(title)}</h3>
+      ${visible.length ? `<div class="list">${visible.map(renderIntegrityIssue).join("")}</div>` : emptyText(emptyMessage)}
+    </section>
+  `;
+}
+
+function renderIntegrityIssue(issue) {
+  const title = issue.objectTitle || issue.projectName || issue.type;
+  const context = [
+    issue.projectName ? `${t("project")}: ${issue.projectName}` : "",
+    issue.objectType ? `${issue.objectType}${issue.objectId ? ` [id: ${issue.objectId}]` : ""}` : ""
+  ].filter(Boolean).join(" · ");
+  return `
+    <div class="item integrity-issue">
+      <p class="item-title"><span class="pill integrity-${escapeHtml(issue.level)}">${escapeHtml(integrityStatusLabel(issue.level))}</span> ${escapeDisplay(title, DISPLAY_META_LIMIT)}</p>
+      <p class="item-body">${escapeDisplay(issue.message, DISPLAY_META_LIMIT)}</p>
+      ${context ? `<p class="item-meta">${escapeDisplay(context, DISPLAY_META_LIMIT)}</p>` : ""}
+    </div>
+  `;
 }
 
 function countProjectImages(project) {
@@ -4704,9 +5465,11 @@ function armTypeLabel(type = "other") {
   const labels = {
     calendar: t("calendar"),
     meeting: t("meeting"),
+    api: t("api"),
     ai: "AI",
     codex: "Codex",
     notes: t("notes"),
+    chat: t("chat"),
     email: t("email"),
     file: t("file"),
     manual: t("manual"),
@@ -4780,7 +5543,7 @@ function buildSearchResults() {
       addImageSearchResults(results, project, "Fact", fact);
     }
     for (const source of project.sources) {
-      addSearchResult(results, project, "Source", source.id, source.title, source.summary || source.location, [source.title, source.sourceType, source.location, source.summary, tagsToText(source.tags)]);
+      addSearchResult(results, project, "Source", source.id, source.title, source.summary || source.location, [source.title, source.sourceType, source.location, source.summary, tagsToText(source.tags), linkedActorNames(source.linkedActorIds).join(" ")]);
       for (const extract of source.extracts || []) {
         addSearchResult(results, project, "Extract", extract.id, extract.text, extract.summary, [extract.text, extract.summary, extractModeLabel(extract.extractMode), tagsToText(extract.tags), extract.extractedFromFile?.fileName, extract.extractedFromFile?.localPath]);
       }
@@ -4992,6 +5755,16 @@ function renderProject(project) {
       ${visibleChanges.length ? visibleChanges.map(renderHistoryItem).join("") : emptyText(t("noChangesRecordedForFilter"))}
     </section>
   `;
+  const map = renderProjectMap(project, {
+    questions,
+    actions,
+    decisions,
+    facts,
+    sources,
+    relationships,
+    draftProjects,
+    changes
+  });
 
   shell(`
     <section class="view-head">
@@ -5005,6 +5778,7 @@ function renderProject(project) {
         ${project.archived ? `<button class="btn secondary" data-action="unarchive-project" data-project-id="${project.id}">${escapeHtml(t("unarchiveProject"))}</button>` : ""}
         <button class="btn secondary" data-action="delete-project" data-project-id="${project.id}" ${project.deletionStatus ? "disabled" : ""}>${escapeHtml(t("deleteProject"))}</button>
         <button class="btn secondary" data-action="project-overview">${escapeHtml(t("onePageOverview"))}</button>
+        <button class="btn secondary" data-action="context-pack">${escapeHtml(t("contextPack"))}</button>
         <button class="btn secondary" data-action="view-object-history" data-object-type="Project" data-object-id="${project.id}">${escapeHtml(t("viewHistory"))}</button>
         <button class="btn secondary" data-action="add-decision">${escapeHtml(t("addDecision"))}</button>
         <button class="btn secondary" data-action="add-fact">${escapeHtml(t("addFact"))}</button>
@@ -5017,11 +5791,154 @@ function renderProject(project) {
 
     <nav class="tabs" aria-label="Project views">
       <button class="tab ${activeView === "dashboard" ? "active" : ""}" data-action="show-dashboard">${escapeHtml(t("dashboard"))}</button>
+      <button class="tab ${activeView === "map" ? "active" : ""}" data-action="show-map">${escapeHtml(t("projectMap"))}</button>
       <button class="tab ${activeView === "history" ? "active" : ""}" data-action="show-history">${escapeDisplay(historyTitle, DISPLAY_META_LIMIT)}</button>
     </nav>
 
-    ${activeView === "dashboard" ? dashboard : history}
+    ${activeView === "dashboard" ? dashboard : activeView === "map" ? map : history}
   `);
+}
+
+function renderProjectMap(project, collections) {
+  const incoming = findIncomingProjectRelationships(project);
+  const outgoingProjectLinks = collections.relationships.filter((relationship) => relationship.targetProjectId);
+  const sourceCount = collections.sources.length;
+  const extractCount = collections.sources.reduce((total, source) => total + (source.extracts || []).filter((extract) => extract.status !== "archived").length, 0);
+  const imageCount = listFullProjectImages(project).length;
+  return `
+    <section class="project-map">
+      <p class="view-subtitle">${escapeHtml(t("projectMapSubtitle"))}</p>
+      <article class="panel strong map-center">
+        <p class="meta-label">${escapeHtml(t("project"))}</p>
+        <h2>${escapeDisplay(project.name, DISPLAY_META_LIMIT)}</h2>
+        <p class="item-body">${escapeDisplay(project.currentSummary || project.currentStatus || t("noCurrentSummaryRecorded"))}</p>
+        <div class="map-stat-row">
+          ${renderMapStat(t("health"), healthFlagLabel(project.healthFlag))}
+          ${renderMapStat(t("relationships"), collections.relationships.length)}
+          ${renderMapStat(t("sourcesLabel"), sourceCount)}
+          ${renderMapStat(t("extractsLabel"), extractCount)}
+          ${renderMapStat(t("imagesLabel"), imageCount)}
+        </div>
+      </article>
+
+      <section class="map-grid">
+        <article class="panel">
+          <div class="panel-head">
+            <h2 class="panel-title">${escapeHtml(t("linkedProjects"))}</h2>
+          </div>
+          ${renderRelationshipMapSection(t("outgoingLinks"), outgoingProjectLinks, "outgoing", project)}
+          ${renderRelationshipMapSection(t("incomingLinks"), incoming, "incoming", project)}
+        </article>
+
+        <article class="panel">
+          <div class="panel-head">
+            <h2 class="panel-title">${escapeHtml(t("evidenceTrail"))}</h2>
+          </div>
+          ${renderEvidenceMap(collections.sources)}
+        </article>
+
+        <article class="panel">
+          <div class="panel-head">
+            <h2 class="panel-title">${escapeHtml(t("unresolvedWork"))}</h2>
+          </div>
+          ${renderUnresolvedMap(collections.questions, collections.actions)}
+        </article>
+
+        <article class="panel">
+          <div class="panel-head">
+            <h2 class="panel-title">${escapeHtml(t("recentDecisions"))}</h2>
+          </div>
+          ${renderDecisionList(recent(collections.decisions, 5))}
+        </article>
+      </section>
+    </section>
+  `;
+}
+
+function renderMapStat(label, value) {
+  return `
+    <div class="map-stat">
+      <span>${escapeHtml(label)}</span>
+      <strong>${escapeDisplay(value, DISPLAY_META_LIMIT)}</strong>
+    </div>
+  `;
+}
+
+function findIncomingProjectRelationships(project) {
+  const incoming = [];
+  const projectKey = nameKey(project.name);
+  for (const candidate of store.projects || []) {
+    if (candidate.id === project.id || candidate.archived) continue;
+    for (const relationship of candidate.relationships || []) {
+      if (relationship.status === "archived") continue;
+      const targetsProject = relationship.targetProjectId === project.id || (!relationship.targetProjectId && nameKey(relationship.target) === projectKey);
+      if (targetsProject) incoming.push({ ...relationship, sourceProjectId: candidate.id, sourceProjectName: candidate.name });
+    }
+  }
+  return sortNewest(incoming, "createdAt");
+}
+
+function renderRelationshipMapSection(title, relationships, direction, currentProject) {
+  if (!relationships.length) return `<div class="map-subsection"><p class="meta-label">${escapeHtml(title)}</p>${emptyText(t("noLinkedProjects"))}</div>`;
+  return `
+    <div class="map-subsection">
+      <p class="meta-label">${escapeHtml(title)}</p>
+      <div class="list">
+        ${relationships.map((relationship) => renderRelationshipMapItem(relationship, direction, currentProject)).join("")}
+      </div>
+    </div>
+  `;
+}
+
+function renderRelationshipMapItem(relationship, direction, currentProject) {
+  const relatedProjectId = direction === "incoming" ? relationship.sourceProjectId : relationship.targetProjectId;
+  const relatedProjectName = direction === "incoming" ? relationship.sourceProjectName : relationshipTargetLabel(relationship);
+  const canOpen = relatedProjectId && store.projects.some((project) => project.id === relatedProjectId);
+  return `
+    <div class="map-link-item">
+      <div>
+        <p class="item-title">${escapeDisplay(relatedProjectName || t("relatedProjectOrEntity"), DISPLAY_META_LIMIT)}</p>
+        <p class="item-meta">${escapeDisplay(relationship.relationshipType || t("related"), DISPLAY_META_LIMIT)}${relationship.notes ? ` · ${escapeDisplay(relationship.notes, DISPLAY_META_LIMIT)}` : ""}</p>
+      </div>
+      ${canOpen ? `<button class="btn secondary compact" data-action="open-project" data-project-id="${relatedProjectId}">${escapeHtml(t("open"))}</button>` : ""}
+    </div>
+  `;
+}
+
+function renderEvidenceMap(sources) {
+  if (!sources.length) return emptyText(t("noEvidenceRecorded"));
+  return `
+    <div class="list">
+      ${sources.map((source) => {
+        const extracts = (source.extracts || []).filter((extract) => extract.status !== "archived");
+        return `
+          <div class="map-evidence-item">
+            <p class="item-title">${escapeDisplay(source.title, DISPLAY_META_LIMIT)}</p>
+            <p class="item-meta">${escapeDisplay(source.sourceType || t("unknown"), DISPLAY_META_LIMIT)} · ${escapeHtml(formatDate(source.dateAdded))} · ${extracts.length} ${escapeHtml(t("extractsLabel"))}</p>
+            ${source.summary ? `<p class="item-body">${escapeDisplay(source.summary, DISPLAY_META_LIMIT)}</p>` : ""}
+          </div>
+        `;
+      }).join("")}
+    </div>
+  `;
+}
+
+function renderUnresolvedMap(questions, actions) {
+  const items = [
+    ...questions.map((question) => ({ type: t("openQuestion"), title: question.question, meta: question.context || t("noContextRecorded") })),
+    ...actions.map((action) => ({ type: t("nextAction"), title: action.action, meta: `${action.owner || t("unknown")} · ${action.dueDate ? formatDate(action.dueDate, false) : t("noDueDate")}` }))
+  ];
+  if (!items.length) return emptyText(`${t("noOpenQuestions")} ${t("noNextActions")}`);
+  return `
+    <div class="list">
+      ${items.slice(0, 8).map((item) => `
+        <div class="map-evidence-item">
+          <p class="item-title">${escapeDisplay(item.title, DISPLAY_META_LIMIT)}</p>
+          <p class="item-meta">${escapeHtml(item.type)} · ${escapeDisplay(item.meta, DISPLAY_META_LIMIT)}</p>
+        </div>
+      `).join("")}
+    </div>
+  `;
 }
 
 function renderDecisionList(decisions) {
@@ -5062,12 +5979,15 @@ function renderSourceList(sources, project) {
         <p class="item-meta">${escapeHtml(t("type"))}: ${escapeDisplay(source.sourceType || t("unknown"), DISPLAY_META_LIMIT)}</p>
         <p class="item-meta">${escapeHtml(t("dateAdded"))}: ${escapeHtml(formatDate(source.dateAdded))}</p>
         <p class="item-meta">${escapeHtml(t("actor"))}: ${escapeHtml(actorDisplay(source.actorId))}</p>
+        ${renderLinkedUsers(source.linkedActorIds)}
         <p class="item-meta">${escapeHtml(t("project"))}: ${escapeDisplay(project.name, DISPLAY_META_LIMIT)}</p>
         ${source.location ? `<p class="item-meta">${escapeHtml(t("location"))}: ${escapeDisplay(source.location, DISPLAY_META_LIMIT)}</p>` : ""}
         ${source.localFile ? `<p class="item-meta">${escapeHtml(t("localFile"))}: ${escapeDisplay(source.localFile.name, DISPLAY_META_LIMIT)} · ${escapeHtml(formatBytes(source.localFile.size))}${source.localFile.lastModified ? ` · ${escapeHtml(t("modified"))} ${escapeHtml(formatDate(source.localFile.lastModified))}` : ""}</p>` : ""}
+        ${renderSourceFileVerification(source)}
         ${source.summary ? `<p class="item-body">${escapeDisplay(source.summary)}</p>` : ""}
         ${source.tags?.length ? `<p class="item-meta">${escapeHtml(t("tags"))}: ${escapeDisplay(tagsToText(source.tags), DISPLAY_META_LIMIT)}</p>` : ""}
         <div class="item-actions">
+          <button class="btn secondary compact" data-action="verify-source-file" data-source-id="${source.id}">${escapeHtml(t("verifyFile"))}</button>
           <button class="btn secondary compact" data-action="add-extract" data-source-id="${source.id}">${escapeHtml(t("addExtract"))}</button>
           <button class="btn secondary compact" data-action="read-file-extract" data-source-id="${source.id}">${escapeHtml(t("readFileExtract"))}</button>
           <button class="btn secondary compact" data-action="suggest-extract" data-source-id="${source.id}">${escapeHtml(t("suggestExtract"))}</button>
@@ -5077,6 +5997,31 @@ function renderSourceList(sources, project) {
       </div>
     `;
   }).join("")}</div>`;
+}
+
+function renderSourceFileVerification(source) {
+  if (!source.fileVerification) return "";
+  const verification = source.fileVerification;
+  return `
+    <p class="item-meta">
+      ${escapeHtml(t("sourceFileVerification"))}:
+      <span class="pill source-file-${escapeHtml(verification.status || "unverifiable")}">${escapeHtml(sourceFileStatusLabel(verification.status))}</span>
+      ${verification.checkedAt ? ` · ${escapeHtml(t("lastVerified"))} ${escapeHtml(formatDate(verification.checkedAt))}` : ""}
+      ${verification.checkedBy ? ` · ${escapeHtml(actorDisplay(verification.checkedBy))}` : ""}
+    </p>
+    ${verification.reason ? `<p class="item-meta">${escapeDisplay(verification.reason, DISPLAY_META_LIMIT)}</p>` : ""}
+  `;
+}
+
+function sourceFileStatusLabel(status = "unverifiable") {
+  if (status === "verified") return t("fileVerified");
+  if (status === "changed") return t("fileChanged");
+  if (status === "missing") return t("fileMissing");
+  return t("fileUnverifiable");
+}
+
+function sourceFileVerificationMessage(verification = {}) {
+  return `${sourceFileStatusLabel(verification.status)}${verification.reason ? `: ${verification.reason}` : ""}`;
 }
 
 function renderExtractList(extracts) {
@@ -5353,7 +6298,340 @@ function exportProjectJson(projectId = activeProjectId) {
   downloadTextFile(`${safeFileName(project.name)}.project-state.json`, JSON.stringify(payload, null, 2), "application/json");
 }
 
+function openContextPackModal() {
+  const project = getProject();
+  if (!project) return;
+  showModal({
+    title: t("contextPack"),
+    submitText: t("exportContextPack"),
+    body: `
+      <p class="notice">${escapeHtml(t("contextPackNotice"))}</p>
+      <div class="field">
+        <label for="contextScope">${escapeHtml(t("contextScope"))}</label>
+        <select id="contextScope" name="contextScope">
+          <option value="project">${escapeHtml(t("contextScopeProject"))}</option>
+          <option value="related">${escapeHtml(t("contextScopeRelated"))}</option>
+          <option value="sources">${escapeHtml(t("contextScopeSources"))}</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="contextBudget">${escapeHtml(t("contextBudget"))}</label>
+        <select id="contextBudget" name="contextBudget">
+          <option value="quick">${escapeHtml(t("budgetQuick"))}</option>
+          <option value="normal" selected>${escapeHtml(t("budgetNormal"))}</option>
+          <option value="deep">${escapeHtml(t("budgetDeep"))}</option>
+        </select>
+      </div>
+      <div class="check-list">
+        <label class="check-field">
+          <input name="includeSources" type="checkbox" checked>
+          <span>${escapeHtml(t("includeSources"))}</span>
+        </label>
+        <label class="check-field">
+          <input name="includeOpenWork" type="checkbox" checked>
+          <span>${escapeHtml(t("includeOpenWork"))}</span>
+        </label>
+        <label class="check-field">
+          <input name="includeHistory" type="checkbox" checked>
+          <span>${escapeHtml(t("includeHistory"))}</span>
+        </label>
+      </div>
+    `,
+    onSubmit(data, form) {
+      const pack = buildProjectContextPack(project, {
+        scope: data.contextScope,
+        budget: data.contextBudget,
+        includeSources: data.includeSources === "on",
+        includeOpenWork: data.includeOpenWork === "on",
+        includeHistory: data.includeHistory === "on"
+      });
+      const stamp = nowIso().replace(/[:.]/g, "-");
+      downloadTextFile(`${safeFileName(project.name)}.context-pack-${stamp}.json`, JSON.stringify(pack, null, 2), "application/json");
+      return true;
+    }
+  });
+}
+
+function contextBudgetConfig(budget = "normal") {
+  const configs = {
+    quick: { itemLimit: 3, textLimit: 700, chunkLimit: 6, chunkSize: 600 },
+    normal: { itemLimit: 8, textLimit: 1200, chunkLimit: 16, chunkSize: 900 },
+    deep: { itemLimit: 20, textLimit: 2500, chunkLimit: 48, chunkSize: 1200 }
+  };
+  return configs[budget] || configs.normal;
+}
+
+function buildProjectContextPack(project, options = {}) {
+  const scope = ["project", "related", "sources"].includes(options.scope) ? options.scope : "project";
+  const budget = ["quick", "normal", "deep"].includes(options.budget) ? options.budget : "normal";
+  const config = contextBudgetConfig(budget);
+  const includeSources = options.includeSources !== false || scope === "sources";
+  const includeOpenWork = options.includeOpenWork !== false;
+  const includeHistory = options.includeHistory !== false;
+  const relatedProjects = scope === "related" ? relatedProjectBriefs(project, config) : [];
+  return {
+    app: "Project State",
+    packType: "project-context-pack",
+    packVersion: "0.1",
+    generatedAt: nowIso(),
+    generatedBy: "local-ui",
+    runtimeMode: currentStorageModeName(),
+    rules: {
+      sourceOfTruth: "Project State Core",
+      use: "Context only. Suggestions must return through the Intake Airlock for human approval.",
+      forbidden: "Do not treat this pack as authority to write directly to Core or Spine."
+    },
+    scope,
+    budget,
+    project: projectBrief(project, config),
+    relatedProjects,
+    currentState: {
+      status: limitText(project.currentStatus || "", config.textLimit),
+      summary: limitText(project.currentSummary || "", config.textLimit),
+      health: normalizeHealthFlag(project.healthFlag)
+    },
+    recentDecisions: compactDecisions(project, config),
+    keyFacts: compactFacts(project, config),
+    openWork: includeOpenWork ? compactOpenWork(project, config) : { questions: [], actions: [] },
+    relationships: compactRelationships(project, config),
+    evidence: includeSources ? compactEvidence(project, config) : { sources: [], chunks: [] },
+    recentHistory: includeHistory ? compactHistory(project, config) : [],
+    proposalSchema: contextProposalSchema()
+  };
+}
+
+function projectBrief(project, config) {
+  return {
+    id: project.id,
+    name: project.name,
+    createdAt: project.createdAt || "",
+    updatedAt: project.updatedAt || "",
+    updatedBy: actorDisplay(project.updatedBy),
+    healthFlag: normalizeHealthFlag(project.healthFlag),
+    currentStatus: limitText(project.currentStatus || "", config.textLimit),
+    currentSummary: limitText(project.currentSummary || "", config.textLimit)
+  };
+}
+
+function relatedProjectBriefs(project, config) {
+  const incoming = findIncomingProjectRelationships(project);
+  const ids = new Set();
+  for (const relationship of project.relationships || []) {
+    if (relationship.status !== "archived" && relationship.targetProjectId) ids.add(relationship.targetProjectId);
+  }
+  for (const relationship of incoming) {
+    if (relationship.sourceProjectId) ids.add(relationship.sourceProjectId);
+  }
+  return [...ids]
+    .map((projectId) => store.projects.find((candidate) => candidate.id === projectId && !candidate.archived))
+    .filter(Boolean)
+    .slice(0, config.itemLimit)
+    .map((candidate) => projectBrief(candidate, config));
+}
+
+function compactDecisions(project, config) {
+  return recent(sortNewest((project.decisions || []).filter((decision) => !decision.archived), "date"), config.itemLimit)
+    .map((decision) => ({
+      id: decision.id,
+      text: limitText(decision.text || "", config.textLimit),
+      reason: limitText(decision.reason || "", config.textLimit),
+      date: decision.date || "",
+      actor: actorDisplay(decision.actorId),
+      confidence: decision.confidence || ""
+    }));
+}
+
+function compactFacts(project, config) {
+  return recent(sortNewest((project.facts || []).filter((fact) => fact.status !== "archived")), config.itemLimit)
+    .map((fact) => ({
+      id: fact.id,
+      statement: limitText(fact.statement || "", config.textLimit),
+      source: limitText(fact.source || "", config.textLimit),
+      confidence: fact.confidence || "",
+      createdAt: fact.createdAt || "",
+      actor: actorDisplay(fact.actorId)
+    }));
+}
+
+function compactOpenWork(project, config) {
+  return {
+    questions: recent(sortNewest((project.openQuestions || []).filter((question) => question.status === "open")), config.itemLimit)
+      .map((question) => ({
+        id: question.id,
+        question: limitText(question.question || "", config.textLimit),
+        context: limitText(question.context || "", config.textLimit),
+        createdAt: question.createdAt || "",
+        actor: actorDisplay(question.actorId)
+      })),
+    actions: recent(sortNewest((project.nextActions || []).filter((action) => getActionStatus(action) === "open")), config.itemLimit)
+      .map((action) => ({
+        id: action.id,
+        action: limitText(action.action || "", config.textLimit),
+        owner: action.owner || "",
+        status: getActionStatus(action),
+        createdAt: action.createdAt || "",
+        dueDate: action.dueDate || "",
+        actor: actorDisplay(action.actorId)
+      }))
+  };
+}
+
+function compactRelationships(project, config) {
+  const incoming = findIncomingProjectRelationships(project);
+  return {
+    outgoing: recent(sortNewest((project.relationships || []).filter((relationship) => relationship.status !== "archived"), "createdAt"), config.itemLimit)
+      .map((relationship) => compactRelationship(project, relationship, "outgoing", config)),
+    incoming: recent(incoming, config.itemLimit)
+      .map((relationship) => compactRelationship(project, relationship, "incoming", config))
+  };
+}
+
+function compactRelationship(project, relationship, direction, config) {
+  return {
+    id: relationship.id,
+    direction,
+    sourceProjectId: direction === "incoming" ? relationship.sourceProjectId : project.id,
+    sourceProjectName: direction === "incoming" ? relationship.sourceProjectName : project.name,
+    targetProjectId: direction === "incoming" ? project.id : relationship.targetProjectId || "",
+    target: limitText(direction === "incoming" ? project.name : relationshipTargetLabel(relationship), config.textLimit),
+    relationshipType: relationship.relationshipType || "",
+    notes: limitText(relationship.notes || "", config.textLimit),
+    createdAt: relationship.createdAt || ""
+  };
+}
+
+function compactEvidence(project, config) {
+  const sources = [];
+  const chunks = [];
+  for (const source of recent(sortNewest((project.sources || []).filter((item) => item.status !== "archived")), config.itemLimit)) {
+    const sourceExtracts = (source.extracts || []).filter((extract) => extract.status !== "archived");
+    sources.push({
+      id: source.id,
+      title: source.title || "",
+      type: source.sourceType || "",
+      location: source.location || "",
+      dateAdded: source.dateAdded || "",
+      actor: actorDisplay(source.actorId),
+      linkedUsers: linkedActorNames(source.linkedActorIds),
+      summary: limitText(source.summary || "", config.textLimit),
+      tags: source.tags || [],
+      extractIds: sourceExtracts.map((extract) => extract.id)
+    });
+    for (const extract of sourceExtracts) {
+      if (chunks.length >= config.chunkLimit) break;
+      chunks.push(...chunkExtractForContext(source, extract, config).slice(0, config.chunkLimit - chunks.length));
+    }
+    if (chunks.length >= config.chunkLimit) break;
+  }
+  return { sources, chunks };
+}
+
+function chunkExtractForContext(source, extract, config) {
+  const text = String(extract.text || "").trim();
+  if (!text) return [];
+  const chunks = [];
+  for (let index = 0; index < text.length && chunks.length < config.chunkLimit; index += config.chunkSize) {
+    const chunkText = text.slice(index, index + config.chunkSize);
+    chunks.push({
+      id: `${extract.id}:chunk_${chunks.length + 1}`,
+      sourceId: source.id,
+      sourceTitle: source.title || "",
+      extractId: extract.id,
+      start: index,
+      end: Math.min(index + config.chunkSize, text.length),
+      text: chunkText,
+      summary: limitText(extract.summary || "", DISPLAY_META_LIMIT),
+      tags: extract.tags || []
+    });
+  }
+  return chunks;
+}
+
+function compactHistory(project, config) {
+  return recent(sortNewest(project.changes || [], "timestamp"), config.itemLimit)
+    .map((change) => ({
+      id: change.id,
+      timestamp: change.timestamp || "",
+      actor: actorDisplay(change.actorId, change.actorName),
+      reason: limitText(change.reason || "", config.textLimit),
+      summary: limitText(change.summary || "", config.textLimit),
+      objectType: change.details?.objectType || "",
+      objectId: change.details?.objectId || "",
+      objectTitle: limitText(change.details?.objectTitle || change.details?.objectText || "", DISPLAY_META_LIMIT),
+      origin: change.howChanged || change.details?.origin || ""
+    }));
+}
+
+function contextProposalSchema() {
+  return {
+    proposals: [
+      {
+        type: "Fact | Decision | OpenQuestion | NextAction | Relationship | Source | ProjectStatus",
+        title: "Readable proposal title",
+        text: "Proposed content",
+        reason: "Why this should be reviewed",
+        evidence: [{ sourceId: "source id", extractId: "extract id", chunkId: "optional chunk id" }],
+        confidence: "low | medium | high",
+        targetProjectId: "stable project id",
+        notes: "Anything the human reviewer should know"
+      }
+    ]
+  };
+}
+
 function exportStorageBackup() {
+  if (ProjectStateStorage.usesExternalStore()) {
+    openDesktopBackupPackageModal();
+    return;
+  }
+  exportCurrentRawData();
+}
+
+function openDesktopBackupPackageModal() {
+  showModal({
+    title: t("backup"),
+    submitText: t("exportFullBackup"),
+    body: `
+      <p class="notice">${escapeHtml(t("desktopBackupPackageNotice"))}</p>
+      ${auditFields({ actorLabel: t("exportedBy"), reasonLabel: t("backupReason") })}
+    `,
+    async onSubmit(data, form) {
+      const actorName = String(data.actorName || "").trim();
+      const reason = String(data.reason || "").trim();
+      const actorField = form.querySelector('[name="actorName"]');
+      const reasonField = form.querySelector('[name="reason"]');
+      if (!actorName) {
+        actorField?.setCustomValidity(t("validationActorRequired"));
+        actorField?.reportValidity();
+        actorField?.setCustomValidity("");
+        return false;
+      }
+      if (!reason) {
+        reasonField?.setCustomValidity(t("validationReasonRequired"));
+        reasonField?.reportValidity();
+        reasonField?.setCustomValidity("");
+        return false;
+      }
+      const actor = store.actors.find((item) => nameKey(item.name) === nameKey(actorName));
+      const result = await platformAdapter.storage.createBackupPackage({
+        actorId: actor?.id || "",
+        actorName,
+        timestamp: nowIso(),
+        reason
+      });
+      if (!result) {
+        reasonField?.setCustomValidity(t("backupPackageUnavailable"));
+        reasonField?.reportValidity();
+        reasonField?.setCustomValidity("");
+        return false;
+      }
+      setSaveStatus("saved", t("backupPackageCreated"));
+      return true;
+    }
+  });
+}
+
+function exportStorageBackupJsonForLegacyDev() {
   const timestamp = nowIso();
   store.settings.lastBackupExportedAt = timestamp;
   store.settings.lastBackupExportedBy = store.settings.primaryActorId || "";
@@ -5898,7 +7176,7 @@ function openApproveIntakeModal(intakeId) {
       ${renderIntakeApprovalPreview(intake)}
       ${auditFields()}
     `,
-    onSubmit(data) {
+    onSubmit(data, form) {
       const actor = getOrCreateActor(data.actorName, "Human");
       const result = approveIntakeItem(intake.id, actor, data.reason, (item, approval) => applyApprovedIntakeToCore(item, actor, data.reason, approval));
       return Boolean(result);
@@ -6226,7 +7504,7 @@ function openDeleteProjectModal(projectId) {
       ${confirmationField("confirmDelete", "I understand this will archive the project and request deletion approval.")}
       ${auditFields()}
     `,
-    onSubmit(data) {
+    onSubmit(data, form) {
       const actor = getOrCreateActor(data.actorName, "Human");
       const previous = {
         archived: Boolean(project.archived),
@@ -6573,6 +7851,11 @@ function openEditSourceModal(project, source) {
         <input id="localFile" name="localFile" type="file" data-local-file-picker data-location-target="location" data-title-target="title" data-type-target="sourceType">
       </div>
       <div class="field">
+        <label>${escapeHtml(t("linkedProjectStateUsers"))}</label>
+        <p class="notice">${escapeHtml(t("communicationRecordsNotice"))}</p>
+        ${linkedActorCheckboxes(source.linkedActorIds)}
+      </div>
+      <div class="field">
         <label for="summary">${escapeHtml(t("summary"))}</label>
         <textarea id="summary" name="summary">${escapeHtml(source.summary || "")}</textarea>
       </div>
@@ -6582,7 +7865,7 @@ function openEditSourceModal(project, source) {
       </div>
       ${auditFields()}
     `,
-    onSubmit(data) {
+    onSubmit(data, form) {
       const actor = getOrCreateActor(data.actorName, "Human");
       const previous = {
         title: source.title,
@@ -6591,16 +7874,20 @@ function openEditSourceModal(project, source) {
         location: source.location,
         localFile: source.localFile ? `${source.localFile.name} (${formatBytes(source.localFile.size)})` : "",
         summary: source.summary,
-        tags: tagsToText(source.tags)
+        tags: tagsToText(source.tags),
+        linkedUsers: linkedActorNames(source.linkedActorIds).join(", ")
       };
-      const localFile = fileMetadata(data.localFile);
+      const localFile = sourceLocalFileMetadata(data.localFile);
+      const linkedActorIds = selectedLinkedActorIds(form);
       source.title = data.title.trim();
       source.sourceType = data.sourceType.trim();
       source.dateAdded = data.dateAdded || source.dateAdded;
       source.location = data.location.trim() || localFile?.name || "";
       source.localFile = localFile || source.localFile || null;
+      if (localFile) source.fileVerification = null;
       source.summary = data.summary.trim();
       source.tags = tagsFromText(data.tags);
+      source.linkedActorIds = linkedActorIds;
       source.editedAt = nowIso();
       recordChange(project, actor, data.reason, "Source edited", {
         objectType: "Source",
@@ -6620,7 +7907,9 @@ function openEditSourceModal(project, source) {
           previousSummary: previous.summary,
           newSummary: source.summary,
           previousTags: previous.tags,
-          newTags: tagsToText(source.tags)
+          newTags: tagsToText(source.tags),
+          previousLinkedUsers: previous.linkedUsers,
+          newLinkedUsers: linkedActorNames(source.linkedActorIds).join(", ")
         }
       });
       saveStore();
@@ -7395,6 +8684,141 @@ function openImageViewer(objectType, objectId, imageId) {
   });
 }
 
+function openVerifySourceFileModal(sourceId = "", options = {}) {
+  const sourceRecord = sourceId ? findSourceRecord(sourceId) : null;
+  const title = sourceRecord ? `${t("verifyFile")}: ${sourceRecord.source.title}` : t("verifySourceFiles");
+  showModal({
+    title,
+    submitText: t("verifyFile"),
+    body: `
+      <p class="notice">${escapeHtml(t("sourceFileVerificationNotice"))}</p>
+      ${auditFields({ reasonLabel: t("verificationReasonPlaceholder") })}
+    `,
+    async onSubmit(data) {
+      const actor = getOrCreateActor(data.actorName, "Human");
+      const reason = String(data.reason || "").trim();
+      const changedCount = sourceRecord
+        ? await verifySourceFileRecord(sourceRecord.project, sourceRecord.source, actor, reason)
+        : await verifyAllSourceFiles(actor, reason);
+      if (changedCount) saveStore();
+      setSaveStatus("saved", t("sourceFileVerificationComplete"));
+      return true;
+    }
+  });
+}
+
+async function verifyAllSourceFiles(actor, reason) {
+  const byProject = new Map();
+  let changedCount = 0;
+  for (const project of store.projects || []) {
+    for (const source of project.sources || []) {
+      const result = await verifySourceFile(source, actor);
+      source.fileVerification = result;
+      changedCount += 1;
+      if (!byProject.has(project.id)) byProject.set(project.id, { project, results: [] });
+      byProject.get(project.id).results.push(result);
+    }
+  }
+
+  for (const { project, results } of byProject.values()) {
+    const counts = sourceVerificationCounts(results);
+    recordChange(project, actor, reason, "Source files verified", {
+      objectType: "Project",
+      objectId: project.id,
+      objectText: project.name,
+      fields: counts
+    });
+  }
+  return changedCount;
+}
+
+async function verifySourceFileRecord(project, source, actor, reason) {
+  const result = await verifySourceFile(source, actor);
+  const previous = source.fileVerification ? sourceFileStatusLabel(source.fileVerification.status) : t("notRecorded");
+  source.fileVerification = result;
+  recordChange(project, actor, reason, "Source file verified", {
+    objectType: "Source",
+    objectId: source.id,
+    objectText: source.title,
+    fields: {
+      previousStatus: previous,
+      newStatus: sourceFileStatusLabel(result.status),
+      path: result.path || "",
+      exists: result.exists ? "yes" : "no",
+      detail: result.reason || ""
+    }
+  });
+  return 1;
+}
+
+async function verifySourceFile(source, actor) {
+  const reference = sourceFileReference(source);
+  const checkedAt = nowIso();
+  let result = null;
+  try {
+    result = await platformAdapter.files.verifyLocalFile(reference);
+  } catch (error) {
+    result = {
+      status: "unverifiable",
+      exists: false,
+      checkedAt,
+      reason: error?.message || "Source file could not be verified."
+    };
+  }
+  return normalizeSourceFileVerification(result, source, actor, checkedAt);
+}
+
+function normalizeSourceFileVerification(result = {}, source, actor, fallbackCheckedAt = nowIso()) {
+  return {
+    status: ["verified", "changed", "missing", "unverifiable"].includes(result.status) ? result.status : "unverifiable",
+    exists: Boolean(result.exists),
+    path: result.path || sourceFileReference(source).localPath || "",
+    checkedAt: result.checkedAt || fallbackCheckedAt,
+    checkedBy: actor.id,
+    reason: result.reason || "",
+    actual: result.actual || null,
+    expected: result.expected || sourceFileReference(source).expected
+  };
+}
+
+function sourceVerificationCounts(results = []) {
+  return {
+    totalSources: results.length,
+    verified: results.filter((result) => result.status === "verified").length,
+    changed: results.filter((result) => result.status === "changed").length,
+    missing: results.filter((result) => result.status === "missing").length,
+    unverifiable: results.filter((result) => result.status === "unverifiable").length
+  };
+}
+
+function sourceFileReference(source = {}) {
+  const localFile = source.localFile || {};
+  const localPath = localFile.localPath || source.localPath || (isAbsoluteLocalPath(source.location) ? source.location : "");
+  return {
+    localPath,
+    path: localPath,
+    expected: {
+      name: localFile.name || source.title || "",
+      type: localFile.type || source.sourceType || "",
+      size: Number(localFile.size || 0),
+      lastModified: localFile.lastModified || ""
+    }
+  };
+}
+
+function isAbsoluteLocalPath(value = "") {
+  const text = String(value || "").trim();
+  return /^[a-zA-Z]:[\\/]/.test(text) || /^\\\\/.test(text) || /^\//.test(text);
+}
+
+function findSourceRecord(sourceId = "") {
+  for (const project of store.projects || []) {
+    const source = (project.sources || []).find((item) => item.id === sourceId);
+    if (source) return { project, source };
+  }
+  return null;
+}
+
 function openArchiveObjectModal(objectType, objectId) {
   const project = getProject();
   const object = getProjectObject(project, objectType, objectId);
@@ -7556,6 +8980,11 @@ function openSourceModal() {
         <input id="localFile" name="localFile" type="file" data-local-file-picker data-location-target="location" data-title-target="title" data-type-target="sourceType">
       </div>
       <div class="field">
+        <label>${escapeHtml(t("linkedProjectStateUsers"))}</label>
+        <p class="notice">${escapeHtml(t("communicationRecordsNotice"))}</p>
+        ${linkedActorCheckboxes()}
+      </div>
+      <div class="field">
         <label for="summary">${escapeHtml(t("summary"))}</label>
         <textarea id="summary" name="summary"></textarea>
       </div>
@@ -7565,9 +8994,10 @@ function openSourceModal() {
       </div>
       ${auditFields()}
     `,
-    onSubmit(data) {
+    onSubmit(data, form) {
       const actor = getOrCreateActor(data.actorName, "Human");
-      const localFile = fileMetadata(data.localFile);
+      const localFile = sourceLocalFileMetadata(data.localFile);
+      const linkedActorIds = selectedLinkedActorIds(form);
       const source = {
         id: uid("source"),
         projectId: project.id,
@@ -7579,6 +9009,7 @@ function openSourceModal() {
         localFile,
         summary: data.summary.trim(),
         tags: tagsFromText(data.tags),
+        linkedActorIds,
         extracts: [],
         status: "active"
       };
@@ -7596,7 +9027,8 @@ function openSourceModal() {
           location: source.location,
           localFile: localFile ? `${localFile.name} (${formatBytes(localFile.size)})` : "",
           summary: source.summary,
-          tags: tagsToText(source.tags)
+          tags: tagsToText(source.tags),
+          linkedUsers: linkedActorNames(source.linkedActorIds).join(", ")
         }
       });
       saveStore();
@@ -8003,6 +9435,8 @@ function saveSettingsActor(data, form) {
   actor.role = normalizeActorRole(data.role, actor.type);
   actor.status = nextStatus;
   actor.type = actor.role === "ai_tool" ? "AI / Tool" : "Human";
+  actor.emailAddress = String(data.emailAddress || "").trim();
+  actor.chatHandle = String(data.chatHandle || "").trim();
   actor.updatedAt = nowIso();
   actor.updatedReason = String(data.reason || "").trim();
   stampSettingsUpdate(store.settings.primaryActorId, data.reason);
@@ -8034,6 +9468,8 @@ function addSettingsActor(data, form) {
     type: role === "ai_tool" ? "AI / Tool" : "Human",
     role,
     status: "active",
+    emailAddress: String(data.emailAddress || "").trim(),
+    chatHandle: String(data.chatHandle || "").trim(),
     createdAt: nowIso(),
     createdReason: String(data.reason || "").trim()
   });
@@ -8056,6 +9492,12 @@ app.addEventListener("click", (event) => {
     return;
   }
   if (loadFailure) return;
+
+  if (browserDevRuntime() && !browserDevActionAllowed(action)) {
+    setSaveStatus("unsaved", t("browserDevNoSilentStorage"));
+    console.warn("Project State ignored a browser/dev action because the desktop bridge is missing.", action);
+    return;
+  }
 
   if (action === "create-project") openCreateProjectModal();
   if (action === "create-intake") openCreateIntakeModal();
@@ -8088,6 +9530,7 @@ app.addEventListener("click", (event) => {
   if (action === "archive-intake") openArchiveIntakeModal(button.dataset.intakeId);
   if (action === "export-project") exportProjectJson();
   if (action === "project-overview") openProjectOverviewModal();
+  if (action === "context-pack") openContextPackModal();
   if (action === "open-project") {
     activeProjectId = button.dataset.projectId;
     activeRootView = "projects";
@@ -8106,6 +9549,10 @@ app.addEventListener("click", (event) => {
   }
   if (action === "show-dashboard") {
     activeView = "dashboard";
+    render();
+  }
+  if (action === "show-map") {
+    activeView = "map";
     render();
   }
   if (action === "show-history" || action === "view-history") {
@@ -8178,6 +9625,8 @@ app.addEventListener("click", (event) => {
   if (action === "add-decision") openDecisionModal();
   if (action === "add-fact") openFactModal();
   if (action === "add-source") openSourceModal();
+  if (action === "verify-source-file") openVerifySourceFileModal(button.dataset.sourceId);
+  if (action === "verify-all-source-files") openVerifySourceFileModal();
   if (action === "add-extract") openExtractModal(button.dataset.sourceId);
   if (action === "read-file-extract") openReadFileExtractModal(button.dataset.sourceId);
   if (action === "suggest-extract") openAISuggestExtractModal(button.dataset.sourceId);

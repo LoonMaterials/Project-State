@@ -106,6 +106,19 @@ async function main() {
   await fsp.writeFile(textFile, "Desktop bridge text extraction sample.", "utf8");
   const extracted = await bridge.files.extractText(textFile);
   assert(extracted.includes("Desktop bridge text extraction sample"), "Desktop file extractText failed.");
+  const sourceVerification = await bridge.files.verifyLocalFile({
+    localPath: textFile,
+    expected: {
+      name: "sample.txt",
+      size: Buffer.byteLength("Desktop bridge text extraction sample.", "utf8")
+    }
+  });
+  assert(sourceVerification.status === "verified", "Desktop source file verification did not verify an existing file.", sourceVerification);
+  const missingSourceVerification = await bridge.files.verifyLocalFile({
+    localPath: path.join(storageRoot, "temp", "missing.txt"),
+    expected: { name: "missing.txt", size: 4 }
+  });
+  assert(missingSourceVerification.status === "missing", "Desktop source file verification did not report a missing file.", missingSourceVerification);
 
   await bridge.storage.preserveRecoveryRecord({
     stage: "desktop-bridge-test",
