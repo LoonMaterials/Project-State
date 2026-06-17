@@ -16,6 +16,62 @@ const PROJECT_HEALTH_FLAGS = ["active", "blocked", "at_risk", "complete", "on_ho
 const ARM_TYPES = ["calendar", "meeting", "api", "ai", "codex", "notes", "chat", "email", "file", "manual", "other"];
 const INTAKE_STATUSES = ["pending", "approved", "rejected", "archived"];
 const INTAKE_QUEUE_STATES = ["new", "needs_review", "ready", "blocked"];
+const COLLAB_REVIEW_STATES = ["draft", "needs_review", "revision_requested", "ready_for_approval", "approved", "rejected", "archived"];
+const ASSIGNMENT_ROLES = ["owner", "reviewer", "approver", "watcher"];
+const AI_WORK_ORDER_STATUSES = ["submitted", "in_progress", "completed", "archived"];
+const CONTEXT_PACK_PRESET_KEYS = ["current_state", "recent_decisions", "handoff", "source_research", "codex_implementation", "custom"];
+const CONTEXT_PACK_PRESETS = {
+  current_state: {
+    scope: "project",
+    budget: "quick",
+    includeSources: false,
+    includeOpenWork: false,
+    includeHistory: false,
+    includeDecisions: false,
+    includeFacts: false,
+    includeRelationships: false
+  },
+  recent_decisions: {
+    scope: "project",
+    budget: "quick",
+    includeSources: false,
+    includeOpenWork: false,
+    includeHistory: false,
+    includeDecisions: true,
+    includeFacts: false,
+    includeRelationships: false
+  },
+  handoff: {
+    scope: "related",
+    budget: "normal",
+    includeSources: true,
+    includeOpenWork: true,
+    includeHistory: true,
+    includeDecisions: true,
+    includeFacts: true,
+    includeRelationships: true
+  },
+  source_research: {
+    scope: "sources",
+    budget: "deep",
+    includeSources: true,
+    includeOpenWork: true,
+    includeHistory: false,
+    includeDecisions: true,
+    includeFacts: true,
+    includeRelationships: true
+  },
+  codex_implementation: {
+    scope: "related",
+    budget: "deep",
+    includeSources: true,
+    includeOpenWork: true,
+    includeHistory: true,
+    includeDecisions: true,
+    includeFacts: true,
+    includeRelationships: true
+  }
+};
 const APPROVED_CORE_ORIGINS = ["human_ui", "migration"];
 const ACTOR_ROLES = ["owner", "admin", "project_lead", "approver", "editor", "contributor", "reviewer", "auditor", "viewer", "ai_tool"];
 const ACTOR_STATUSES = ["active", "archived"];
@@ -186,6 +242,65 @@ const LANGUAGES = {
     goToIntake: "Go to Intake",
     goToSettings: "Go to Settings",
     openItem: "Open Item",
+    assignment: "Assignment",
+    assignments: "Assignments",
+    assignObject: "Assign",
+    assignedTo: "Assigned To",
+    assignmentRole: "Assignment Role",
+    assignmentOwner: "Owner",
+    assignmentReviewer: "Reviewer",
+    assignmentApprover: "Approver",
+    assignmentWatcher: "Watcher",
+    comments: "Comments",
+    reviewThread: "Review Thread",
+    addComment: "Add Comment",
+    commentText: "Comment",
+    commentsNotPrivateNotice: "Comments are part of the project record and are not private.",
+    reviewState: "Review State",
+    projectRoles: "Project Roles",
+    manageProjectRoles: "Manage Project Roles",
+    projectRole: "Project Role",
+    proposalDiff: "Proposal Diff",
+    currentValue: "Current Value",
+    proposedValue: "Proposed Value",
+    conflictWarning: "Conflict Warning",
+    changedSinceOpened: "This record may have changed since it was opened. Review before approving.",
+    notificationQueue: "Notification Queue",
+    assignedToYou: "Assigned to you",
+    aiWorkOrders: "AI Work Orders",
+    aiWorkOrder: "AI Work Order",
+    aiWorkOrdersSubtitle: "Human-created work requests for future AI arms. Outputs must return through the airlock.",
+    createAiWorkOrder: "Create AI Work Order",
+    aiWorkOrderNotice: "This creates a work order only. It does not call AI and does not change Project State.",
+    workOrderTask: "Task",
+    outputType: "Output Type",
+    canCreateIntake: "May create intake proposals",
+    noAiWorkOrders: "No AI work orders recorded.",
+    inProgress: "In Progress",
+    revisionRequested: "Revision Requested",
+    projectConfidence: "Project Confidence",
+    projectCompleteness: "Project Completeness",
+    airlockCompleteness: "Airlock Completeness",
+    airlockIncompleteNotice: "This item is incomplete and cannot pass the airlock.",
+    requiredAirlockChecks: "Required Airlock Checks",
+    present: "Present",
+    missing: "Missing",
+    hasCurrentStatus: "Current status",
+    hasCurrentSummary: "Current summary",
+    hasNextAction: "Next action",
+    hasRecentDecision: "Recent decision",
+    hasSourceReference: "Source reference",
+    sourceFilesClear: "Source files clear",
+    healthNotBlocked: "Not blocked or at risk",
+    targetProjectSelected: "Target project selected",
+    proposedTitleRecorded: "Proposal title recorded",
+    proposedTextRecorded: "Proposal text recorded",
+    proposedTypeSelected: "Proposal type selected",
+    queueMarkedReady: "Queue marked ready",
+    draftNameRecorded: "Draft name recorded",
+    draftTextRecorded: "Draft text recorded",
+    draftReviewComplete: "Draft review complete",
+    draftSourceLinked: "Source and extract linked",
     archivedProjects: "Archived Projects",
     intake: "Intake",
     backup: "Backup",
@@ -439,8 +554,34 @@ const LANGUAGES = {
     relationships: "Relationships",
     projectMap: "Project Map",
     projectMapSubtitle: "Relationships, evidence, and unresolved work around this project.",
+    handoffMode: "Handoff Mode",
+    handoffSubtitle: "A read-only briefing for a human or AI helper joining this project.",
+    exportHandoff: "Export Handoff",
+    whatThisProjectIs: "What This Project Is",
+    whyItMatters: "Why It Matters",
+    whatChangedRecently: "What Changed Recently",
+    waitingOnApproval: "Waiting On Approval",
+    blockersAndRisks: "Blockers And Risks",
+    whoOwnsWhat: "Who Owns What",
+    trustedSources: "Trusted Sources",
+    aiAllowedHelp: "AI Allowed Help",
+    doNotTouch: "Do Not Touch",
+    handoffNoApprovalItems: "No approval items are waiting.",
+    handoffNoBlockers: "No blockers or risks are recorded.",
+    handoffNoAssignments: "No assignments or project roles are recorded.",
+    handoffNoTrustedSources: "No verified or active sources are recorded.",
+    handoffAiBoundary: "AI may summarize, search, draft, and suggest. AI may not approve, write to Core, write to Spine, delete history, or become source of truth.",
+    handoffDoNotTouchDefault: "Do not bypass the Intake Airlock, overwrite history, approve incomplete items, or treat comments/source extracts as Core truth.",
     contextPack: "Context Pack",
     contextPackNotice: "Export a bounded local context packet for a future API or AI arm. This does not change Project State.",
+    contextPackPreset: "Context Pack Preset",
+    contextPresetCurrentState: "Current state only",
+    contextPresetRecentDecisions: "Current state + recent decisions",
+    contextPresetHandoff: "Full project handoff",
+    contextPresetSourceResearch: "Source-heavy research context",
+    contextPresetCodexImplementation: "Codex implementation context",
+    contextPresetCustom: "Custom",
+    contextPresetNotice: "Presets choose scope, budget, and included sections. Custom uses the controls below.",
     contextScope: "Context Scope",
     contextScopeProject: "This project only",
     contextScopeRelated: "This project and related projects",
@@ -452,6 +593,9 @@ const LANGUAGES = {
     includeSources: "Include sources and extract chunks",
     includeHistory: "Include recent history",
     includeOpenWork: "Include open questions and next actions",
+    includeDecisions: "Include decisions",
+    includeFacts: "Include facts",
+    includeRelationships: "Include relationships",
     exportContextPack: "Export Context Pack",
     linkedProjects: "Linked Projects",
     incomingLinks: "Incoming Links",
@@ -721,6 +865,65 @@ const LANGUAGES = {
     goToIntake: "Aller à l’entrée",
     goToSettings: "Aller aux paramètres",
     openItem: "Ouvrir l’élément",
+    assignment: "Affectation",
+    assignments: "Affectations",
+    assignObject: "Affecter",
+    assignedTo: "Affecté à",
+    assignmentRole: "Rôle d’affectation",
+    assignmentOwner: "Responsable",
+    assignmentReviewer: "Réviseur",
+    assignmentApprover: "Approbateur",
+    assignmentWatcher: "Observateur",
+    comments: "Commentaires",
+    reviewThread: "Fil de révision",
+    addComment: "Ajouter un commentaire",
+    commentText: "Commentaire",
+    commentsNotPrivateNotice: "Les commentaires font partie du dossier du projet et ne sont pas privés.",
+    reviewState: "État de révision",
+    projectRoles: "Rôles du projet",
+    manageProjectRoles: "Gérer les rôles du projet",
+    projectRole: "Rôle du projet",
+    proposalDiff: "Diff de proposition",
+    currentValue: "Valeur actuelle",
+    proposedValue: "Valeur proposée",
+    conflictWarning: "Avertissement de conflit",
+    changedSinceOpened: "Cet enregistrement a peut-être changé depuis son ouverture. Révisez avant d’approuver.",
+    notificationQueue: "File de notifications",
+    assignedToYou: "Affecté à vous",
+    aiWorkOrders: "Ordres de travail IA",
+    aiWorkOrder: "Ordre de travail IA",
+    aiWorkOrdersSubtitle: "Demandes de travail créées par des humains pour de futurs bras IA. Les sorties doivent revenir par l’airlock.",
+    createAiWorkOrder: "Créer un ordre de travail IA",
+    aiWorkOrderNotice: "Cela crée seulement un ordre de travail. Cela n’appelle pas l’IA et ne modifie pas Project State.",
+    workOrderTask: "Tâche",
+    outputType: "Type de sortie",
+    canCreateIntake: "Peut créer des propositions d’entrée",
+    noAiWorkOrders: "Aucun ordre de travail IA enregistré.",
+    inProgress: "En cours",
+    revisionRequested: "Révision demandée",
+    projectConfidence: "Confiance du projet",
+    projectCompleteness: "Complétude du projet",
+    airlockCompleteness: "Complétude de l’airlock",
+    airlockIncompleteNotice: "Cet élément est incomplet et ne peut pas passer l’airlock.",
+    requiredAirlockChecks: "Vérifications d’airlock requises",
+    present: "Présent",
+    missing: "Manquant",
+    hasCurrentStatus: "Statut actuel",
+    hasCurrentSummary: "Résumé actuel",
+    hasNextAction: "Prochaine action",
+    hasRecentDecision: "Décision récente",
+    hasSourceReference: "Référence source",
+    sourceFilesClear: "Fichiers source clairs",
+    healthNotBlocked: "Non bloqué ou à risque",
+    targetProjectSelected: "Projet cible sélectionné",
+    proposedTitleRecorded: "Titre de proposition enregistré",
+    proposedTextRecorded: "Texte de proposition enregistré",
+    proposedTypeSelected: "Type de proposition sélectionné",
+    queueMarkedReady: "File marquée prête",
+    draftNameRecorded: "Nom du brouillon enregistré",
+    draftTextRecorded: "Texte du brouillon enregistré",
+    draftReviewComplete: "Révision du brouillon complète",
+    draftSourceLinked: "Source et extrait liés",
     archivedProjects: "Projets archivés",
     intake: "Entrée",
     backup: "Sauvegarde",
@@ -974,8 +1177,34 @@ const LANGUAGES = {
     relationships: "Relations",
     projectMap: "Carte du projet",
     projectMapSubtitle: "Relations, preuves et travail non résolu autour de ce projet.",
+    handoffMode: "Mode transmission",
+    handoffSubtitle: "Un briefing en lecture seule pour une personne ou une aide IA qui rejoint ce projet.",
+    exportHandoff: "Exporter la transmission",
+    whatThisProjectIs: "Ce qu’est ce projet",
+    whyItMatters: "Pourquoi c’est important",
+    whatChangedRecently: "Ce qui a changé récemment",
+    waitingOnApproval: "En attente d’approbation",
+    blockersAndRisks: "Blocages et risques",
+    whoOwnsWhat: "Qui possède quoi",
+    trustedSources: "Sources fiables",
+    aiAllowedHelp: "Aide IA autorisée",
+    doNotTouch: "Ne pas toucher",
+    handoffNoApprovalItems: "Aucun élément n’attend d’approbation.",
+    handoffNoBlockers: "Aucun blocage ou risque n’est enregistré.",
+    handoffNoAssignments: "Aucune affectation ou rôle de projet n’est enregistré.",
+    handoffNoTrustedSources: "Aucune source vérifiée ou active n’est enregistrée.",
+    handoffAiBoundary: "L’IA peut résumer, chercher, rédiger et suggérer. L’IA ne peut pas approuver, écrire dans le Core, écrire dans la Spine, supprimer l’historique ou devenir source de vérité.",
+    handoffDoNotTouchDefault: "Ne contournez pas l’Intake Airlock, n’écrasez pas l’historique, n’approuvez pas les éléments incomplets et ne traitez pas les commentaires ou extraits comme vérité Core.",
     contextPack: "Paquet de contexte",
     contextPackNotice: "Exporter un paquet de contexte local et borné pour un futur bras API ou IA. Cela ne modifie pas Project State.",
+    contextPackPreset: "Préréglage du paquet de contexte",
+    contextPresetCurrentState: "État actuel uniquement",
+    contextPresetRecentDecisions: "État actuel + décisions récentes",
+    contextPresetHandoff: "Transmission complète du projet",
+    contextPresetSourceResearch: "Contexte de recherche axé sources",
+    contextPresetCodexImplementation: "Contexte d’implémentation Codex",
+    contextPresetCustom: "Personnalisé",
+    contextPresetNotice: "Les préréglages choisissent la portée, le budget et les sections incluses. Personnalisé utilise les contrôles ci-dessous.",
     contextScope: "Portée du contexte",
     contextScopeProject: "Ce projet uniquement",
     contextScopeRelated: "Ce projet et les projets liés",
@@ -987,6 +1216,9 @@ const LANGUAGES = {
     includeSources: "Inclure les sources et morceaux d’extraits",
     includeHistory: "Inclure l’historique récent",
     includeOpenWork: "Inclure les questions ouvertes et prochaines actions",
+    includeDecisions: "Inclure les décisions",
+    includeFacts: "Inclure les faits",
+    includeRelationships: "Inclure les relations",
     exportContextPack: "Exporter le paquet de contexte",
     linkedProjects: "Projets liés",
     incomingLinks: "Liens entrants",
@@ -1256,6 +1488,65 @@ const LANGUAGES = {
     goToIntake: "Zum Eingang",
     goToSettings: "Zu Einstellungen",
     openItem: "Element öffnen",
+    assignment: "Zuweisung",
+    assignments: "Zuweisungen",
+    assignObject: "Zuweisen",
+    assignedTo: "Zugewiesen an",
+    assignmentRole: "Zuweisungsrolle",
+    assignmentOwner: "Verantwortlich",
+    assignmentReviewer: "Prüfer",
+    assignmentApprover: "Genehmiger",
+    assignmentWatcher: "Beobachter",
+    comments: "Kommentare",
+    reviewThread: "Prüfverlauf",
+    addComment: "Kommentar hinzufügen",
+    commentText: "Kommentar",
+    commentsNotPrivateNotice: "Kommentare sind Teil des Projektdatensatzes und nicht privat.",
+    reviewState: "Prüfstatus",
+    projectRoles: "Projektrollen",
+    manageProjectRoles: "Projektrollen verwalten",
+    projectRole: "Projektrolle",
+    proposalDiff: "Vorschlagsdiff",
+    currentValue: "Aktueller Wert",
+    proposedValue: "Vorgeschlagener Wert",
+    conflictWarning: "Konfliktwarnung",
+    changedSinceOpened: "Dieser Eintrag könnte sich seit dem Öffnen geändert haben. Vor der Genehmigung prüfen.",
+    notificationQueue: "Benachrichtigungswarteschlange",
+    assignedToYou: "Ihnen zugewiesen",
+    aiWorkOrders: "KI-Arbeitsaufträge",
+    aiWorkOrder: "KI-Arbeitsauftrag",
+    aiWorkOrdersSubtitle: "Von Menschen erstellte Arbeitsanfragen für künftige KI-Arme. Ergebnisse müssen durch den Airlock zurückkehren.",
+    createAiWorkOrder: "KI-Arbeitsauftrag erstellen",
+    aiWorkOrderNotice: "Dies erstellt nur einen Arbeitsauftrag. Es ruft keine KI auf und ändert Project State nicht.",
+    workOrderTask: "Aufgabe",
+    outputType: "Ausgabetyp",
+    canCreateIntake: "Darf Eingangsvorschläge erstellen",
+    noAiWorkOrders: "Keine KI-Arbeitsaufträge erfasst.",
+    inProgress: "In Bearbeitung",
+    revisionRequested: "Überarbeitung angefordert",
+    projectConfidence: "Projektvertrauen",
+    projectCompleteness: "Projektvollständigkeit",
+    airlockCompleteness: "Airlock-Vollständigkeit",
+    airlockIncompleteNotice: "Dieses Element ist unvollständig und kann den Airlock nicht passieren.",
+    requiredAirlockChecks: "Erforderliche Airlock-Prüfungen",
+    present: "Vorhanden",
+    missing: "Fehlt",
+    hasCurrentStatus: "Aktueller Status",
+    hasCurrentSummary: "Aktuelle Zusammenfassung",
+    hasNextAction: "Nächste Aktion",
+    hasRecentDecision: "Aktuelle Entscheidung",
+    hasSourceReference: "Quellenverweis",
+    sourceFilesClear: "Quelldateien klar",
+    healthNotBlocked: "Nicht blockiert oder gefährdet",
+    targetProjectSelected: "Zielprojekt ausgewählt",
+    proposedTitleRecorded: "Vorschlagstitel erfasst",
+    proposedTextRecorded: "Vorschlagstext erfasst",
+    proposedTypeSelected: "Vorschlagstyp ausgewählt",
+    queueMarkedReady: "Warteschlange als bereit markiert",
+    draftNameRecorded: "Entwurfsname erfasst",
+    draftTextRecorded: "Entwurfstext erfasst",
+    draftReviewComplete: "Entwurfsprüfung vollständig",
+    draftSourceLinked: "Quelle und Auszug verknüpft",
     archivedProjects: "Archivierte Projekte",
     intake: "Eingang",
     backup: "Sicherung",
@@ -1509,8 +1800,34 @@ const LANGUAGES = {
     relationships: "Beziehungen",
     projectMap: "Projektkarte",
     projectMapSubtitle: "Beziehungen, Nachweise und offene Arbeit rund um dieses Projekt.",
+    handoffMode: "Übergabemodus",
+    handoffSubtitle: "Ein schreibgeschütztes Briefing für eine Person oder KI-Hilfe, die diesem Projekt beitritt.",
+    exportHandoff: "Übergabe exportieren",
+    whatThisProjectIs: "Was dieses Projekt ist",
+    whyItMatters: "Warum es wichtig ist",
+    whatChangedRecently: "Was sich kürzlich geändert hat",
+    waitingOnApproval: "Wartet auf Genehmigung",
+    blockersAndRisks: "Blockaden und Risiken",
+    whoOwnsWhat: "Wer was verantwortet",
+    trustedSources: "Vertrauenswürdige Quellen",
+    aiAllowedHelp: "Erlaubte KI-Hilfe",
+    doNotTouch: "Nicht anfassen",
+    handoffNoApprovalItems: "Keine Elemente warten auf Genehmigung.",
+    handoffNoBlockers: "Keine Blockaden oder Risiken erfasst.",
+    handoffNoAssignments: "Keine Zuweisungen oder Projektrollen erfasst.",
+    handoffNoTrustedSources: "Keine geprüften oder aktiven Quellen erfasst.",
+    handoffAiBoundary: "KI darf zusammenfassen, suchen, entwerfen und vorschlagen. KI darf nicht genehmigen, in Core schreiben, in die Spine schreiben, Verlauf löschen oder zur Quelle der Wahrheit werden.",
+    handoffDoNotTouchDefault: "Den Intake Airlock nicht umgehen, Verlauf nicht überschreiben, unvollständige Elemente nicht genehmigen und Kommentare oder Auszüge nicht als Core-Wahrheit behandeln.",
     contextPack: "Kontextpaket",
     contextPackNotice: "Ein begrenztes lokales Kontextpaket für einen künftigen API- oder KI-Arm exportieren. Project State wird dadurch nicht geändert.",
+    contextPackPreset: "Kontextpaket-Voreinstellung",
+    contextPresetCurrentState: "Nur aktueller Stand",
+    contextPresetRecentDecisions: "Aktueller Stand + letzte Entscheidungen",
+    contextPresetHandoff: "Vollständige Projektübergabe",
+    contextPresetSourceResearch: "Quellenlastiger Forschungskontext",
+    contextPresetCodexImplementation: "Codex-Implementierungskontext",
+    contextPresetCustom: "Benutzerdefiniert",
+    contextPresetNotice: "Voreinstellungen wählen Umfang, Budget und enthaltene Abschnitte. Benutzerdefiniert nutzt die Steuerelemente unten.",
     contextScope: "Kontextumfang",
     contextScopeProject: "Nur dieses Projekt",
     contextScopeRelated: "Dieses Projekt und verknüpfte Projekte",
@@ -1522,6 +1839,9 @@ const LANGUAGES = {
     includeSources: "Quellen und Auszugsabschnitte einbeziehen",
     includeHistory: "Aktuellen Verlauf einbeziehen",
     includeOpenWork: "Offene Fragen und nächste Aktionen einbeziehen",
+    includeDecisions: "Entscheidungen einbeziehen",
+    includeFacts: "Fakten einbeziehen",
+    includeRelationships: "Beziehungen einbeziehen",
     exportContextPack: "Kontextpaket exportieren",
     linkedProjects: "Verknüpfte Projekte",
     incomingLinks: "Eingehende Links",
@@ -1791,6 +2111,65 @@ const LANGUAGES = {
     goToIntake: "Ir a entrada",
     goToSettings: "Ir a ajustes",
     openItem: "Abrir elemento",
+    assignment: "Asignación",
+    assignments: "Asignaciones",
+    assignObject: "Asignar",
+    assignedTo: "Asignado a",
+    assignmentRole: "Rol de asignación",
+    assignmentOwner: "Responsable",
+    assignmentReviewer: "Revisor",
+    assignmentApprover: "Aprobador",
+    assignmentWatcher: "Observador",
+    comments: "Comentarios",
+    reviewThread: "Hilo de revisión",
+    addComment: "Agregar comentario",
+    commentText: "Comentario",
+    commentsNotPrivateNotice: "Los comentarios son parte del registro del proyecto y no son privados.",
+    reviewState: "Estado de revisión",
+    projectRoles: "Roles del proyecto",
+    manageProjectRoles: "Gestionar roles del proyecto",
+    projectRole: "Rol del proyecto",
+    proposalDiff: "Diferencia de propuesta",
+    currentValue: "Valor actual",
+    proposedValue: "Valor propuesto",
+    conflictWarning: "Advertencia de conflicto",
+    changedSinceOpened: "Este registro puede haber cambiado desde que se abrió. Revisa antes de aprobar.",
+    notificationQueue: "Cola de notificaciones",
+    assignedToYou: "Asignado a ti",
+    aiWorkOrders: "Órdenes de trabajo IA",
+    aiWorkOrder: "Orden de trabajo IA",
+    aiWorkOrdersSubtitle: "Solicitudes de trabajo creadas por humanos para futuros brazos IA. Los resultados deben volver por el airlock.",
+    createAiWorkOrder: "Crear orden de trabajo IA",
+    aiWorkOrderNotice: "Esto solo crea una orden de trabajo. No llama a la IA ni cambia Project State.",
+    workOrderTask: "Tarea",
+    outputType: "Tipo de salida",
+    canCreateIntake: "Puede crear propuestas de entrada",
+    noAiWorkOrders: "No hay órdenes de trabajo IA registradas.",
+    inProgress: "En curso",
+    revisionRequested: "Revisión solicitada",
+    projectConfidence: "Confianza del proyecto",
+    projectCompleteness: "Completitud del proyecto",
+    airlockCompleteness: "Completitud del airlock",
+    airlockIncompleteNotice: "Este elemento está incompleto y no puede pasar el airlock.",
+    requiredAirlockChecks: "Revisiones requeridas del airlock",
+    present: "Presente",
+    missing: "Falta",
+    hasCurrentStatus: "Estado actual",
+    hasCurrentSummary: "Resumen actual",
+    hasNextAction: "Próxima acción",
+    hasRecentDecision: "Decisión reciente",
+    hasSourceReference: "Referencia de fuente",
+    sourceFilesClear: "Archivos fuente claros",
+    healthNotBlocked: "No bloqueado ni en riesgo",
+    targetProjectSelected: "Proyecto objetivo seleccionado",
+    proposedTitleRecorded: "Título de propuesta registrado",
+    proposedTextRecorded: "Texto de propuesta registrado",
+    proposedTypeSelected: "Tipo de propuesta seleccionado",
+    queueMarkedReady: "Cola marcada lista",
+    draftNameRecorded: "Nombre del borrador registrado",
+    draftTextRecorded: "Texto del borrador registrado",
+    draftReviewComplete: "Revisión del borrador completa",
+    draftSourceLinked: "Fuente y extracto vinculados",
     archivedProjects: "Proyectos archivados",
     intake: "Entrada",
     backup: "Copia de seguridad",
@@ -2044,8 +2423,34 @@ const LANGUAGES = {
     relationships: "Relaciones",
     projectMap: "Mapa del proyecto",
     projectMapSubtitle: "Relaciones, evidencia y trabajo sin resolver alrededor de este proyecto.",
+    handoffMode: "Modo traspaso",
+    handoffSubtitle: "Un resumen de solo lectura para una persona o ayuda de IA que se suma al proyecto.",
+    exportHandoff: "Exportar traspaso",
+    whatThisProjectIs: "Qué es este proyecto",
+    whyItMatters: "Por qué importa",
+    whatChangedRecently: "Qué cambió recientemente",
+    waitingOnApproval: "En espera de aprobación",
+    blockersAndRisks: "Bloqueos y riesgos",
+    whoOwnsWhat: "Quién tiene qué",
+    trustedSources: "Fuentes confiables",
+    aiAllowedHelp: "Ayuda de IA permitida",
+    doNotTouch: "No tocar",
+    handoffNoApprovalItems: "No hay elementos esperando aprobación.",
+    handoffNoBlockers: "No hay bloqueos ni riesgos registrados.",
+    handoffNoAssignments: "No hay asignaciones ni roles de proyecto registrados.",
+    handoffNoTrustedSources: "No hay fuentes verificadas o activas registradas.",
+    handoffAiBoundary: "La IA puede resumir, buscar, redactar y sugerir. La IA no puede aprobar, escribir en Core, escribir en Spine, borrar historial ni convertirse en fuente de verdad.",
+    handoffDoNotTouchDefault: "No omitas el Intake Airlock, no sobrescribas historial, no apruebes elementos incompletos ni trates comentarios o extractos como verdad Core.",
     contextPack: "Paquete de contexto",
     contextPackNotice: "Exporta un paquete de contexto local y acotado para un futuro brazo API o IA. Esto no cambia Project State.",
+    contextPackPreset: "Preajuste de paquete de contexto",
+    contextPresetCurrentState: "Solo estado actual",
+    contextPresetRecentDecisions: "Estado actual + decisiones recientes",
+    contextPresetHandoff: "Traspaso completo del proyecto",
+    contextPresetSourceResearch: "Contexto de investigación con muchas fuentes",
+    contextPresetCodexImplementation: "Contexto de implementación Codex",
+    contextPresetCustom: "Personalizado",
+    contextPresetNotice: "Los preajustes eligen alcance, presupuesto y secciones incluidas. Personalizado usa los controles de abajo.",
     contextScope: "Alcance de contexto",
     contextScopeProject: "Solo este proyecto",
     contextScopeRelated: "Este proyecto y proyectos vinculados",
@@ -2057,6 +2462,9 @@ const LANGUAGES = {
     includeSources: "Incluir fuentes y fragmentos de extracto",
     includeHistory: "Incluir historial reciente",
     includeOpenWork: "Incluir preguntas abiertas y próximas acciones",
+    includeDecisions: "Incluir decisiones",
+    includeFacts: "Incluir hechos",
+    includeRelationships: "Incluir relaciones",
     exportContextPack: "Exportar paquete de contexto",
     linkedProjects: "Proyectos vinculados",
     incomingLinks: "Enlaces entrantes",
@@ -2374,6 +2782,7 @@ const emptyStore = () => ({
   settings: defaultSettings(),
   actors: [],
   intakeItems: [],
+  aiWorkOrders: [],
   projects: []
 });
 
@@ -3512,6 +3921,7 @@ function normalizeStore(parsed) {
     settings: normalizeSettings(parsed.settings),
     actors,
     intakeItems: Array.isArray(parsed.intakeItems) ? parsed.intakeItems.map((item) => normalizeIntakeItem(item, context)) : [],
+    aiWorkOrders: Array.isArray(parsed.aiWorkOrders) ? parsed.aiWorkOrders.map((workOrder) => normalizeAiWorkOrder(workOrder, context)) : [],
     projects: projects.map((project) => normalizeProject(project, context))
   };
 }
@@ -3641,6 +4051,10 @@ function normalizeProject(project, context) {
     archived: false,
     deletionStatus: "",
     healthFlag: "active",
+    reviewState: "approved",
+    assignments: [],
+    comments: [],
+    projectRoles: [],
     sourceLinks: [],
     imageLinks: [],
     decisions: [],
@@ -3654,6 +4068,10 @@ function normalizeProject(project, context) {
     ...project,
     id: project.id,
     healthFlag: normalizeHealthFlag(project.healthFlag),
+    reviewState: normalizeReviewState(project.reviewState || "approved"),
+    assignments: normalizeAssignments(project.assignments, context),
+    comments: normalizeComments(project.comments, context),
+    projectRoles: normalizeProjectRoles(project.projectRoles, context),
     sourceLinks: normalizeSourceLinksArray(project.sourceLinks, context),
     imageLinks: normalizeImageLinksArray(project.imageLinks, project.id, "Project", project.id, context),
     decisions: Array.isArray(project.decisions) ? project.decisions.map((decision) => normalizeObject(decision, "decision", project.id, context)) : [],
@@ -3664,6 +4082,7 @@ function normalizeProject(project, context) {
     openQuestions: Array.isArray(project.openQuestions) ? project.openQuestions.map((question) => normalizeObject(question, "question", project.id, context)) : [],
     nextActions: Array.isArray(project.nextActions) ? project.nextActions.map((action) => normalizeObject(action, "action", project.id, context)) : []
   };
+  if (!project.reviewState || !Array.isArray(project.assignments) || !Array.isArray(project.comments) || !Array.isArray(project.projectRoles)) migrationNeeded = true;
   normalized.changes = Array.isArray(project.changes) ? project.changes.map((change) => normalizeChange(change, normalized, context)) : [];
   return normalized;
 }
@@ -3673,14 +4092,86 @@ function normalizeObject(object, prefix, projectId, context) {
   const normalized = {
     sourceLinks: [],
     imageLinks: [],
+    assignments: [],
+    comments: [],
+    reviewState: "approved",
     ...object,
     id: objectId,
     projectId: object.projectId || projectId,
+    reviewState: normalizeReviewState(object.reviewState || "approved"),
+    assignments: normalizeAssignments(object.assignments, context),
+    comments: normalizeComments(object.comments, context),
     sourceLinks: normalizeSourceLinksArray(object.sourceLinks, context),
     imageLinks: normalizeImageLinksArray(object.imageLinks, projectId, objectTypeFromPrefix(prefix), objectId, context)
   };
-  if (!object.projectId) migrationNeeded = true;
+  if (!object.projectId || !object.reviewState || !Array.isArray(object.assignments) || !Array.isArray(object.comments)) migrationNeeded = true;
   return normalized;
+}
+
+function normalizeReviewState(state = "approved") {
+  return COLLAB_REVIEW_STATES.includes(state) ? state : "approved";
+}
+
+function normalizeAssignmentRole(role = "watcher") {
+  return ASSIGNMENT_ROLES.includes(role) ? role : "watcher";
+}
+
+function normalizeAssignments(assignments, context) {
+  if (!Array.isArray(assignments)) return [];
+  return assignments.map((assignment) => ({
+    id: ensureId(assignment, "assignment", context),
+    actorId: assignment.actorId || "",
+    role: normalizeAssignmentRole(assignment.role),
+    assignedAt: assignment.assignedAt || nowIso(),
+    assignedBy: assignment.assignedBy || "",
+    reason: assignment.reason || "",
+    status: assignment.status === "archived" ? "archived" : "active"
+  }));
+}
+
+function normalizeComments(comments, context) {
+  if (!Array.isArray(comments)) return [];
+  return comments.map((comment) => ({
+    id: ensureId(comment, "comment", context),
+    actorId: comment.actorId || "",
+    actorName: comment.actorName || "",
+    createdAt: comment.createdAt || nowIso(),
+    text: comment.text || "",
+    reviewState: normalizeReviewState(comment.reviewState || "needs_review"),
+    visibilityNotice: comment.visibilityNotice || "Project State comments are part of the project record and are not private."
+  }));
+}
+
+function normalizeProjectRoles(projectRoles, context) {
+  if (!Array.isArray(projectRoles)) return [];
+  return projectRoles.map((role) => ({
+    id: ensureId(role, "project_role", context),
+    actorId: role.actorId || "",
+    role: normalizeActorRole(role.role || "viewer"),
+    assignedAt: role.assignedAt || nowIso(),
+    assignedBy: role.assignedBy || "",
+    reason: role.reason || "",
+    status: role.status === "archived" ? "archived" : "active"
+  }));
+}
+
+function normalizeAiWorkOrder(workOrder, context) {
+  const status = AI_WORK_ORDER_STATUSES.includes(workOrder.status) ? workOrder.status : "submitted";
+  if (!AI_WORK_ORDER_STATUSES.includes(workOrder.status)) migrationNeeded = true;
+  return {
+    id: ensureId(workOrder, "ai_work_order", context),
+    projectId: workOrder.projectId || "",
+    title: workOrder.title || t("aiWorkOrder"),
+    task: workOrder.task || "",
+    contextPreset: CONTEXT_PACK_PRESET_KEYS.includes(workOrder.contextPreset) ? workOrder.contextPreset : "handoff",
+    outputType: workOrder.outputType || "",
+    canCreateIntake: Boolean(workOrder.canCreateIntake),
+    status,
+    createdAt: workOrder.createdAt || nowIso(),
+    createdBy: workOrder.createdBy || "",
+    reason: workOrder.reason || "",
+    comments: normalizeComments(workOrder.comments, context)
+  };
 }
 
 function normalizeSourceLinksArray(sourceLinks, context) {
@@ -3729,9 +4220,15 @@ function normalizeSource(source, projectId, context) {
     status: "active",
     tags: [],
     linkedActorIds: [],
+    assignments: [],
+    comments: [],
+    reviewState: "approved",
     ...source,
     id: sourceId,
     projectId: source.projectId || projectId,
+    reviewState: normalizeReviewState(source.reviewState || "approved"),
+    assignments: normalizeAssignments(source.assignments, context),
+    comments: normalizeComments(source.comments, context),
     extracts: Array.isArray(source.extracts) ? source.extracts.map((extract) => normalizeExtract(extract, projectId, sourceId, context)) : [],
     tags: Array.isArray(source.tags) ? source.tags : tagsFromText(source.tags || ""),
     linkedActorIds: normalizeLinkedActorIds(source.linkedActorIds || source.participantActorIds || source.actorIds || [])
@@ -3753,10 +4250,16 @@ function normalizeExtract(extract, projectId, sourceId, context) {
     tags: [],
     sourceLinks: [],
     imageLinks: [],
+    assignments: [],
+    comments: [],
+    reviewState: "approved",
     ...extract,
     id: extractId,
     projectId: extract.projectId || projectId,
     sourceId: extract.sourceId || sourceId,
+    reviewState: normalizeReviewState(extract.reviewState || "approved"),
+    assignments: normalizeAssignments(extract.assignments, context),
+    comments: normalizeComments(extract.comments, context),
     extractMode: extract.extractMode || "manual",
     suggestionStatus: extract.suggestionStatus || (extract.extractMode === "ai_suggested" ? "pending_approval" : ""),
     sourceLinks: normalizeSourceLinksArray(extract.sourceLinks, context),
@@ -3782,6 +4285,9 @@ function normalizeDraftProject(draftProject, projectId, context) {
   return {
     sourceLinks: [],
     imageLinks: [],
+    assignments: [],
+    comments: [],
+    reviewState: "draft",
     status: "draft",
     ...draftProject,
     id: draftId,
@@ -3789,6 +4295,9 @@ function normalizeDraftProject(draftProject, projectId, context) {
     createdAt: draftProject.createdAt || draftProject.createdDate || nowIso(),
     createdDate: draftProject.createdDate || draftProject.createdAt || nowIso(),
     status: draftProject.status || (draftProject.approvedAt ? "approved" : "draft"),
+    reviewState: normalizeReviewState(draftProject.reviewState || "draft"),
+    assignments: normalizeAssignments(draftProject.assignments, context),
+    comments: normalizeComments(draftProject.comments, context),
     reviewFlags,
     sourceLinks: normalizeSourceLinksArray(draftProject.sourceLinks, context),
     imageLinks: normalizeImageLinksArray(draftProject.imageLinks, projectId, "DraftProject", draftId, context)
@@ -3810,11 +4319,14 @@ function normalizeIntakeItem(item, context) {
     id,
     armType: normalizeArmType(item.armType),
     status,
+    reviewState: normalizeReviewState(item.reviewState || (status === "pending" ? "needs_review" : status === "approved" ? "approved" : "rejected")),
     queueState,
     queueNotes: item.queueNotes || "",
     queueReviewedAt: item.queueReviewedAt || "",
     queueReviewedBy: item.queueReviewedBy || "",
     queueReviewReason: item.queueReviewReason || "",
+    assignments: normalizeAssignments(item.assignments, context),
+    comments: normalizeComments(item.comments, context),
     title: item.title || t("untitledIntake"),
     projectId: item.projectId || "",
     createdAt: item.createdAt || nowIso(),
@@ -3839,6 +4351,7 @@ function createIntakeItem(input = {}) {
     id: uid("intake"),
     armType: normalizeArmType(input.armType),
     status: "pending",
+    reviewState: "needs_review",
     queueState: "new",
     queueNotes: "",
     queueReviewedAt: "",
@@ -3853,6 +4366,8 @@ function createIntakeItem(input = {}) {
     proposedChange: input.proposedChange || {},
     evidence: input.evidence || {},
     approval: null,
+    assignments: [],
+    comments: [],
     archived: false
   };
   store.intakeItems = Array.isArray(store.intakeItems) ? store.intakeItems : [];
@@ -3865,7 +4380,7 @@ function approveIntakeItem(intakeId, actor, reason, applyApprovedChange) {
   const intake = store.intakeItems?.find((item) => item.id === intakeId);
   requireHumanApproval(actor, reason, { origin: "intake" });
   if (!intake || intake.status !== "pending" || typeof applyApprovedChange !== "function") return null;
-  if (intake.queueState !== "ready") return null;
+  if (!allRequiredFlagsPass(intakeAirlockChecks(intake))) return null;
   const approval = {
     approvedAt: nowIso(),
     approvedBy: actor.id,
@@ -3903,6 +4418,9 @@ function normalizeChange(change, project, context) {
     actorId,
     language,
     howChanged,
+    reviewState: normalizeReviewState(change.reviewState || "approved"),
+    assignments: normalizeAssignments(change.assignments, context),
+    comments: normalizeComments(change.comments, context),
     imageLinks: normalizeImageLinksArray(change.imageLinks, project.id, "Change", changeId, context),
     details: {
       ...details,
@@ -4488,6 +5006,59 @@ function healthFlagOptions(selected = "active") {
     .join("");
 }
 
+function flagItem(key, label, passed, required = false) {
+  return { key, label, passed: Boolean(passed), required: Boolean(required) };
+}
+
+function allRequiredFlagsPass(flags = []) {
+  return flags.every((flag) => !flag.required || flag.passed);
+}
+
+function renderFlagPills(flags = []) {
+  if (!flags.length) return "";
+  return `
+    <div class="review-flags">
+      ${flags.map((flag) => `<span class="pill ${flag.passed ? "review-done" : flag.required ? "health-blocked" : "review-open"}">${escapeHtml(flag.label)}: ${flag.passed ? escapeHtml(t("present")) : escapeHtml(t("missing"))}</span>`).join("")}
+    </div>
+  `;
+}
+
+function projectCompletenessFlags(project) {
+  const activeSources = (project.sources || []).filter((source) => source.status !== "archived");
+  const sourceLinks = Array.isArray(project.sourceLinks) ? project.sourceLinks : [];
+  const sourceIssues = activeSources.some((source) => ["missing", "changed", "unverifiable"].includes(source.fileVerification?.status));
+  return [
+    flagItem("hasCurrentStatus", t("hasCurrentStatus"), String(project.currentStatus || "").trim()),
+    flagItem("hasCurrentSummary", t("hasCurrentSummary"), String(project.currentSummary || "").trim()),
+    flagItem("hasNextAction", t("hasNextAction"), (project.nextActions || []).some((action) => getActionStatus(action) === "open")),
+    flagItem("hasRecentDecision", t("hasRecentDecision"), (project.decisions || []).some((decision) => !decision.archived)),
+    flagItem("hasSourceReference", t("hasSourceReference"), activeSources.length || sourceLinks.length),
+    flagItem("sourceFilesClear", t("sourceFilesClear"), activeSources.length ? !sourceIssues : false),
+    flagItem("healthNotBlocked", t("healthNotBlocked"), !["blocked", "at_risk"].includes(project.healthFlag))
+  ];
+}
+
+function intakeAirlockChecks(intake) {
+  const proposed = intake.proposedChange || {};
+  return [
+    flagItem("targetProjectSelected", t("targetProjectSelected"), Boolean(getProject(intake.projectId)), true),
+    flagItem("proposedTitleRecorded", t("proposedTitleRecorded"), String(intake.title || "").trim(), true),
+    flagItem("proposedTextRecorded", t("proposedTextRecorded"), String(proposed.text || "").trim(), true),
+    flagItem("proposedTypeSelected", t("proposedTypeSelected"), normalizeProposedObjectType(intake.proposedObjectType), true),
+    flagItem("queueMarkedReady", t("queueMarkedReady"), intake.queueState === "ready", true)
+  ];
+}
+
+function draftAirlockChecks(draftProject) {
+  const flags = normalizeDraftReviewFlags(draftProject.reviewFlags);
+  return [
+    flagItem("draftNameRecorded", t("draftNameRecorded"), String(draftProject.name || "").trim(), true),
+    flagItem("draftTextRecorded", t("draftTextRecorded"), String(draftProject.draft || "").trim(), true),
+    flagItem("draftSourceLinked", t("draftSourceLinked"), draftProject.sourceId && draftProject.extractId, true),
+    flagItem("draftReviewComplete", t("draftReviewComplete"), DRAFT_REVIEW_FLAGS.every((flag) => flags[flag]), true)
+  ];
+}
+
 function sortNewest(items, field = "createdAt") {
   return [...items].sort((a, b) => dateSortValue(b[field]) - dateSortValue(a[field]));
 }
@@ -4532,6 +5103,13 @@ function recordChange(project, actor, reason, summary, details = {}) {
   project.changes.unshift(change);
   project.updatedAt = timestamp;
   project.updatedBy = actor.id;
+  const changedObject = normalizedDetails.objectType && normalizedDetails.objectId
+    ? getProjectObject(project, normalizedDetails.objectType, normalizedDetails.objectId)
+    : null;
+  if (changedObject && changedObject !== project && normalizedDetails.objectType !== "Change") {
+    changedObject.updatedAt = timestamp;
+    changedObject.updatedBy = actor.id;
+  }
   return change;
 }
 
@@ -4563,6 +5141,7 @@ function render() {
 
   if (!activeProjectId) {
     if (activeRootView === "inbox") renderWorkInbox();
+    else if (activeRootView === "work-orders") renderAiWorkOrders();
     else if (activeRootView === "intake") renderIntakeQueue();
     else if (activeRootView === "archived") renderArchivedProjectList();
     else if (activeRootView === "settings") renderSettings();
@@ -4595,6 +5174,56 @@ function openProjectNow(projectId, view = "dashboard") {
 
 function workInboxCount() {
   return buildWorkInboxItems().length;
+}
+
+function activeAiWorkOrderCount() {
+  return (store.aiWorkOrders || []).filter((order) => !["completed", "archived"].includes(order.status)).length;
+}
+
+function renderAiWorkOrders() {
+  const orders = sortNewest(store.aiWorkOrders || [], "createdAt");
+  shell(`
+    <section class="view-head">
+      <div>
+        <h1 class="view-title">${escapeHtml(t("aiWorkOrders"))}</h1>
+        <p class="view-subtitle">${escapeHtml(t("aiWorkOrdersSubtitle"))}</p>
+      </div>
+      <button class="btn" data-action="create-ai-work-order">${escapeHtml(t("createAiWorkOrder"))}</button>
+    </section>
+    ${orders.length ? `<section class="list">${orders.map(renderAiWorkOrderItem).join("")}</section>` : `
+      <section class="empty-state">
+        <h2>${escapeHtml(t("noAiWorkOrders"))}</h2>
+        <p>${escapeHtml(t("aiWorkOrderNotice"))}</p>
+        <button class="btn" data-action="create-ai-work-order">${escapeHtml(t("createAiWorkOrder"))}</button>
+      </section>
+    `}
+  `);
+}
+
+function renderAiWorkOrderItem(order) {
+  const projectName = order.projectId ? projectNameById(order.projectId) || t("missingProject") : t("noTargetProject");
+  return `
+    <article class="item">
+      <p class="item-title">${escapeDisplay(order.title, DISPLAY_META_LIMIT)}</p>
+      <p class="item-meta">${escapeHtml(t("project"))}: ${escapeDisplay(projectName, DISPLAY_META_LIMIT)} · ${escapeHtml(t("status"))}: ${escapeHtml(aiWorkOrderStatusLabel(order.status))}</p>
+      <p class="item-meta">${escapeHtml(t("contextPackPreset"))}: ${escapeHtml(contextPackPresetLabel(order.contextPreset))} · ${escapeHtml(t("outputType"))}: ${escapeDisplay(order.outputType || t("notRecorded"), DISPLAY_META_LIMIT)}</p>
+      <p class="item-body">${escapeDisplay(order.task, DISPLAY_TEXT_LIMIT)}</p>
+      <p class="item-meta">${escapeHtml(t("created"))}: ${escapeHtml(formatDate(order.createdAt))} · ${escapeHtml(t("actor"))}: ${escapeHtml(actorDisplay(order.createdBy))}</p>
+      ${order.canCreateIntake ? `<p class="notice">${escapeHtml(t("canCreateIntake"))}</p>` : ""}
+      <div class="item-actions">
+        ${order.projectId ? `<button class="btn secondary compact" data-action="open-project" data-project-id="${escapeHtml(order.projectId)}">${escapeHtml(t("goToProject"))}</button>` : ""}
+        <button class="btn secondary compact" data-action="comment-ai-work-order" data-work-order-id="${escapeHtml(order.id)}">${escapeHtml(t("reviewThread"))}</button>
+        <button class="btn secondary compact" data-action="archive-ai-work-order" data-work-order-id="${escapeHtml(order.id)}" ${order.status === "archived" ? "disabled" : ""}>${escapeHtml(t("archive"))}</button>
+      </div>
+    </article>
+  `;
+}
+
+function aiWorkOrderStatusLabel(status = "submitted") {
+  if (status === "in_progress") return t("inProgress");
+  if (status === "completed") return t("complete");
+  if (status === "archived") return t("archived");
+  return t("pending");
 }
 
 function buildWorkInboxItems() {
@@ -4631,6 +5260,23 @@ function buildWorkInboxItems() {
 
   for (const project of store.projects || []) {
     if (project.archived) continue;
+    for (const item of projectIntegrityObjects(project)) {
+      for (const assignment of item.object.assignments || []) {
+        if (assignment.status === "archived") continue;
+        push({
+          id: `assignment-${assignment.id}`,
+          level: "warning",
+          category: t("assignedToYou"),
+          title: objectLabel(item.objectType, item.object),
+          body: `${assignmentRoleLabel(assignment.role)} · ${actorDisplay(assignment.actorId)}`,
+          meta: `${t("project")}: ${project.name} · ${t("assignedTo")}: ${actorDisplay(assignment.actorId)}`,
+          projectId: project.id,
+          actionLabel: t("goToProject"),
+          sortAt: assignment.assignedAt
+        });
+      }
+    }
+
     if (["blocked", "at_risk"].includes(project.healthFlag)) {
       push({
         id: `project-health-${project.id}`,
@@ -4647,7 +5293,7 @@ function buildWorkInboxItems() {
 
     for (const draft of project.draftProjects || []) {
       if (draft.status === "approved" || draft.status === "archived") continue;
-      if (draft.reviewFlags?.readyForApproval) {
+      if (allRequiredFlagsPass(draftAirlockChecks(draft))) {
         push({
           id: `draft-${draft.id}`,
           level: "healthy",
@@ -4731,6 +5377,22 @@ function buildWorkInboxItems() {
       action: issue.projectId ? "open-project" : "show-settings",
       actionLabel: issue.projectId ? t("goToProject") : t("goToSettings"),
       sortAt: integrity.generatedAt
+    });
+  }
+
+  for (const order of store.aiWorkOrders || []) {
+    if (["completed", "archived"].includes(order.status)) continue;
+    push({
+      id: `ai-work-order-${order.id}`,
+      level: "warning",
+      category: t("aiWorkOrders"),
+      title: order.title,
+      body: order.task,
+      meta: `${t("contextPackPreset")}: ${contextPackPresetLabel(order.contextPreset)} · ${t("status")}: ${aiWorkOrderStatusLabel(order.status)}`,
+      projectId: order.projectId,
+      action: "show-work-orders",
+      actionLabel: t("aiWorkOrders"),
+      sortAt: order.createdAt
     });
   }
 
@@ -4858,6 +5520,7 @@ function shell(inner) {
         ${activeProjectId ? `<button class="btn secondary" data-action="back">${escapeHtml(t("backToProjects"))}</button>` : ""}
         ${!activeProjectId ? `<button class="btn secondary" data-action="show-projects">${escapeHtml(t("projects"))}</button>` : ""}
         ${!activeProjectId ? `<button class="btn secondary" data-action="show-inbox">${escapeHtml(t("workInbox"))}${workInboxCount() ? ` (${workInboxCount()})` : ""}</button>` : ""}
+        ${!activeProjectId ? `<button class="btn secondary" data-action="show-work-orders">${escapeHtml(t("aiWorkOrders"))}${activeAiWorkOrderCount() ? ` (${activeAiWorkOrderCount()})` : ""}</button>` : ""}
         ${!activeProjectId ? `<button class="btn secondary" data-action="show-archived-projects">${escapeHtml(t("archivedProjects"))}${archivedProjectCount() ? ` (${archivedProjectCount()})` : ""}</button>` : ""}
         ${!activeProjectId ? `<button class="btn secondary" data-action="show-intake">${escapeHtml(t("intake"))}${pendingIntakeCount() ? ` (${pendingIntakeCount()})` : ""}</button>` : ""}
         ${!activeProjectId ? `<button class="btn secondary" data-action="show-settings">${escapeHtml(t("settings"))}</button>` : ""}
@@ -5452,6 +6115,64 @@ function actorSelectOptions(selectedActorId = "") {
     .join("");
 }
 
+function assignmentRoleLabel(role = "watcher") {
+  const labels = {
+    owner: t("assignmentOwner"),
+    reviewer: t("assignmentReviewer"),
+    approver: t("assignmentApprover"),
+    watcher: t("assignmentWatcher")
+  };
+  return labels[normalizeAssignmentRole(role)] || t("assignmentWatcher");
+}
+
+function assignmentRoleOptions(selected = "watcher") {
+  const safeSelected = normalizeAssignmentRole(selected);
+  return ASSIGNMENT_ROLES.map((role) => `<option value="${role}" ${role === safeSelected ? "selected" : ""}>${escapeHtml(assignmentRoleLabel(role))}</option>`).join("");
+}
+
+function reviewStateLabel(state = "needs_review") {
+  const labels = {
+    draft: t("draft"),
+    needs_review: t("needsReview"),
+    revision_requested: t("revisionRequested"),
+    ready_for_approval: t("readyForApproval"),
+    approved: t("approved"),
+    rejected: t("rejected"),
+    archived: t("archived")
+  };
+  return labels[normalizeReviewState(state)] || t("needsReview");
+}
+
+function reviewStateOptions(selected = "needs_review") {
+  const safeSelected = normalizeReviewState(selected);
+  return COLLAB_REVIEW_STATES.map((state) => `<option value="${state}" ${state === safeSelected ? "selected" : ""}>${escapeHtml(reviewStateLabel(state))}</option>`).join("");
+}
+
+function renderAssignmentsSummary(object = {}) {
+  const assignments = (object.assignments || []).filter((assignment) => assignment.status !== "archived");
+  if (!assignments.length) return "";
+  const text = assignments.map((assignment) => `${actorDisplay(assignment.actorId)}: ${assignmentRoleLabel(assignment.role)}`).join(", ");
+  return `<p class="item-meta">${escapeHtml(t("assignments"))}: ${escapeDisplay(text, DISPLAY_META_LIMIT)}</p>`;
+}
+
+function renderCommentsSummary(object = {}) {
+  const count = (object.comments || []).length;
+  if (!count) return "";
+  return `<p class="item-meta">${escapeHtml(t("comments"))}: ${escapeHtml(String(count))}</p>`;
+}
+
+function renderProjectRoles(project) {
+  const roles = (project.projectRoles || []).filter((role) => role.status !== "archived");
+  if (!roles.length) return emptyText(t("noActorsRecorded"));
+  return `<div class="list">${roles.map((role) => `
+    <div class="item">
+      <p class="item-title">${escapeHtml(actorDisplay(role.actorId))}</p>
+      <p class="item-meta">${escapeHtml(t("projectRole"))}: ${escapeHtml(actorRoleLabel(role.role))} · ${escapeHtml(t("created"))}: ${escapeHtml(formatDate(role.assignedAt))}</p>
+      ${role.reason ? `<p class="item-body">${escapeDisplay(role.reason, DISPLAY_META_LIMIT)}</p>` : ""}
+    </div>
+  `).join("")}</div>`;
+}
+
 function linkedActorCheckboxes(selectedActorIds = []) {
   const selected = new Set(normalizeLinkedActorIds(selectedActorIds));
   const actors = store.actors.filter((actor) => normalizeActorStatus(actor.status) === "active");
@@ -5913,7 +6634,8 @@ function renderIntakeItem(item) {
   const projectName = item.projectId ? projectNameById(item.projectId) || t("missingProject") : t("noTargetProject");
   const proposed = item.proposedChange || {};
   const isPending = item.status === "pending" && !item.archived;
-  const isReady = item.queueState === "ready";
+  const airlockFlags = intakeAirlockChecks(item);
+  const airlockReady = allRequiredFlagsPass(airlockFlags);
   return `
     <div class="item">
       <p class="item-title">${escapeDisplay(item.title, DISPLAY_META_LIMIT)}</p>
@@ -5926,13 +6648,16 @@ function renderIntakeItem(item) {
       ${item.sourceLabel ? `<p class="item-meta">${escapeHtml(t("source"))}: ${escapeDisplay(item.sourceLabel, DISPLAY_META_LIMIT)}</p>` : ""}
       ${proposed.text ? `<p class="item-body">${escapeDisplay(proposed.text)}</p>` : ""}
       ${proposed.summary ? `<p class="item-body">${escapeHtml(t("summary"))}: ${escapeDisplay(proposed.summary)}</p>` : ""}
+      ${renderIntakeProposalDiff(item)}
+      <p class="item-meta">${escapeHtml(t("airlockCompleteness"))}</p>
+      ${renderFlagPills(airlockFlags)}
       ${item.queueNotes ? `<p class="item-meta">${escapeHtml(t("queueReviewNotes"))}: ${escapeDisplay(item.queueNotes, DISPLAY_META_LIMIT)}</p>` : ""}
       ${item.queueReviewedAt ? `<p class="item-meta">${escapeHtml(t("reviewedBy"))} ${escapeHtml(actorDisplay(item.queueReviewedBy))} · ${escapeHtml(formatDate(item.queueReviewedAt))}</p>` : ""}
       ${item.review ? `<p class="item-meta">${escapeHtml(t("reviewedBy"))} ${escapeHtml(actorDisplay(item.review.actorId, item.review.actorName))} · ${escapeHtml(formatDate(item.review.reviewedAt))}</p>` : ""}
       ${item.approval ? `<p class="item-meta">${escapeHtml(t("approvedBy"))} ${escapeHtml(actorDisplay(item.approval.approvedBy))} · ${escapeHtml(formatDate(item.approval.approvedAt))}</p>` : ""}
       <div class="item-actions">
         ${isPending ? `<button class="btn secondary compact" data-action="review-intake-queue" data-intake-id="${item.id}">${escapeHtml(t("reviewQueueItem"))}</button>` : ""}
-        ${isPending ? `<button class="btn secondary compact" data-action="approve-intake" data-intake-id="${item.id}" ${isReady ? "" : "disabled"} title="${isReady ? "" : escapeHtml(t("approvalQueueReadyRequired"))}">${escapeHtml(t("approve"))}</button>` : ""}
+        ${isPending ? `<button class="btn secondary compact" data-action="approve-intake" data-intake-id="${item.id}" ${airlockReady ? "" : "disabled"} title="${airlockReady ? "" : escapeHtml(t("airlockIncompleteNotice"))}">${escapeHtml(t("approve"))}</button>` : ""}
         ${isPending ? `<button class="btn secondary compact" data-action="reject-intake" data-intake-id="${item.id}">${escapeHtml(t("reject"))}</button>` : ""}
         ${!item.archived ? `<button class="btn secondary compact" data-action="archive-intake" data-intake-id="${item.id}">${escapeHtml(t("archive"))}</button>` : ""}
       </div>
@@ -6117,6 +6842,7 @@ function renderProject(project) {
   const visibleChanges = filterHistoryByEventType(objectFilteredChanges, activeHistoryEventType);
   const eventTypes = historyEventTypes(objectFilteredChanges);
   const historyTitle = activeHistoryFilter ? `${activeHistoryFilter.objectType} ${t("viewHistory")}` : t("changeHistory");
+  const completenessFlags = projectCompletenessFlags(project);
 
   const dashboard = `
     <section class="meta-grid">
@@ -6137,6 +6863,13 @@ function renderProject(project) {
         <p class="meta-value">${escapeHtml(healthFlagLabel(project.healthFlag))}</p>
       </div>
     </section>
+
+    <article class="panel">
+      <div class="panel-head">
+        <h2 class="panel-title">${escapeHtml(t("projectConfidence"))} / ${escapeHtml(t("projectCompleteness"))}</h2>
+      </div>
+      ${renderFlagPills(completenessFlags)}
+    </article>
 
     <section class="dashboard-grid">
       <div class="stack">
@@ -6185,6 +6918,14 @@ function renderProject(project) {
       </div>
 
       <aside class="stack">
+        <article class="panel">
+          <div class="panel-head">
+            <h2 class="panel-title">${escapeHtml(t("projectRoles"))}</h2>
+            <button class="btn secondary" data-action="manage-project-roles">${escapeHtml(t("manageProjectRoles"))}</button>
+          </div>
+          ${renderProjectRoles(project)}
+        </article>
+
         <article class="panel">
           <div class="panel-head">
             <h2 class="panel-title">${escapeHtml(t("recentDecisions"))}</h2>
@@ -6244,6 +6985,16 @@ function renderProject(project) {
     draftProjects,
     changes
   });
+  const handoff = renderProjectHandoff(project, {
+    questions,
+    actions,
+    decisions,
+    facts,
+    sources,
+    relationships,
+    draftProjects,
+    changes
+  });
 
   shell(`
     <section class="view-head">
@@ -6257,6 +7008,7 @@ function renderProject(project) {
         ${project.archived ? `<button class="btn secondary" data-action="unarchive-project" data-project-id="${project.id}">${escapeHtml(t("unarchiveProject"))}</button>` : ""}
         <button class="btn secondary" data-action="delete-project" data-project-id="${project.id}" ${project.deletionStatus ? "disabled" : ""}>${escapeHtml(t("deleteProject"))}</button>
         <button class="btn secondary" data-action="project-overview">${escapeHtml(t("onePageOverview"))}</button>
+        <button class="btn secondary" data-action="export-handoff">${escapeHtml(t("exportHandoff"))}</button>
         <button class="btn secondary" data-action="context-pack">${escapeHtml(t("contextPack"))}</button>
         <button class="btn secondary" data-action="view-object-history" data-object-type="Project" data-object-id="${project.id}">${escapeHtml(t("viewHistory"))}</button>
         <button class="btn secondary" data-action="add-decision">${escapeHtml(t("addDecision"))}</button>
@@ -6270,12 +7022,185 @@ function renderProject(project) {
 
     <nav class="tabs" aria-label="Project views">
       <button class="tab ${activeView === "dashboard" ? "active" : ""}" data-action="show-dashboard">${escapeHtml(t("dashboard"))}</button>
+      <button class="tab ${activeView === "handoff" ? "active" : ""}" data-action="show-handoff">${escapeHtml(t("handoffMode"))}</button>
       <button class="tab ${activeView === "map" ? "active" : ""}" data-action="show-map">${escapeHtml(t("projectMap"))}</button>
       <button class="tab ${activeView === "history" ? "active" : ""}" data-action="show-history">${escapeDisplay(historyTitle, DISPLAY_META_LIMIT)}</button>
     </nav>
 
-    ${activeView === "dashboard" ? dashboard : activeView === "map" ? map : history}
+    ${activeView === "dashboard" ? dashboard : activeView === "handoff" ? handoff : activeView === "map" ? map : history}
   `);
+}
+
+function renderProjectHandoff(project, collections = {}) {
+  const changes = recent(sortNewest(collections.changes || [], "timestamp"), 8);
+  const approvals = projectHandoffApprovalItems(project, collections);
+  const blockers = projectHandoffBlockers(project, collections);
+  const people = projectHandoffPeople(project);
+  const sources = projectHandoffSources(collections.sources || []);
+  const aiItems = projectHandoffAiItems(project);
+  return `
+    <section class="view-head">
+      <div>
+        <h1 class="view-title">${escapeHtml(t("handoffMode"))}</h1>
+        <p class="view-subtitle">${escapeHtml(t("handoffSubtitle"))}</p>
+      </div>
+    </section>
+    <section class="dashboard-grid">
+      <div class="stack">
+        <article class="panel strong">
+          <div class="panel-head"><h2 class="panel-title">${escapeHtml(t("whatThisProjectIs"))}</h2></div>
+          <p class="status-text">${escapeDisplay(project.name, DISPLAY_META_LIMIT)}</p>
+          <p class="summary-text">${escapeDisplay(project.currentStatus || t("noStatusRecorded"))}</p>
+        </article>
+        <article class="panel">
+          <div class="panel-head"><h2 class="panel-title">${escapeHtml(t("whyItMatters"))}</h2></div>
+          <p class="summary-text">${escapeDisplay(project.currentSummary || t("noCurrentSummaryRecorded"))}</p>
+          ${renderFlagPills(projectCompletenessFlags(project))}
+        </article>
+        ${renderHandoffSection(t("whatChangedRecently"), changes.map((change) => ({
+          title: change.summary,
+          meta: `${formatDate(change.timestamp)} · ${actorDisplay(change.actorId, change.actorName)}`,
+          body: change.reason || change.details?.objectText || ""
+        })), t("noChangesRecordedForFilter"))}
+        ${renderHandoffSection(t("waitingOnApproval"), approvals, t("handoffNoApprovalItems"))}
+        ${renderHandoffSection(t("blockersAndRisks"), blockers, t("handoffNoBlockers"))}
+      </div>
+      <aside class="stack">
+        ${renderHandoffSection(t("whoOwnsWhat"), people, t("handoffNoAssignments"))}
+        ${renderHandoffSection(t("trustedSources"), sources, t("handoffNoTrustedSources"))}
+        ${renderHandoffSection(t("aiAllowedHelp"), aiItems, t("handoffAiBoundary"))}
+        <article class="panel">
+          <div class="panel-head"><h2 class="panel-title">${escapeHtml(t("doNotTouch"))}</h2></div>
+          <p class="notice">${escapeHtml(t("handoffDoNotTouchDefault"))}</p>
+          ${project.deletionStatus ? `<p class="item-meta">${escapeHtml(t("deleteProject"))}: ${escapeDisplay(project.deletionStatus, DISPLAY_META_LIMIT)}</p>` : ""}
+        </article>
+      </aside>
+    </section>
+  `;
+}
+
+function renderHandoffSection(title, items = [], emptyMessage = "") {
+  return `
+    <article class="panel">
+      <div class="panel-head"><h2 class="panel-title">${escapeHtml(title)}</h2></div>
+      ${items.length ? `<div class="list">${items.map((item) => `
+        <div class="item">
+          <p class="item-title">${escapeDisplay(item.title, DISPLAY_META_LIMIT)}</p>
+          ${item.meta ? `<p class="item-meta">${escapeDisplay(item.meta, DISPLAY_META_LIMIT)}</p>` : ""}
+          ${item.body ? `<p class="item-body">${escapeDisplay(item.body, DISPLAY_TEXT_LIMIT)}</p>` : ""}
+        </div>
+      `).join("")}</div>` : emptyText(emptyMessage)}
+    </article>
+  `;
+}
+
+function projectHandoffApprovalItems(project, collections = {}) {
+  const items = [];
+  for (const intake of store.intakeItems || []) {
+    if (intake.projectId !== project.id || intake.archived || intake.status !== "pending") continue;
+    items.push({
+      title: intake.title,
+      meta: `${t("intake")} · ${intakeQueueStateLabel(intake.queueState)} · ${proposedObjectTypeLabel(intake.proposedObjectType)}`,
+      body: intake.proposedChange?.text || intake.queueNotes || ""
+    });
+  }
+  for (const draft of collections.draftProjects || []) {
+    if (draft.status !== "approved" && allRequiredFlagsPass(draftAirlockChecks(draft))) {
+      items.push({
+        title: draft.name,
+        meta: `${t("draftProjects")} · ${t("readyForApproval")}`,
+        body: draft.draft || ""
+      });
+    }
+  }
+  for (const source of collections.sources || []) {
+    for (const extract of source.extracts || []) {
+      if (extract.extractMode === "ai_suggested" && extract.suggestionStatus === "pending_approval") {
+        items.push({
+          title: source.title,
+          meta: `${t("extract")} · ${t("aiSuggested")}`,
+          body: extract.summary || extract.text || ""
+        });
+      }
+    }
+  }
+  return items;
+}
+
+function projectHandoffBlockers(project, collections = {}) {
+  const items = [];
+  if (["blocked", "at_risk"].includes(project.healthFlag)) {
+    items.push({ title: healthFlagLabel(project.healthFlag), meta: t("health"), body: project.currentStatus || "" });
+  }
+  for (const action of collections.actions || []) {
+    if (nextActionDueState(action.dueDate) === "overdue") {
+      items.push({ title: action.action, meta: `${t("overdue")} · ${formatDate(action.dueDate, false)}`, body: action.owner || "" });
+    }
+  }
+  for (const source of collections.sources || []) {
+    const status = source.fileVerification?.status || "";
+    if (["missing", "changed", "unverifiable"].includes(status)) {
+      items.push({ title: source.title, meta: t("sourceFileVerification"), body: sourceFileVerificationMessage(source.fileVerification) });
+    }
+  }
+  for (const question of collections.questions || []) {
+    items.push({ title: question.question, meta: t("openQuestion"), body: question.context || "" });
+  }
+  return items;
+}
+
+function projectHandoffPeople(project) {
+  const items = [];
+  for (const role of project.projectRoles || []) {
+    if (role.status === "archived") continue;
+    items.push({
+      title: actorDisplay(role.actorId),
+      meta: `${t("projectRole")}: ${actorRoleLabel(role.role)}`,
+      body: role.reason || ""
+    });
+  }
+  for (const item of projectIntegrityObjects(project)) {
+    for (const assignment of item.object.assignments || []) {
+      if (assignment.status === "archived") continue;
+      items.push({
+        title: actorDisplay(assignment.actorId),
+        meta: `${assignmentRoleLabel(assignment.role)} · ${item.objectType}`,
+        body: objectLabel(item.objectType, item.object)
+      });
+    }
+  }
+  return items;
+}
+
+function projectHandoffSources(sources = []) {
+  return sortNewest(sources.filter((source) => source.status !== "archived"), "dateAdded")
+    .sort((a, b) => sourceTrustRank(a) - sourceTrustRank(b))
+    .slice(0, 8)
+    .map((source) => ({
+      title: source.title,
+      meta: `${source.sourceType || t("source")} · ${sourceFileStatusLabel(source.fileVerification?.status || "unverifiable")}`,
+      body: source.summary || source.location || source.localFile?.name || ""
+    }));
+}
+
+function sourceTrustRank(source) {
+  const status = source.fileVerification?.status || "";
+  if (status === "verified") return 0;
+  if (!status) return 1;
+  if (status === "changed") return 2;
+  if (status === "unverifiable") return 3;
+  return 4;
+}
+
+function projectHandoffAiItems(project) {
+  const orders = (store.aiWorkOrders || []).filter((order) => order.projectId === project.id && !["completed", "archived"].includes(order.status));
+  const items = orders.map((order) => ({
+    title: order.title,
+    meta: `${t("contextPackPreset")}: ${contextPackPresetLabel(order.contextPreset)} · ${t("status")}: ${aiWorkOrderStatusLabel(order.status)}`,
+    body: order.task
+  }));
+  items.push({ title: t("aiAllowedHelp"), meta: t("approvalPolicyHuman"), body: t("handoffAiBoundary") });
+  return items;
 }
 
 function renderProjectMap(project, collections) {
@@ -6427,6 +7352,8 @@ function renderDecisionList(decisions) {
       <p class="item-title">${escapeDisplay(decision.text)}</p>
       <p class="item-body">${escapeDisplay(decision.reason)}</p>
       <p class="item-meta">${escapeHtml(actorDisplay(decision.actorId))} · ${escapeHtml(formatDate(decision.date))} · ${escapeHtml(decision.confidence)}</p>
+      ${renderAssignmentsSummary(decision)}
+      ${renderCommentsSummary(decision)}
       ${renderAttachedSources(decision)}
       ${renderAttachedImages(decision)}
       ${renderObjectActions("Decision", decision.id, decision.archived)}
@@ -6441,6 +7368,8 @@ function renderFactList(facts) {
       <p class="item-title">${escapeDisplay(fact.statement)}</p>
       ${fact.source ? `<p class="item-body">${escapeHtml(t("source"))}: ${escapeDisplay(fact.source)}</p>` : ""}
       <p class="item-meta">${escapeHtml(actorDisplay(fact.actorId))} · ${escapeHtml(formatDate(fact.createdAt))} · ${escapeHtml(fact.confidence || t("unknown"))}</p>
+      ${renderAssignmentsSummary(fact)}
+      ${renderCommentsSummary(fact)}
       ${renderAttachedSources(fact)}
       ${renderAttachedImages(fact)}
       ${renderObjectActions("Fact", fact.id, fact.status === "archived")}
@@ -6465,6 +7394,8 @@ function renderSourceList(sources, project) {
         ${renderSourceFileVerification(source)}
         ${source.summary ? `<p class="item-body">${escapeDisplay(source.summary)}</p>` : ""}
         ${source.tags?.length ? `<p class="item-meta">${escapeHtml(t("tags"))}: ${escapeDisplay(tagsToText(source.tags), DISPLAY_META_LIMIT)}</p>` : ""}
+        ${renderAssignmentsSummary(source)}
+        ${renderCommentsSummary(source)}
         <div class="item-actions">
           <button class="btn secondary compact" data-action="verify-source-file" data-source-id="${source.id}">${escapeHtml(t("verifyFile"))}</button>
           <button class="btn secondary compact" data-action="add-extract" data-source-id="${source.id}">${escapeHtml(t("addExtract"))}</button>
@@ -6516,6 +7447,8 @@ function renderExtractList(extracts) {
       ${extract.summary ? `<p class="item-body">${escapeHtml(t("summary"))}: ${escapeDisplay(extract.summary)}</p>` : ""}
       <p class="item-meta">${escapeHtml(actorDisplay(extract.actorId))} · ${escapeHtml(formatDate(extract.dateAdded))}</p>
       ${extract.tags?.length ? `<p class="item-meta">${escapeHtml(t("tags"))}: ${escapeDisplay(tagsToText(extract.tags), DISPLAY_META_LIMIT)}</p>` : ""}
+      ${renderAssignmentsSummary(extract)}
+      ${renderCommentsSummary(extract)}
       ${renderAttachedSources(extract)}
       <div class="item-actions"><button class="btn secondary compact" data-action="create-draft-project" data-object-id="${extract.id}">${escapeHtml(t("createDraftProject"))}</button></div>
       ${extract.extractMode === "ai_suggested" && extract.suggestionStatus === "pending_approval" ? `<div class="item-actions"><button class="btn secondary compact" data-action="approve-extract" data-object-id="${extract.id}">${escapeHtml(t("approveExtract"))}</button></div>` : ""}
@@ -6531,6 +7464,8 @@ function renderRelationshipList(relationships) {
       <p class="item-title">${escapeDisplay(relationshipTargetLabel(relationship))}</p>
       <p class="item-meta">${escapeDisplay(relationship.relationshipType || t("related"), DISPLAY_META_LIMIT)} · ${escapeHtml(actorDisplay(relationship.actorId))} · ${escapeHtml(formatDate(relationship.createdAt))}</p>
       ${relationship.notes ? `<p class="item-body">${escapeDisplay(relationship.notes)}</p>` : ""}
+      ${renderAssignmentsSummary(relationship)}
+      ${renderCommentsSummary(relationship)}
       ${renderAttachedSources(relationship)}
       ${renderAttachedImages(relationship)}
       ${renderObjectActions("Relationship", relationship.id, relationship.status === "archived")}
@@ -6547,11 +7482,15 @@ function renderDraftProjectList(draftProjects) {
       <p class="item-meta">${escapeHtml(t("status"))}: ${escapeHtml(draftProject.status || t("draft"))}${draftProject.approvedAt ? ` · ${escapeHtml(t("approved"))} ${escapeHtml(formatDate(draftProject.approvedAt))}` : ""}</p>
       <p class="item-body">${escapeDisplay(draftProject.draft || t("noDraftTextRecorded"))}</p>
       ${renderDraftReviewFlags(draftProject)}
+      <p class="item-meta">${escapeHtml(t("airlockCompleteness"))}</p>
+      ${renderFlagPills(draftAirlockChecks(draftProject))}
+      ${renderAssignmentsSummary(draftProject)}
+      ${renderCommentsSummary(draftProject)}
       ${renderAttachedSources(draftProject)}
       ${renderAttachedImages(draftProject)}
       <div class="item-actions">
         <button class="btn secondary compact" data-action="edit-object" data-object-type="DraftProject" data-object-id="${draftProject.id}">${escapeHtml(t("review"))}</button>
-        <button class="btn secondary compact" data-action="approve-draft-project" data-object-id="${draftProject.id}" ${draftProject.status === "approved" || !draftProject.reviewFlags?.readyForApproval ? "disabled" : ""}>${escapeHtml(t("approveDraft"))}</button>
+        <button class="btn secondary compact" data-action="approve-draft-project" data-object-id="${draftProject.id}" ${draftProject.status === "approved" || !allRequiredFlagsPass(draftAirlockChecks(draftProject)) ? "disabled" : ""}>${escapeHtml(t("approveDraft"))}</button>
         <button class="btn secondary compact" data-action="archive-object" data-object-type="DraftProject" data-object-id="${draftProject.id}" ${draftProject.status === "archived" ? "disabled" : ""}>${escapeHtml(t("archive"))}</button>
         <button class="btn secondary compact" data-action="view-object-history" data-object-type="DraftProject" data-object-id="${draftProject.id}">${escapeHtml(t("viewHistory"))}</button>
       </div>
@@ -6583,6 +7522,8 @@ function renderQuestionList(questions) {
       <p class="item-title">${escapeDisplay(question.question)}</p>
       ${question.context ? `<p class="item-body">${escapeDisplay(question.context)}</p>` : ""}
       <p class="item-meta">${escapeHtml(actorDisplay(question.actorId))} · ${escapeHtml(formatDate(question.createdAt))}</p>
+      ${renderAssignmentsSummary(question)}
+      ${renderCommentsSummary(question)}
       ${renderAttachedSources(question)}
       ${renderAttachedImages(question)}
       ${renderObjectActions("OpenQuestion", question.id, question.status === "archived")}
@@ -6600,6 +7541,8 @@ function renderActionList(actions) {
       <p class="item-meta">${escapeHtml(t("due"))}: ${escapeHtml(action.dueDate ? formatDate(action.dueDate, false) : t("notSet"))}</p>
       <p class="item-meta">${escapeHtml(t("completed"))}: ${escapeHtml(action.completedAt ? formatDate(action.completedAt) : t("notCompleted"))}</p>
       <p class="item-meta">${action.owner ? `${escapeDisplay(action.owner, DISPLAY_META_LIMIT)} · ` : ""}${escapeHtml(actorDisplay(action.actorId))}</p>
+      ${renderAssignmentsSummary(action)}
+      ${renderCommentsSummary(action)}
       ${renderAttachedSources(action)}
       ${renderAttachedImages(action)}
       ${getActionStatus(action) === "open" ? `<div class="item-actions"><button class="btn secondary compact" data-action="mark-complete" data-object-id="${action.id}">${escapeHtml(t("markComplete"))}</button></div>` : ""}
@@ -6618,6 +7561,8 @@ function renderObjectActions(objectType, objectId, archived = false) {
   return `
     <div class="item-actions">
       <button class="btn secondary compact" data-action="edit-object" data-object-type="${objectType}" data-object-id="${objectId}">${escapeHtml(t("edit"))}</button>
+      <button class="btn secondary compact" data-action="assign-object" data-object-type="${objectType}" data-object-id="${objectId}">${escapeHtml(t("assignObject"))}</button>
+      <button class="btn secondary compact" data-action="comment-object" data-object-type="${objectType}" data-object-id="${objectId}">${escapeHtml(t("reviewThread"))}</button>
       ${attachSource}
       ${attachImage}
       <button class="btn secondary compact" data-action="archive-object" data-object-type="${objectType}" data-object-id="${objectId}" ${archived ? "disabled" : ""}>${escapeHtml(t("archive"))}</button>
@@ -6777,6 +7722,55 @@ function exportProjectJson(projectId = activeProjectId) {
   downloadTextFile(`${safeFileName(project.name)}.project-state.json`, JSON.stringify(payload, null, 2), "application/json");
 }
 
+function exportProjectHandoff() {
+  const project = getProject();
+  if (!project) return;
+  const pack = buildProjectContextPack(project, {
+    preset: "handoff",
+    ...CONTEXT_PACK_PRESETS.handoff
+  });
+  const text = buildProjectHandoffText(project, pack);
+  const stamp = nowIso().replace(/[:.]/g, "-");
+  downloadTextFile(`${safeFileName(project.name)}.handoff-${stamp}.md`, text, "text/markdown");
+}
+
+function buildProjectHandoffText(project, pack) {
+  const sections = [
+    `# ${project.name}`,
+    `Generated: ${formatDate(pack.generatedAt)}`,
+    "",
+    `## ${t("whatThisProjectIs")}`,
+    project.currentStatus || t("noStatusRecorded"),
+    "",
+    `## ${t("whyItMatters")}`,
+    project.currentSummary || t("noCurrentSummaryRecorded"),
+    "",
+    `## ${t("recentDecisions")}`,
+    markdownList(pack.recentDecisions, (item) => `${item.text || item.title || ""} - ${item.reason || ""}`),
+    "",
+    `## ${t("openQuestions")}`,
+    markdownList(pack.openWork.questions, (item) => `${item.question || item.title || ""} - ${item.context || ""}`),
+    "",
+    `## ${t("nextActions")}`,
+    markdownList(pack.openWork.actions, (item) => `${item.action || item.title || ""} - ${item.dueDate || t("noDueDate")}`),
+    "",
+    `## ${t("trustedSources")}`,
+    markdownList(pack.evidence.sources, (item) => `${item.title || ""} - ${item.summary || item.location || ""}`),
+    "",
+    `## ${t("aiAllowedHelp")}`,
+    t("handoffAiBoundary"),
+    "",
+    `## ${t("doNotTouch")}`,
+    t("handoffDoNotTouchDefault")
+  ];
+  return sections.join("\n");
+}
+
+function markdownList(items = [], renderer) {
+  if (!items.length) return `- ${t("notRecorded")}`;
+  return items.map((item) => `- ${renderer(item).replace(/\s+/g, " ").trim()}`).join("\n");
+}
+
 function openContextPackModal() {
   const project = getProject();
   if (!project) return;
@@ -6785,6 +7779,13 @@ function openContextPackModal() {
     submitText: t("exportContextPack"),
     body: `
       <p class="notice">${escapeHtml(t("contextPackNotice"))}</p>
+      <div class="field">
+        <label for="contextPreset">${escapeHtml(t("contextPackPreset"))}</label>
+        <select id="contextPreset" name="contextPreset" data-context-preset>
+          ${contextPackPresetOptions()}
+        </select>
+      </div>
+      <p class="notice">${escapeHtml(t("contextPresetNotice"))}</p>
       <div class="field">
         <label for="contextScope">${escapeHtml(t("contextScope"))}</label>
         <select id="contextScope" name="contextScope">
@@ -6814,21 +7815,96 @@ function openContextPackModal() {
           <input name="includeHistory" type="checkbox" checked>
           <span>${escapeHtml(t("includeHistory"))}</span>
         </label>
+        <label class="check-field">
+          <input name="includeDecisions" type="checkbox" checked>
+          <span>${escapeHtml(t("includeDecisions"))}</span>
+        </label>
+        <label class="check-field">
+          <input name="includeFacts" type="checkbox" checked>
+          <span>${escapeHtml(t("includeFacts"))}</span>
+        </label>
+        <label class="check-field">
+          <input name="includeRelationships" type="checkbox" checked>
+          <span>${escapeHtml(t("includeRelationships"))}</span>
+        </label>
       </div>
     `,
     onSubmit(data, form) {
+      const options = resolveContextPackOptions(data);
       const pack = buildProjectContextPack(project, {
+        preset: options.preset,
         scope: data.contextScope,
         budget: data.contextBudget,
         includeSources: data.includeSources === "on",
         includeOpenWork: data.includeOpenWork === "on",
-        includeHistory: data.includeHistory === "on"
+        includeHistory: data.includeHistory === "on",
+        includeDecisions: data.includeDecisions === "on",
+        includeFacts: data.includeFacts === "on",
+        includeRelationships: data.includeRelationships === "on",
+        ...options
       });
       const stamp = nowIso().replace(/[:.]/g, "-");
       downloadTextFile(`${safeFileName(project.name)}.context-pack-${stamp}.json`, JSON.stringify(pack, null, 2), "application/json");
       return true;
     }
   });
+  const form = document.querySelector(".modal-backdrop .form");
+  applyContextPresetToForm(form, "handoff");
+}
+
+function contextPackPresetOptions() {
+  return CONTEXT_PACK_PRESET_KEYS.map((key) => `<option value="${escapeHtml(key)}" ${key === "handoff" ? "selected" : ""}>${escapeHtml(contextPackPresetLabel(key))}</option>`).join("");
+}
+
+function contextPackPresetLabel(key) {
+  const labels = {
+    current_state: t("contextPresetCurrentState"),
+    recent_decisions: t("contextPresetRecentDecisions"),
+    handoff: t("contextPresetHandoff"),
+    source_research: t("contextPresetSourceResearch"),
+    codex_implementation: t("contextPresetCodexImplementation"),
+    custom: t("contextPresetCustom")
+  };
+  return labels[key] || t("contextPresetCustom");
+}
+
+function resolveContextPackOptions(data = {}) {
+  const preset = CONTEXT_PACK_PRESET_KEYS.includes(data.contextPreset) ? data.contextPreset : "handoff";
+  if (preset === "custom") {
+    return {
+      preset,
+      scope: data.contextScope,
+      budget: data.contextBudget,
+      includeSources: data.includeSources === "on",
+      includeOpenWork: data.includeOpenWork === "on",
+      includeHistory: data.includeHistory === "on",
+      includeDecisions: data.includeDecisions === "on",
+      includeFacts: data.includeFacts === "on",
+      includeRelationships: data.includeRelationships === "on"
+    };
+  }
+  return { preset, ...CONTEXT_PACK_PRESETS[preset] };
+}
+
+function applyContextPresetToForm(form, presetKey) {
+  const preset = CONTEXT_PACK_PRESETS[presetKey];
+  if (!form || !preset) return;
+  const setValue = (name, value) => {
+    const field = form.querySelector(`[name="${name}"]`);
+    if (field) field.value = value;
+  };
+  const setChecked = (name, value) => {
+    const field = form.querySelector(`[name="${name}"]`);
+    if (field) field.checked = Boolean(value);
+  };
+  setValue("contextScope", preset.scope);
+  setValue("contextBudget", preset.budget);
+  setChecked("includeSources", preset.includeSources);
+  setChecked("includeOpenWork", preset.includeOpenWork);
+  setChecked("includeHistory", preset.includeHistory);
+  setChecked("includeDecisions", preset.includeDecisions);
+  setChecked("includeFacts", preset.includeFacts);
+  setChecked("includeRelationships", preset.includeRelationships);
 }
 
 function contextBudgetConfig(budget = "normal") {
@@ -6847,11 +7923,16 @@ function buildProjectContextPack(project, options = {}) {
   const includeSources = options.includeSources !== false || scope === "sources";
   const includeOpenWork = options.includeOpenWork !== false;
   const includeHistory = options.includeHistory !== false;
+  const includeDecisions = options.includeDecisions !== false;
+  const includeFacts = options.includeFacts !== false;
+  const includeRelationships = options.includeRelationships !== false;
   const relatedProjects = scope === "related" ? relatedProjectBriefs(project, config) : [];
   return {
     app: "Project State",
     packType: "project-context-pack",
     packVersion: "0.1",
+    preset: options.preset || "custom",
+    presetLabel: contextPackPresetLabel(options.preset || "custom"),
     generatedAt: nowIso(),
     generatedBy: "local-ui",
     runtimeMode: currentStorageModeName(),
@@ -6869,10 +7950,10 @@ function buildProjectContextPack(project, options = {}) {
       summary: limitText(project.currentSummary || "", config.textLimit),
       health: normalizeHealthFlag(project.healthFlag)
     },
-    recentDecisions: compactDecisions(project, config),
-    keyFacts: compactFacts(project, config),
+    recentDecisions: includeDecisions ? compactDecisions(project, config) : [],
+    keyFacts: includeFacts ? compactFacts(project, config) : [],
     openWork: includeOpenWork ? compactOpenWork(project, config) : { questions: [], actions: [] },
-    relationships: compactRelationships(project, config),
+    relationships: includeRelationships ? compactRelationships(project, config) : [],
     evidence: includeSources ? compactEvidence(project, config) : { sources: [], chunks: [] },
     recentHistory: includeHistory ? compactHistory(project, config) : [],
     proposalSchema: contextProposalSchema()
@@ -7571,6 +8652,313 @@ function projectOptions(selected = "") {
     .join("");
 }
 
+function openAssignObjectModal(objectType, objectId) {
+  const project = getProject();
+  const object = getProjectObject(project, objectType, objectId);
+  if (!project || !object) return;
+  showModal({
+    title: t("assignObject"),
+    submitText: t("approveChange"),
+    body: `
+      <p class="notice">${escapeHtml(t("commentsNotPrivateNotice"))}</p>
+      <div class="field">
+        <label for="assignedActorId">${escapeHtml(t("assignedTo"))}</label>
+        <select id="assignedActorId" name="assignedActorId" required>${actorSelectOptions()}</select>
+      </div>
+      <div class="field">
+        <label for="assignmentRole">${escapeHtml(t("assignmentRole"))}</label>
+        <select id="assignmentRole" name="assignmentRole">${assignmentRoleOptions("reviewer")}</select>
+      </div>
+      ${auditFields()}
+    `,
+    onSubmit(data) {
+      const actor = getOrCreateActor(data.actorName, "Human");
+      object.assignments = Array.isArray(object.assignments) ? object.assignments : [];
+      const assignment = {
+        id: uid("assignment"),
+        actorId: data.assignedActorId,
+        role: normalizeAssignmentRole(data.assignmentRole),
+        assignedAt: nowIso(),
+        assignedBy: actor.id,
+        reason: data.reason.trim(),
+        status: "active"
+      };
+      object.assignments.unshift(assignment);
+      recordChange(project, actor, data.reason, `${objectType} assigned`, {
+        objectType,
+        objectId: object.id,
+        objectText: objectLabel(objectType, object),
+        fields: {
+          assignedTo: actorDisplay(assignment.actorId),
+          assignmentRole: assignmentRoleLabel(assignment.role)
+        }
+      });
+      saveStore();
+    }
+  });
+}
+
+function openReviewThreadModal(objectType, objectId) {
+  const project = getProject();
+  const object = getProjectObject(project, objectType, objectId);
+  if (!project || !object) return;
+  showModal({
+    title: t("reviewThread"),
+    submitText: t("addComment"),
+    body: `
+      <p class="notice">${escapeHtml(t("commentsNotPrivateNotice"))}</p>
+      ${renderCommentThread(object)}
+      <div class="field">
+        <label for="reviewState">${escapeHtml(t("reviewState"))}</label>
+        <select id="reviewState" name="reviewState">${reviewStateOptions(object.reviewState || "needs_review")}</select>
+      </div>
+      <div class="field">
+        <label for="commentText">${escapeHtml(t("commentText"))}</label>
+        <textarea id="commentText" name="commentText" required></textarea>
+      </div>
+      ${auditFields()}
+    `,
+    onSubmit(data) {
+      const actor = getOrCreateActor(data.actorName, "Human");
+      object.comments = Array.isArray(object.comments) ? object.comments : [];
+      const comment = {
+        id: uid("comment"),
+        actorId: actor.id,
+        actorName: actor.name,
+        createdAt: nowIso(),
+        text: data.commentText.trim(),
+        reviewState: normalizeReviewState(data.reviewState),
+        visibilityNotice: "Project State comments are part of the project record and are not private."
+      };
+      object.comments.unshift(comment);
+      object.reviewState = comment.reviewState;
+      recordChange(project, actor, data.reason, `${objectType} review comment added`, {
+        objectType,
+        objectId: object.id,
+        objectText: objectLabel(objectType, object),
+        fields: {
+          reviewState: reviewStateLabel(object.reviewState),
+          comment: comment.text
+        }
+      });
+      saveStore();
+    }
+  });
+}
+
+function renderCommentThread(object = {}) {
+  const comments = sortNewest(object.comments || [], "createdAt");
+  if (!comments.length) return emptyText(t("comments"));
+  return `
+    <div class="list">
+      ${comments.map((comment) => `
+        <div class="item">
+          <p class="item-title">${escapeHtml(actorDisplay(comment.actorId, comment.actorName))}</p>
+          <p class="item-meta">${escapeHtml(formatDate(comment.createdAt))} · ${escapeHtml(reviewStateLabel(comment.reviewState))}</p>
+          <p class="item-body">${escapeDisplay(comment.text, DISPLAY_META_LIMIT)}</p>
+        </div>
+      `).join("")}
+    </div>
+  `;
+}
+
+function openManageProjectRolesModal() {
+  const project = getProject();
+  if (!project) return;
+  showModal({
+    title: t("manageProjectRoles"),
+    submitText: t("approveChange"),
+    body: `
+      ${renderProjectRoles(project)}
+      <div class="field">
+        <label for="projectRoleActorId">${escapeHtml(t("assignedTo"))}</label>
+        <select id="projectRoleActorId" name="projectRoleActorId" required>${actorSelectOptions()}</select>
+      </div>
+      <div class="field">
+        <label for="projectRole">${escapeHtml(t("projectRole"))}</label>
+        <select id="projectRole" name="projectRole">${actorRoleOptions("project_lead")}</select>
+      </div>
+      ${auditFields()}
+    `,
+    onSubmit(data) {
+      const actor = getOrCreateActor(data.actorName, "Human");
+      project.projectRoles = Array.isArray(project.projectRoles) ? project.projectRoles : [];
+      const role = {
+        id: uid("project_role"),
+        actorId: data.projectRoleActorId,
+        role: normalizeActorRole(data.projectRole),
+        assignedAt: nowIso(),
+        assignedBy: actor.id,
+        reason: data.reason.trim(),
+        status: "active"
+      };
+      project.projectRoles.unshift(role);
+      recordChange(project, actor, data.reason, "Project role assigned", {
+        objectType: "Project",
+        objectId: project.id,
+        objectText: project.name,
+        fields: {
+          assignedTo: actorDisplay(role.actorId),
+          projectRole: actorRoleLabel(role.role)
+        }
+      });
+      saveStore();
+    }
+  });
+}
+
+function openCreateAiWorkOrderModal() {
+  showModal({
+    title: t("createAiWorkOrder"),
+    submitText: t("recordSuggestion"),
+    body: `
+      <p class="notice">${escapeHtml(t("aiWorkOrderNotice"))}</p>
+      <div class="field">
+        <label for="projectId">${escapeHtml(t("targetProject"))}</label>
+        <select id="projectId" name="projectId" required>${projectOptions()}</select>
+      </div>
+      <div class="field">
+        <label for="title">${escapeHtml(t("title"))}</label>
+        <input id="title" name="title" required>
+      </div>
+      <div class="field">
+        <label for="contextPreset">${escapeHtml(t("contextPackPreset"))}</label>
+        <select id="contextPreset" name="contextPreset">${contextPackPresetOptions()}</select>
+      </div>
+      <div class="field">
+        <label for="outputType">${escapeHtml(t("outputType"))}</label>
+        <input id="outputType" name="outputType" placeholder="${escapeHtml(t("draftProjectDefault"))}">
+      </div>
+      <div class="field">
+        <label for="task">${escapeHtml(t("workOrderTask"))}</label>
+        <textarea id="task" name="task" required></textarea>
+      </div>
+      <label class="check-field">
+        <input name="canCreateIntake" type="checkbox">
+        <span>${escapeHtml(t("canCreateIntake"))}</span>
+      </label>
+      ${auditFields()}
+    `,
+    onSubmit(data) {
+      const actor = getOrCreateActor(data.actorName, "Human");
+      const workOrder = {
+        id: uid("ai_work_order"),
+        projectId: data.projectId,
+        title: data.title.trim(),
+        task: data.task.trim(),
+        contextPreset: CONTEXT_PACK_PRESET_KEYS.includes(data.contextPreset) ? data.contextPreset : "handoff",
+        outputType: data.outputType.trim(),
+        canCreateIntake: data.canCreateIntake === "on",
+        status: "submitted",
+        createdAt: nowIso(),
+        createdBy: actor.id,
+        reason: data.reason.trim(),
+        comments: []
+      };
+      store.aiWorkOrders.unshift(workOrder);
+      const project = getProject(workOrder.projectId);
+      if (project) {
+        recordChange(project, actor, data.reason, "AI work order created", {
+          objectType: "Project",
+          objectId: project.id,
+          objectText: project.name,
+          fields: {
+            workOrderId: workOrder.id,
+            title: workOrder.title,
+            contextPreset: contextPackPresetLabel(workOrder.contextPreset),
+            canCreateIntake: workOrder.canCreateIntake ? t("yes") : t("no")
+          }
+        });
+      }
+      saveStore({ allowWithoutCoreApproval: !project, reason: "ai-work-order-created" });
+      activeRootView = "work-orders";
+      activeProjectId = null;
+    }
+  });
+}
+
+function openAiWorkOrderCommentsModal(workOrderId) {
+  const workOrder = (store.aiWorkOrders || []).find((order) => order.id === workOrderId);
+  if (!workOrder) return;
+  showModal({
+    title: t("reviewThread"),
+    submitText: t("addComment"),
+    body: `
+      <p class="notice">${escapeHtml(t("commentsNotPrivateNotice"))}</p>
+      ${renderCommentThread(workOrder)}
+      <div class="field">
+        <label for="reviewState">${escapeHtml(t("status"))}</label>
+        <select id="reviewState" name="reviewState">
+          ${AI_WORK_ORDER_STATUSES.map((status) => `<option value="${status}" ${workOrder.status === status ? "selected" : ""}>${escapeHtml(aiWorkOrderStatusLabel(status))}</option>`).join("")}
+        </select>
+      </div>
+      <div class="field">
+        <label for="commentText">${escapeHtml(t("commentText"))}</label>
+        <textarea id="commentText" name="commentText" required></textarea>
+      </div>
+      ${auditFields()}
+    `,
+    onSubmit(data) {
+      const actor = getOrCreateActor(data.actorName, "Human");
+      workOrder.status = AI_WORK_ORDER_STATUSES.includes(data.reviewState) ? data.reviewState : workOrder.status;
+      workOrder.comments = Array.isArray(workOrder.comments) ? workOrder.comments : [];
+      workOrder.comments.unshift({
+        id: uid("comment"),
+        actorId: actor.id,
+        actorName: actor.name,
+        createdAt: nowIso(),
+        text: data.commentText.trim(),
+        reviewState: workOrder.status,
+        visibilityNotice: "Project State comments are part of the project record and are not private."
+      });
+      const project = getProject(workOrder.projectId);
+      if (project) {
+        recordChange(project, actor, data.reason, "AI work order commented", {
+          objectType: "Project",
+          objectId: project.id,
+          objectText: project.name,
+          fields: {
+            workOrderId: workOrder.id,
+            status: aiWorkOrderStatusLabel(workOrder.status),
+            comment: data.commentText.trim()
+          }
+        });
+      }
+      saveStore({ allowWithoutCoreApproval: !project, reason: "ai-work-order-commented" });
+    }
+  });
+}
+
+function archiveAiWorkOrder(workOrderId) {
+  const workOrder = (store.aiWorkOrders || []).find((order) => order.id === workOrderId);
+  if (!workOrder || workOrder.status === "archived") return;
+  showModal({
+    title: t("archive"),
+    submitText: t("approveArchive"),
+    body: `
+      ${confirmationField("confirmArchive", t("archiveObjectNotice"))}
+      ${auditFields()}
+    `,
+    onSubmit(data) {
+      const actor = getOrCreateActor(data.actorName, "Human");
+      workOrder.status = "archived";
+      const project = getProject(workOrder.projectId);
+      if (project) {
+        recordChange(project, actor, data.reason, "AI work order archived", {
+          objectType: "Project",
+          objectId: project.id,
+          objectText: project.name,
+          fields: {
+            workOrderId: workOrder.id,
+            title: workOrder.title
+          }
+        });
+      }
+      saveStore({ allowWithoutCoreApproval: !project, reason: "ai-work-order-archived" });
+    }
+  });
+}
+
 function openCreateIntakeModal() {
   showModal({
     title: t("addIntake"),
@@ -7647,8 +9035,9 @@ function openCreateIntakeModal() {
 function openApproveIntakeModal(intakeId) {
   const intake = findIntakeItem(intakeId);
   if (!intake || intake.status !== "pending" || intake.archived) return;
-  if (intake.queueState !== "ready") {
-    window.alert(t("approvalQueueReadyRequired"));
+  const airlockFlags = intakeAirlockChecks(intake);
+  if (!allRequiredFlagsPass(airlockFlags)) {
+    window.alert(t("airlockIncompleteNotice"));
     return;
   }
   showModal({
@@ -7657,6 +9046,10 @@ function openApproveIntakeModal(intakeId) {
     body: `
       <p class="notice">${escapeHtml(t("approvalAppliesChangeNotice"))}</p>
       ${renderIntakeApprovalPreview(intake)}
+      <div class="field">
+        <label>${escapeHtml(t("requiredAirlockChecks"))}</label>
+        ${renderFlagPills(airlockFlags)}
+      </div>
       <div class="field">
         <label>${escapeHtml(t("approvalChecklist"))}</label>
         ${confirmationField("confirmProposalReviewed", t("confirmProposalReviewed"))}
@@ -7769,7 +9162,37 @@ function renderIntakeApprovalPreview(intake) {
       <p>${escapeDisplay(proposed.text || t("noProposedTextRecorded"))}</p>
       ${proposed.summary ? `<p>${escapeDisplay(proposed.summary)}</p>` : ""}
     </div>
+    ${renderIntakeProposalDiff(intake)}
   `;
+}
+
+function renderIntakeProposalDiff(intake) {
+  const rows = intakeProposalDiffRows(intake);
+  if (!rows.length) return "";
+  return `
+    <div class="inline-empty">
+      <p><strong>${escapeHtml(t("proposalDiff"))}</strong></p>
+      ${rows.map((row) => `
+        <p><strong>${escapeHtml(row.label)}:</strong> ${escapeHtml(t("currentValue"))}: ${escapeDisplay(row.current || t("notRecorded"), DISPLAY_META_LIMIT)} · ${escapeHtml(t("proposedValue"))}: ${escapeDisplay(row.proposed || t("notRecorded"), DISPLAY_META_LIMIT)}</p>
+      `).join("")}
+    </div>
+  `;
+}
+
+function intakeProposalDiffRows(intake) {
+  const project = getProject(intake.projectId);
+  const proposed = intake.proposedChange || {};
+  if (!project) return [];
+  if (intake.proposedObjectType === "ProjectStatus") {
+    return [
+      { label: t("currentStatus"), current: project.currentStatus, proposed: proposed.text },
+      { label: t("currentSummary"), current: project.currentSummary, proposed: proposed.summary }
+    ];
+  }
+  return [
+    { label: proposedObjectTypeLabel(intake.proposedObjectType), current: t("notRecorded"), proposed: proposed.text },
+    { label: t("summary"), current: "", proposed: proposed.summary }
+  ].filter((row) => row.proposed);
 }
 
 function applyApprovedIntakeToCore(intake, actor, reason, approval) {
@@ -8704,13 +10127,21 @@ function reviewFlagsSummary(flags = {}) {
 function openApproveDraftProjectModal(draftProjectId) {
   const project = getProject();
   const draftProject = getProjectObject(project, "DraftProject", draftProjectId);
-  if (!project || !draftProject || draftProject.status === "approved" || !draftProject.reviewFlags?.readyForApproval) return;
+  const airlockFlags = draftAirlockChecks(draftProject || {});
+  if (!project || !draftProject || draftProject.status === "approved" || !allRequiredFlagsPass(airlockFlags)) {
+    window.alert(t("airlockIncompleteNotice"));
+    return;
+  }
 
   showModal({
     title: t("approveDraft"),
     submitText: t("approveToProject"),
     body: `
       <p class="notice">${escapeHtml(t("approvalCreatesProjectNotice"))}</p>
+      <div class="field">
+        <label>${escapeHtml(t("requiredAirlockChecks"))}</label>
+        ${renderFlagPills(airlockFlags)}
+      </div>
       <div class="field">
         <label for="name">${escapeHtml(t("approvedProjectName"))}</label>
         <input id="name" name="name" value="${escapeHtml(draftProject.name)}" required>
@@ -10038,6 +11469,11 @@ app.addEventListener("click", (event) => {
     activeProjectId = null;
     render();
   }
+  if (action === "show-work-orders") {
+    activeRootView = "work-orders";
+    activeProjectId = null;
+    render();
+  }
   if (action === "show-archived-projects") {
     activeRootView = "archived";
     activeProjectId = null;
@@ -10057,8 +11493,12 @@ app.addEventListener("click", (event) => {
   if (action === "review-intake-queue") openReviewIntakeQueueModal(button.dataset.intakeId);
   if (action === "reject-intake") openRejectIntakeModal(button.dataset.intakeId);
   if (action === "archive-intake") openArchiveIntakeModal(button.dataset.intakeId);
+  if (action === "create-ai-work-order") openCreateAiWorkOrderModal();
+  if (action === "comment-ai-work-order") openAiWorkOrderCommentsModal(button.dataset.workOrderId);
+  if (action === "archive-ai-work-order") archiveAiWorkOrder(button.dataset.workOrderId);
   if (action === "export-project") exportProjectJson();
   if (action === "project-overview") openProjectOverviewModal();
+  if (action === "export-handoff") exportProjectHandoff();
   if (action === "context-pack") openContextPackModal();
   if (action === "open-project") {
     activeProjectId = button.dataset.projectId;
@@ -10078,6 +11518,10 @@ app.addEventListener("click", (event) => {
   }
   if (action === "show-dashboard") {
     activeView = "dashboard";
+    render();
+  }
+  if (action === "show-handoff") {
+    activeView = "handoff";
     render();
   }
   if (action === "show-map") {
@@ -10131,6 +11575,15 @@ app.addEventListener("click", (event) => {
     if (button.dataset.objectType === "Project") activeProjectId = button.dataset.objectId;
     openEditObjectModal(button.dataset.objectType, button.dataset.objectId);
   }
+  if (action === "assign-object") {
+    if (button.dataset.objectType === "Project") activeProjectId = button.dataset.objectId;
+    openAssignObjectModal(button.dataset.objectType, button.dataset.objectId);
+  }
+  if (action === "comment-object") {
+    if (button.dataset.objectType === "Project") activeProjectId = button.dataset.objectId;
+    openReviewThreadModal(button.dataset.objectType, button.dataset.objectId);
+  }
+  if (action === "manage-project-roles") openManageProjectRolesModal();
   if (action === "archive-object") {
     if (button.dataset.objectType === "Project") activeProjectId = button.dataset.objectId;
     openArchiveObjectModal(button.dataset.objectType, button.dataset.objectId);
@@ -10246,6 +11699,13 @@ app.addEventListener("change", (event) => {
   if (!filter) return;
   activeHistoryEventType = filter.value;
   render();
+});
+
+document.addEventListener("change", (event) => {
+  const presetField = event.target.closest("[data-context-preset]");
+  if (!presetField) return;
+  if (presetField.value === "custom") return;
+  applyContextPresetToForm(presetField.closest("form"), presetField.value);
 });
 
 app.addEventListener("input", (event) => {

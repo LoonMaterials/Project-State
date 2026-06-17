@@ -420,6 +420,34 @@ Context Pack Foundation
 
 Each project can export a local Context Pack for future API or AI arms. A context pack is a bounded JSON packet containing the current project brief, selected scope, recent decisions, key facts, open work, relationships, evidence/source chunks, recent history, and a standard proposal schema. Context packs are read-only context. They do not change Project State and do not authorize an arm to write to Core or Spine.
 
+Context Pack presets are available for common handoffs:
+
+Current state only
+Current state plus recent decisions
+Full project handoff
+Source-heavy research context
+Codex implementation context
+Custom
+
+Presets control scope, context budget, and which sections are included so future arms receive only the context needed for the task.
+
+Handoff Mode
+
+Each project has a read-only Handoff Mode for humans or AI helpers joining the work. It summarizes what the project is, why it matters, recent changes, approval waits, blockers, ownership, trusted sources, AI boundaries, and what not to touch. Handoff Mode can also export a local Markdown handoff file. Handoffs are briefing material only; they do not authorize changes to Core or Spine.
+
+Collaboration Workflow Foundation
+
+Project State now includes local collaboration workflow primitives for future multi-human and AI-assisted use:
+
+Assignments: objects can be assigned to an owner, reviewer, approver, or watcher.
+Review threads: objects can hold comments and review-state notes. Comments are part of the project record and are not private.
+Project roles: projects can record project-specific human roles without changing global system roles.
+Proposal diffs: intake approvals show current value versus proposed value before human approval.
+AI work orders: humans can create bounded AI work requests with a context-pack preset and output type. Creating a work order does not call AI and does not change Project State.
+Notifications: assignments and open AI work orders appear in the Work Inbox.
+
+These collaboration records support workflow and review. They do not let humans, AI, APIs, or other arms bypass the Intake Airlock or write directly to Core or Spine.
+
 Recorded Communications
 
 Recorded chats and emails are treated as Project State source records. They can be linked to Project State users through actor email addresses and chat handles. These records are not private; authorized Project State users should assume recorded project chats, emails, sources, and history are visible inside the app.
