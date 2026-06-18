@@ -1000,6 +1000,38 @@ select:focus {
   background: #e9edf1;
 }
 
+.source-freshness-current,
+.trust-boundary-core {
+  color: #2f5f3a;
+  background: #e1f0e3;
+}
+
+.source-freshness-review_due {
+  color: #76521d;
+  background: #fff1ce;
+}
+
+.source-freshness-stale {
+  color: #803b31;
+  background: #fde3dc;
+}
+
+.source-freshness-not_reviewed,
+.trust-boundary-read_only {
+  color: #4f5962;
+  background: #e9edf1;
+}
+
+.trust-boundary-external {
+  color: #5c4770;
+  background: #eee6f4;
+}
+
+.trust-boundary-airlock {
+  color: #7a541b;
+  background: #fff0cf;
+}
+
 .notice {
   margin: 0;
   color: var(--warn);

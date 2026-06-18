@@ -101,6 +101,28 @@ Conflicting
 
 New sources default to Unverified. Changing a source trust level records actor, timestamp, reason, and the changed field in history.
 
+Source Staleness Flags
+
+Source freshness is tracked separately from trust level and file integrity:
+
+- Current
+- Review Due (within 30 days)
+- Stale
+- Not Reviewed
+
+Freshness is calculated from a human-recorded review date and next-review date. Reviewing freshness requires an actor and reason and creates a source history entry. Existing sources migrate to Not Reviewed until a human reviews them. Verifying that a local file still exists or has not changed does not certify that its content is current.
+
+Trust Boundary Labels
+
+Workflow records display a derived trust-boundary label:
+
+- Outside Input
+- Airlock Proposal
+- Project State Record
+- Read-only Export
+
+Boundary labels describe where information sits in the workflow; they do not assert truth or grant permissions. Outside input is visibly shown entering the Airlock, pending extracts remain Airlock proposals, approved records appear as Project State records, and context packs are labeled read-only exports. These labels are derived from workflow state and cannot be edited to bypass human approval.
+
 Conflict Register
 
 Projects now include a Conflict Register for contradictions, disputed facts, and mismatched source claims. A conflict records:

@@ -20,6 +20,9 @@ const COLLAB_REVIEW_STATES = ["draft", "needs_review", "revision_requested", "re
 const ASSIGNMENT_ROLES = ["owner", "reviewer", "approver", "watcher"];
 const AI_WORK_ORDER_STATUSES = ["submitted", "in_progress", "completed", "archived"];
 const SOURCE_TRUST_LEVELS = ["primary", "supporting", "unverified", "superseded", "conflicting"];
+const SOURCE_STALENESS_STATES = ["current", "review_due", "stale", "not_reviewed"];
+const SOURCE_REVIEW_DUE_WINDOW_DAYS = 30;
+const TRUST_BOUNDARIES = ["external", "airlock", "core", "read_only"];
 const CONFLICT_STATUSES = ["unresolved", "under_review", "resolved", "archived"];
 const CONTEXT_PACK_PRESET_KEYS = ["current_state", "recent_decisions", "handoff", "source_research", "codex_implementation", "custom"];
 const CONTEXT_PACK_PRESETS = {
@@ -572,6 +575,26 @@ const LANGUAGES = {
     sourceTrustUnverified: "Unverified",
     sourceTrustSuperseded: "Superseded",
     sourceTrustConflicting: "Conflicting",
+    sourceFreshness: "Source Freshness",
+    freshnessCurrent: "Current",
+    freshnessReviewDue: "Review Due",
+    freshnessStale: "Stale",
+    freshnessNotReviewed: "Not Reviewed",
+    freshnessLastReviewed: "Last Reviewed",
+    freshnessNextReview: "Next Review",
+    lastReviewedBy: "Reviewed By",
+    reviewFreshness: "Review Freshness",
+    reviewSourceFreshness: "Review Source Freshness",
+    freshnessReviewNotice: "Freshness is based only on a recorded human review and next-review date. File verification does not certify that source content is current.",
+    freshnessReviewed: "Source freshness reviewed",
+    staleSourceWarning: "Source review is stale or due.",
+    validationReviewDueAfterReviewed: "Next review must be on or after the review date.",
+    trustBoundary: "Trust Boundary",
+    trustBoundaryExternal: "Outside Input",
+    trustBoundaryAirlock: "Airlock Proposal",
+    trustBoundaryCore: "Project State Record",
+    trustBoundaryReadOnly: "Read-only Export",
+    trustBoundaryEvidenceNotice: "This label shows workflow position, not truth. Sources remain evidence and cannot approve themselves.",
     conflictRegister: "Conflict Register",
     addConflict: "Add Conflict",
     editConflict: "Edit Conflict",
@@ -1213,6 +1236,26 @@ const LANGUAGES = {
     sourceTrustUnverified: "Non vérifiée",
     sourceTrustSuperseded: "Remplacée",
     sourceTrustConflicting: "En conflit",
+    sourceFreshness: "Actualité de la source",
+    freshnessCurrent: "À jour",
+    freshnessReviewDue: "Révision bientôt due",
+    freshnessStale: "Périmée",
+    freshnessNotReviewed: "Non révisée",
+    freshnessLastReviewed: "Dernière révision",
+    freshnessNextReview: "Prochaine révision",
+    lastReviewedBy: "Révisée par",
+    reviewFreshness: "Réviser l’actualité",
+    reviewSourceFreshness: "Réviser l’actualité de la source",
+    freshnessReviewNotice: "L’actualité repose uniquement sur une révision humaine enregistrée et une date de prochaine révision. La vérification du fichier ne certifie pas que le contenu est à jour.",
+    freshnessReviewed: "Actualité de la source révisée",
+    staleSourceWarning: "La révision de la source est périmée ou bientôt due.",
+    validationReviewDueAfterReviewed: "La prochaine révision doit être le même jour ou après la date de révision.",
+    trustBoundary: "Frontière de confiance",
+    trustBoundaryExternal: "Entrée externe",
+    trustBoundaryAirlock: "Proposition dans l’Airlock",
+    trustBoundaryCore: "Enregistrement Project State",
+    trustBoundaryReadOnly: "Exportation en lecture seule",
+    trustBoundaryEvidenceNotice: "Cette étiquette indique la position dans le flux, pas la vérité. Les sources restent des preuves et ne peuvent pas s’approuver elles-mêmes.",
     conflictRegister: "Registre des conflits",
     addConflict: "Ajouter un conflit",
     editConflict: "Modifier le conflit",
@@ -1854,6 +1897,26 @@ const LANGUAGES = {
     sourceTrustUnverified: "Ungeprüft",
     sourceTrustSuperseded: "Ersetzt",
     sourceTrustConflicting: "Widersprüchlich",
+    sourceFreshness: "Quellenaktualität",
+    freshnessCurrent: "Aktuell",
+    freshnessReviewDue: "Prüfung fällig",
+    freshnessStale: "Veraltet",
+    freshnessNotReviewed: "Nicht geprüft",
+    freshnessLastReviewed: "Zuletzt geprüft",
+    freshnessNextReview: "Nächste Prüfung",
+    lastReviewedBy: "Geprüft von",
+    reviewFreshness: "Aktualität prüfen",
+    reviewSourceFreshness: "Quellenaktualität prüfen",
+    freshnessReviewNotice: "Die Aktualität basiert nur auf einer erfassten menschlichen Prüfung und dem nächsten Prüfdatum. Eine Dateiprüfung bestätigt nicht, dass der Quelleninhalt aktuell ist.",
+    freshnessReviewed: "Quellenaktualität geprüft",
+    staleSourceWarning: "Die Quellenprüfung ist veraltet oder fällig.",
+    validationReviewDueAfterReviewed: "Die nächste Prüfung muss am oder nach dem Prüfdatum liegen.",
+    trustBoundary: "Vertrauensgrenze",
+    trustBoundaryExternal: "Externe Eingabe",
+    trustBoundaryAirlock: "Airlock-Vorschlag",
+    trustBoundaryCore: "Project-State-Datensatz",
+    trustBoundaryReadOnly: "Schreibgeschützter Export",
+    trustBoundaryEvidenceNotice: "Diese Kennzeichnung zeigt die Workflow-Position, nicht die Wahrheit. Quellen bleiben Nachweise und können sich nicht selbst genehmigen.",
     conflictRegister: "Konfliktregister",
     addConflict: "Konflikt hinzufügen",
     editConflict: "Konflikt bearbeiten",
@@ -2495,6 +2558,26 @@ const LANGUAGES = {
     sourceTrustUnverified: "No verificada",
     sourceTrustSuperseded: "Reemplazada",
     sourceTrustConflicting: "En conflicto",
+    sourceFreshness: "Vigencia de la fuente",
+    freshnessCurrent: "Vigente",
+    freshnessReviewDue: "Revisión próxima",
+    freshnessStale: "Desactualizada",
+    freshnessNotReviewed: "Sin revisar",
+    freshnessLastReviewed: "Última revisión",
+    freshnessNextReview: "Próxima revisión",
+    lastReviewedBy: "Revisada por",
+    reviewFreshness: "Revisar vigencia",
+    reviewSourceFreshness: "Revisar vigencia de la fuente",
+    freshnessReviewNotice: "La vigencia se basa únicamente en una revisión humana registrada y una fecha de próxima revisión. Verificar el archivo no certifica que el contenido esté vigente.",
+    freshnessReviewed: "Vigencia de la fuente revisada",
+    staleSourceWarning: "La revisión de la fuente está vencida o próxima.",
+    validationReviewDueAfterReviewed: "La próxima revisión debe ser el mismo día o posterior a la fecha de revisión.",
+    trustBoundary: "Límite de confianza",
+    trustBoundaryExternal: "Entrada externa",
+    trustBoundaryAirlock: "Propuesta en Airlock",
+    trustBoundaryCore: "Registro de Project State",
+    trustBoundaryReadOnly: "Exportación de solo lectura",
+    trustBoundaryEvidenceNotice: "Esta etiqueta muestra la posición en el flujo, no la verdad. Las fuentes siguen siendo evidencia y no pueden aprobarse a sí mismas.",
     conflictRegister: "Registro de conflictos",
     addConflict: "Agregar conflicto",
     editConflict: "Editar conflicto",
@@ -4226,6 +4309,72 @@ function normalizeSourceTrustLevel(level = "unverified") {
   return SOURCE_TRUST_LEVELS.includes(level) ? level : "unverified";
 }
 
+function normalizeTrustBoundary(boundary = "core") {
+  return TRUST_BOUNDARIES.includes(boundary) ? boundary : "core";
+}
+
+function trustBoundaryForRecord(objectType = "", object = {}) {
+  if (objectType === "Intake") return "airlock";
+  if (objectType === "ContextPack") return "read_only";
+  if (objectType === "External") return "external";
+  if (objectType === "Extract" && object.suggestionStatus === "pending_approval") return "airlock";
+  if (objectType === "DraftProject" || (object.reviewState && normalizeReviewState(object.reviewState) !== "approved")) return "airlock";
+  return "core";
+}
+
+function trustBoundaryLabel(boundary = "core") {
+  const labels = {
+    external: t("trustBoundaryExternal"),
+    airlock: t("trustBoundaryAirlock"),
+    core: t("trustBoundaryCore"),
+    read_only: t("trustBoundaryReadOnly")
+  };
+  return labels[normalizeTrustBoundary(boundary)] || t("trustBoundaryCore");
+}
+
+function renderTrustBoundaryLabel(objectType, object = {}) {
+  const boundary = trustBoundaryForRecord(objectType, object);
+  return `<span class="pill trust-boundary-${escapeHtml(boundary)}">${escapeHtml(trustBoundaryLabel(boundary))}</span>`;
+}
+
+function sourceStalenessState(source = {}, at = new Date()) {
+  const reviewedAt = Date.parse(source.lastReviewedAt || "");
+  const dueText = String(source.reviewDueAt || "");
+  const reviewDueAt = Date.parse(/^\d{4}-\d{2}-\d{2}$/.test(dueText) ? `${dueText}T23:59:59` : dueText);
+  if (!Number.isFinite(reviewedAt) || !Number.isFinite(reviewDueAt)) return "not_reviewed";
+
+  const now = at instanceof Date ? at.getTime() : Date.parse(at);
+  if (!Number.isFinite(now)) return "not_reviewed";
+  if (reviewDueAt < now) return "stale";
+  if (reviewDueAt - now <= SOURCE_REVIEW_DUE_WINDOW_DAYS * 24 * 60 * 60 * 1000) return "review_due";
+  return "current";
+}
+
+function sourceStalenessLabel(state = "not_reviewed") {
+  const labels = {
+    current: t("freshnessCurrent"),
+    review_due: t("freshnessReviewDue"),
+    stale: t("freshnessStale"),
+    not_reviewed: t("freshnessNotReviewed")
+  };
+  const safeState = SOURCE_STALENESS_STATES.includes(state) ? state : "not_reviewed";
+  return labels[safeState] || t("freshnessNotReviewed");
+}
+
+function renderSourceFreshness(source = {}) {
+  const state = sourceStalenessState(source);
+  const details = [];
+  if (source.lastReviewedAt) details.push(`${t("freshnessLastReviewed")} ${formatDate(source.lastReviewedAt, false)}`);
+  if (source.reviewDueAt) details.push(`${t("freshnessNextReview")} ${formatDate(source.reviewDueAt, false)}`);
+  if (source.reviewedBy) details.push(`${t("lastReviewedBy")} ${actorDisplay(source.reviewedBy)}`);
+  return `
+    <p class="item-meta">
+      ${escapeHtml(t("sourceFreshness"))}: <span class="pill source-freshness-${escapeHtml(state)}">${escapeHtml(sourceStalenessLabel(state))}</span>
+      ${details.length ? ` · ${escapeDisplay(details.join(" · "), DISPLAY_META_LIMIT)}` : ""}
+    </p>
+  `;
+}
+
 function normalizeConflictStatus(status = "unresolved") {
   return CONFLICT_STATUSES.includes(status) ? status : "unresolved";
 }
@@ -4363,7 +4512,7 @@ function objectTypeFromPrefix(prefix) {
 
 function normalizeSource(source, projectId, context) {
   const sourceId = ensureId(source, "source", context);
-  if (!source.projectId || !Array.isArray(source.linkedActorIds) || !source.trustLevel) migrationNeeded = true;
+  if (!source.projectId || !Array.isArray(source.linkedActorIds) || !source.trustLevel || source.lastReviewedAt === undefined || source.reviewDueAt === undefined || source.reviewedBy === undefined) migrationNeeded = true;
   return {
     extracts: [],
     status: "active",
@@ -4373,6 +4522,9 @@ function normalizeSource(source, projectId, context) {
     assignments: [],
     comments: [],
     reviewState: "approved",
+    lastReviewedAt: "",
+    reviewDueAt: "",
+    reviewedBy: "",
     ...source,
     id: sourceId,
     projectId: source.projectId || projectId,
@@ -6478,6 +6630,10 @@ function scanProjectIntegrity(project, groups) {
       const level = source.fileVerification.status === "missing" ? "needs_attention" : "warning";
       groups.sourceFileReferences.push(integrityIssue("source-file-verification", level, sourceFileVerificationMessage(source.fileVerification), project, "Source", source));
     }
+    const freshness = sourceStalenessState(source);
+    if (["stale", "review_due"].includes(freshness)) {
+      groups.sourceFileReferences.push(integrityIssue("source-staleness", freshness === "stale" ? "needs_attention" : "warning", `${t("staleSourceWarning")} ${sourceStalenessLabel(freshness)}`, project, "Source", source));
+    }
     for (const actorId of source.linkedActorIds || []) {
       if (!getActor(actorId)) {
         groups.linkedUserIssues.push(integrityIssue("linked-user", "needs_attention", `${t("missingLinkedUser")} ${actorId}`, project, "Source", source));
@@ -6796,6 +6952,7 @@ function renderIntakeItem(item) {
       <div class="review-flags">
         <span class="pill ${escapeHtml(intakeQueueStateClass(item.queueState))}">${escapeHtml(intakeQueueStateLabel(item.queueState))}</span>
         <span class="pill">${escapeHtml(intakeStatusLabel(item))}</span>
+        ${renderTrustBoundaryLabel("External", item)} <span aria-hidden="true">→</span> ${renderTrustBoundaryLabel("Intake", item)}
       </div>
       <p class="item-meta">${escapeHtml(armTypeLabel(item.armType))} · ${escapeHtml(proposedObjectTypeLabel(item.proposedObjectType))}</p>
       <p class="item-meta">${escapeHtml(t("target"))}: ${escapeDisplay(projectName, DISPLAY_META_LIMIT)} · ${escapeHtml(t("created"))} ${escapeHtml(formatDate(item.createdAt))} · ${escapeHtml(t("age"))}: ${escapeHtml(intakeQueueAgeLabel(item.createdAt))}</p>
@@ -6906,7 +7063,7 @@ function buildSearchResults() {
       addImageSearchResults(results, project, "Conflict", conflict);
     }
     for (const source of project.sources) {
-      addSearchResult(results, project, "Source", source.id, source.title, source.summary || source.location, [source.title, source.sourceType, sourceTrustLabel(source.trustLevel), source.location, source.summary, tagsToText(source.tags), linkedActorNames(source.linkedActorIds).join(" ")]);
+      addSearchResult(results, project, "Source", source.id, source.title, source.summary || source.location, [source.title, source.sourceType, sourceTrustLabel(source.trustLevel), sourceStalenessLabel(sourceStalenessState(source)), trustBoundaryLabel(trustBoundaryForRecord("Source", source)), source.location, source.summary, tagsToText(source.tags), linkedActorNames(source.linkedActorIds).join(" ")]);
       for (const extract of source.extracts || []) {
         addSearchResult(results, project, "Extract", extract.id, extract.text, extract.summary, [extract.text, extract.summary, extractModeLabel(extract.extractMode), tagsToText(extract.tags), extract.extractedFromFile?.fileName, extract.extractedFromFile?.localPath]);
       }
@@ -7313,6 +7470,10 @@ function projectHandoffBlockers(project, collections = {}) {
     if (["missing", "changed", "unverifiable"].includes(status)) {
       items.push({ title: source.title, meta: t("sourceFileVerification"), body: sourceFileVerificationMessage(source.fileVerification) });
     }
+    const freshness = sourceStalenessState(source);
+    if (["stale", "review_due"].includes(freshness)) {
+      items.push({ title: source.title, meta: `${t("sourceFreshness")} · ${sourceStalenessLabel(freshness)}`, body: t("staleSourceWarning") });
+    }
   }
   for (const conflict of collections.conflicts || []) {
     if (["unresolved", "under_review"].includes(conflict.status)) {
@@ -7354,7 +7515,7 @@ function projectHandoffSources(sources = []) {
     .slice(0, 8)
     .map((source) => ({
       title: source.title,
-      meta: `${source.sourceType || t("source")} · ${sourceTrustLabel(source.trustLevel)} · ${sourceFileStatusLabel(source.fileVerification?.status || "unverifiable")}`,
+      meta: `${source.sourceType || t("source")} · ${sourceTrustLabel(source.trustLevel)} · ${sourceStalenessLabel(sourceStalenessState(source))} · ${trustBoundaryLabel(trustBoundaryForRecord("Source", source))} · ${sourceFileStatusLabel(source.fileVerification?.status || "unverifiable")}`,
       body: source.summary || source.location || source.localFile?.name || ""
     }));
 }
@@ -7369,7 +7530,8 @@ function sourceTrustRank(source) {
   };
   const trustRank = ranks[normalizeSourceTrustLevel(source.trustLevel)] ?? 2;
   const verificationBonus = source.fileVerification?.status === "verified" ? -0.25 : 0;
-  return trustRank + verificationBonus;
+  const freshnessPenalty = { current: 0, review_due: 0.5, not_reviewed: 1, stale: 2 }[sourceStalenessState(source)] || 0;
+  return trustRank + verificationBonus + freshnessPenalty;
 }
 
 function projectHandoffAiItems(project) {
@@ -7499,7 +7661,7 @@ function renderEvidenceMap(sources) {
         return `
           <div class="map-evidence-item">
             <p class="item-title">${escapeDisplay(source.title, DISPLAY_META_LIMIT)}</p>
-            <p class="item-meta">${escapeDisplay(source.sourceType || t("unknown"), DISPLAY_META_LIMIT)} · ${escapeHtml(sourceTrustLabel(source.trustLevel))} · ${escapeHtml(formatDate(source.dateAdded))} · ${extracts.length} ${escapeHtml(t("extractsLabel"))}</p>
+            <p class="item-meta">${escapeDisplay(source.sourceType || t("unknown"), DISPLAY_META_LIMIT)} · ${escapeHtml(sourceTrustLabel(source.trustLevel))} · ${escapeHtml(sourceStalenessLabel(sourceStalenessState(source)))} · ${escapeHtml(trustBoundaryLabel(trustBoundaryForRecord("Source", source)))} · ${escapeHtml(formatDate(source.dateAdded))} · ${extracts.length} ${escapeHtml(t("extractsLabel"))}</p>
             ${source.summary ? `<p class="item-body">${escapeDisplay(source.summary, DISPLAY_META_LIMIT)}</p>` : ""}
           </div>
         `;
@@ -7585,6 +7747,9 @@ function renderSourceList(sources, project) {
         <p class="item-title">${escapeDisplay(source.title, DISPLAY_META_LIMIT)}</p>
         <p class="item-meta">${escapeHtml(t("type"))}: ${escapeDisplay(source.sourceType || t("unknown"), DISPLAY_META_LIMIT)}</p>
         <p class="item-meta">${escapeHtml(t("sourceTrustLevel"))}: <span class="pill source-trust-${escapeHtml(normalizeSourceTrustLevel(source.trustLevel))}">${escapeHtml(sourceTrustLabel(source.trustLevel))}</span></p>
+        ${renderSourceFreshness(source)}
+        <p class="item-meta">${escapeHtml(t("trustBoundary"))}: ${renderTrustBoundaryLabel("Source", source)}</p>
+        <p class="item-meta">${escapeHtml(t("trustBoundaryEvidenceNotice"))}</p>
         <p class="item-meta">${escapeHtml(t("dateAdded"))}: ${escapeHtml(formatDate(source.dateAdded))}</p>
         <p class="item-meta">${escapeHtml(t("actor"))}: ${escapeHtml(actorDisplay(source.actorId))}</p>
         ${renderLinkedUsers(source.linkedActorIds)}
@@ -7598,6 +7763,7 @@ function renderSourceList(sources, project) {
         ${renderCommentsSummary(source)}
         <div class="item-actions">
           <button class="btn secondary compact" data-action="verify-source-file" data-source-id="${source.id}">${escapeHtml(t("verifyFile"))}</button>
+          <button class="btn secondary compact" data-action="review-source-freshness" data-source-id="${source.id}">${escapeHtml(t("reviewFreshness"))}</button>
           <button class="btn secondary compact" data-action="add-extract" data-source-id="${source.id}">${escapeHtml(t("addExtract"))}</button>
           <button class="btn secondary compact" data-action="read-file-extract" data-source-id="${source.id}">${escapeHtml(t("readFileExtract"))}</button>
           <button class="btn secondary compact" data-action="suggest-extract" data-source-id="${source.id}">${escapeHtml(t("suggestExtract"))}</button>
@@ -7640,6 +7806,7 @@ function renderExtractList(extracts) {
     <div class="item">
       <p class="item-title">${escapeHtml(t("extract"))}</p>
       <p class="item-meta">${escapeHtml(t("mode"))}: ${escapeHtml(extractModeLabel(extract.extractMode))}</p>
+      <p class="item-meta">${escapeHtml(t("trustBoundary"))}: ${renderTrustBoundaryLabel("Extract", extract)}</p>
       ${extract.suggestionStatus ? `<p class="item-meta">${escapeHtml(t("suggestionStatus"))}: ${escapeHtml(extract.suggestionStatus)}</p>` : ""}
       ${extract.suggestedBy ? `<p class="item-meta">${escapeHtml(t("suggestedBy"))}: ${escapeHtml(extract.suggestedBy)}</p>` : ""}
       ${extract.extractedFromFile ? `<p class="item-meta">${escapeHtml(t("file"))}: ${escapeDisplay(extract.extractedFromFile.fileName, DISPLAY_META_LIMIT)}${extract.extractedFromFile.truncated ? ` · ${escapeHtml(t("truncated"))}` : ""}</p>` : ""}
@@ -8140,6 +8307,10 @@ function buildProjectContextPack(project, options = {}) {
     generatedAt: nowIso(),
     generatedBy: "local-ui",
     runtimeMode: currentStorageModeName(),
+    trustBoundary: {
+      state: trustBoundaryForRecord("ContextPack"),
+      label: trustBoundaryLabel(trustBoundaryForRecord("ContextPack"))
+    },
     rules: {
       sourceOfTruth: "Project State Core",
       use: "Context only. Suggestions must return through the Intake Airlock for human approval.",
@@ -8290,6 +8461,13 @@ function compactEvidence(project, config) {
       type: source.sourceType || "",
       trustLevel: normalizeSourceTrustLevel(source.trustLevel),
       trustLabel: sourceTrustLabel(source.trustLevel),
+      freshnessState: sourceStalenessState(source),
+      freshnessLabel: sourceStalenessLabel(sourceStalenessState(source)),
+      lastReviewedAt: source.lastReviewedAt || "",
+      reviewDueAt: source.reviewDueAt || "",
+      reviewedBy: source.reviewedBy ? actorDisplay(source.reviewedBy) : "",
+      trustBoundary: trustBoundaryForRecord("Source", source),
+      trustBoundaryLabel: trustBoundaryLabel(trustBoundaryForRecord("Source", source)),
       location: source.location || "",
       dateAdded: source.dateAdded || "",
       actor: actorDisplay(source.actorId),
@@ -9576,6 +9754,9 @@ function applyApprovedIntakeToCore(intake, actor, reason, approval) {
       title: text || intake.title,
       sourceType: armTypeLabel(intake.armType),
       trustLevel: "unverified",
+      lastReviewedAt: "",
+      reviewDueAt: "",
+      reviewedBy: "",
       dateAdded: timestamp,
       actorId: actor.id,
       location: intake.sourceLabel || "",
@@ -10995,6 +11176,72 @@ function openVerifySourceFileModal(sourceId = "", options = {}) {
   });
 }
 
+function openReviewSourceFreshnessModal(sourceId = "") {
+  const sourceRecord = findSourceRecord(sourceId);
+  if (!sourceRecord) return;
+  const { project, source } = sourceRecord;
+  const today = toDateInputValue(nowIso());
+  const defaultDue = new Date();
+  defaultDue.setDate(defaultDue.getDate() + 90);
+
+  showModal({
+    title: `${t("reviewSourceFreshness")}: ${source.title}`,
+    submitText: t("reviewFreshness"),
+    body: `
+      <p class="notice">${escapeHtml(t("freshnessReviewNotice"))}</p>
+      <div class="two-col">
+        <div class="field">
+          <label for="lastReviewedAt">${escapeHtml(t("freshnessLastReviewed"))}</label>
+          <input id="lastReviewedAt" name="lastReviewedAt" type="date" value="${escapeHtml(toDateInputValue(source.lastReviewedAt) || today)}" required>
+        </div>
+        <div class="field">
+          <label for="reviewDueAt">${escapeHtml(t("freshnessNextReview"))}</label>
+          <input id="reviewDueAt" name="reviewDueAt" type="date" value="${escapeHtml(toDateInputValue(source.reviewDueAt) || toDateInputValue(defaultDue.toISOString()))}" required>
+        </div>
+      </div>
+      ${auditFields()}
+    `,
+    onSubmit(data, form) {
+      if (Date.parse(data.reviewDueAt) < Date.parse(data.lastReviewedAt)) {
+        const field = form.querySelector('[name="reviewDueAt"]');
+        field?.setCustomValidity(t("validationReviewDueAfterReviewed"));
+        field?.reportValidity();
+        field?.setCustomValidity("");
+        return false;
+      }
+
+      const actor = getOrCreateActor(data.actorName, "Human");
+      const previous = {
+        lastReviewedAt: source.lastReviewedAt || "",
+        reviewDueAt: source.reviewDueAt || "",
+        reviewedBy: source.reviewedBy || "",
+        state: sourceStalenessState(source)
+      };
+      source.lastReviewedAt = data.lastReviewedAt;
+      source.reviewDueAt = data.reviewDueAt;
+      source.reviewedBy = actor.id;
+      source.editedAt = nowIso();
+      recordChange(project, actor, data.reason, t("freshnessReviewed"), {
+        objectType: "Source",
+        objectId: source.id,
+        objectText: source.title,
+        fields: {
+          previousFreshness: sourceStalenessLabel(previous.state),
+          newFreshness: sourceStalenessLabel(sourceStalenessState(source)),
+          previousReviewedAt: previous.lastReviewedAt,
+          newReviewedAt: source.lastReviewedAt,
+          previousReviewDueAt: previous.reviewDueAt,
+          newReviewDueAt: source.reviewDueAt,
+          previousReviewedBy: previous.reviewedBy ? actorDisplay(previous.reviewedBy) : "",
+          newReviewedBy: actorDisplay(source.reviewedBy)
+        }
+      });
+      saveStore();
+      return true;
+    }
+  });
+}
+
 async function verifyAllSourceFiles(actor, reason) {
   const byProject = new Map();
   let changedCount = 0;
@@ -11361,6 +11608,9 @@ function openSourceModal() {
         title: data.title.trim() || localFile?.name || t("untitledSource"),
         sourceType: data.sourceType.trim(),
         trustLevel: normalizeSourceTrustLevel(data.trustLevel),
+        lastReviewedAt: "",
+        reviewDueAt: "",
+        reviewedBy: "",
         dateAdded: data.dateAdded || nowIso(),
         actorId: actor.id,
         location: data.location.trim() || localFile?.name || "",
@@ -12014,6 +12264,7 @@ app.addEventListener("click", (event) => {
   if (action === "add-conflict") openConflictModal();
   if (action === "add-source") openSourceModal();
   if (action === "verify-source-file") openVerifySourceFileModal(button.dataset.sourceId);
+  if (action === "review-source-freshness") openReviewSourceFreshnessModal(button.dataset.sourceId);
   if (action === "verify-all-source-files") openVerifySourceFileModal();
   if (action === "add-extract") openExtractModal(button.dataset.sourceId);
   if (action === "read-file-extract") openReadFileExtractModal(button.dataset.sourceId);
