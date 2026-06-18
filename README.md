@@ -323,7 +323,7 @@ Permission Matrix v0.1
 | Viewer | N | N | N | N | N |
 | AI / Tool | Y | N | N | N | N |
 
-The matrix is currently policy/reference for the future multi-user model. It is not yet enforced as login or collaboration permissions.
+The matrix controls which actions are shown and accepted for the configured default actor, including project-specific roles. This is local single-user policy enforcement, not account authentication or multi-user authorization.
 
 Mandatory History Policy v0.1
 
