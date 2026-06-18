@@ -738,7 +738,8 @@ select:focus {
   font-weight: 740;
 }
 
-.filter-label select {
+.filter-label select,
+.filter-label input {
   min-height: 38px;
   border: 1px solid #bec9bf;
   border-radius: 7px;

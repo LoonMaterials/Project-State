@@ -144,6 +144,14 @@ Archived
 
 Unresolved and Under Review conflicts appear in project context and handoff checks so they are visible before approval or outside-arm work continues. Conflicts can be proposed through the Intake Airlock, but they still require human approval before entering Project State.
 
+Decision Continuity
+
+Decisions can explicitly Supersede or Replace an earlier decision using the earlier decision's stable ID. The earlier decision and its history remain intact; linking a newer decision never silently archives, deletes, or rewrites it. Both forward and reverse relationships are shown, exported in context packs, included in search, and checked by the Integrity Dashboard for missing references.
+
+What Changed Since
+
+Each project includes a read-only What Changed Since view. Choose a starting date to see the recorded change count, affected object types, actors, timestamps, reasons, and change details. The view reads from Change History and does not rebuild or overwrite Current State.
+
 Long-Term Vision
 
 The long-term goal is a system where:

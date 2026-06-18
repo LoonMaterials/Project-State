@@ -23,6 +23,7 @@ const SOURCE_TRUST_LEVELS = ["primary", "supporting", "unverified", "superseded"
 const SOURCE_STALENESS_STATES = ["current", "review_due", "stale", "not_reviewed"];
 const SOURCE_REVIEW_DUE_WINDOW_DAYS = 30;
 const TRUST_BOUNDARIES = ["external", "airlock", "core", "read_only"];
+const DECISION_RELATION_TYPES = ["", "supersedes", "replaces"];
 const CONFLICT_STATUSES = ["unresolved", "under_review", "resolved", "archived"];
 const CONTEXT_PACK_PRESET_KEYS = ["current_state", "recent_decisions", "handoff", "source_research", "codex_implementation", "custom"];
 const CONTEXT_PACK_PRESETS = {
@@ -556,6 +557,20 @@ const LANGUAGES = {
     currentObjects: "Current Objects",
     recentActivity: "Recent Activity",
     recentDecisions: "Recent Decisions",
+    decisionRelationship: "Decision Relationship",
+    decisionNoRelationship: "No earlier decision",
+    supersedesDecision: "Supersedes an earlier decision",
+    replacesDecision: "Replaces an earlier decision",
+    supersedes: "Supersedes",
+    replaces: "Replaces",
+    supersededBy: "Superseded By",
+    replacedBy: "Replaced By",
+    missingDecision: "Missing decision",
+    whatChangedSince: "What Changed Since…",
+    whatChangedSinceSubtitle: "A read-only view of recorded project changes since the selected date.",
+    sinceDate: "Since Date",
+    changesFound: "Changes Found",
+    noChangesSince: "No recorded changes since this date.",
     relationships: "Relationships",
     projectMap: "Project Map",
     projectMapSubtitle: "Relationships, evidence, and unresolved work around this project.",
@@ -589,11 +604,12 @@ const LANGUAGES = {
     freshnessReviewed: "Source freshness reviewed",
     staleSourceWarning: "Source review is stale or due.",
     validationReviewDueAfterReviewed: "Next review must be on or after the review date.",
+    validationRelatedDecisionRequired: "Choose the earlier decision this decision supersedes or replaces.",
     trustBoundary: "Trust Boundary",
     trustBoundaryExternal: "Outside Input",
     trustBoundaryAirlock: "Airlock Proposal",
     trustBoundaryCore: "Project State Record",
-    trustBoundaryReadOnly: "Read-only Export",
+    trustBoundaryReadOnly: "Read-only View / Export",
     trustBoundaryEvidenceNotice: "This label shows workflow position, not truth. Sources remain evidence and cannot approve themselves.",
     conflictRegister: "Conflict Register",
     addConflict: "Add Conflict",
@@ -1217,6 +1233,20 @@ const LANGUAGES = {
     currentObjects: "Objets actuels",
     recentActivity: "Activité récente",
     recentDecisions: "Décisions récentes",
+    decisionRelationship: "Relation entre décisions",
+    decisionNoRelationship: "Aucune décision antérieure",
+    supersedesDecision: "Annule et remplace une décision antérieure",
+    replacesDecision: "Remplace une décision antérieure",
+    supersedes: "Annule et remplace",
+    replaces: "Remplace",
+    supersededBy: "Annulée et remplacée par",
+    replacedBy: "Remplacée par",
+    missingDecision: "Décision manquante",
+    whatChangedSince: "Ce qui a changé depuis…",
+    whatChangedSinceSubtitle: "Une vue en lecture seule des changements enregistrés depuis la date sélectionnée.",
+    sinceDate: "Depuis la date",
+    changesFound: "Changements trouvés",
+    noChangesSince: "Aucun changement enregistré depuis cette date.",
     relationships: "Relations",
     projectMap: "Carte du projet",
     projectMapSubtitle: "Relations, preuves et travail non résolu autour de ce projet.",
@@ -1250,11 +1280,12 @@ const LANGUAGES = {
     freshnessReviewed: "Actualité de la source révisée",
     staleSourceWarning: "La révision de la source est périmée ou bientôt due.",
     validationReviewDueAfterReviewed: "La prochaine révision doit être le même jour ou après la date de révision.",
+    validationRelatedDecisionRequired: "Choisissez la décision antérieure que cette décision annule ou remplace.",
     trustBoundary: "Frontière de confiance",
     trustBoundaryExternal: "Entrée externe",
     trustBoundaryAirlock: "Proposition dans l’Airlock",
     trustBoundaryCore: "Enregistrement Project State",
-    trustBoundaryReadOnly: "Exportation en lecture seule",
+    trustBoundaryReadOnly: "Vue / exportation en lecture seule",
     trustBoundaryEvidenceNotice: "Cette étiquette indique la position dans le flux, pas la vérité. Les sources restent des preuves et ne peuvent pas s’approuver elles-mêmes.",
     conflictRegister: "Registre des conflits",
     addConflict: "Ajouter un conflit",
@@ -1878,6 +1909,20 @@ const LANGUAGES = {
     currentObjects: "Aktuelle Objekte",
     recentActivity: "Letzte Aktivität",
     recentDecisions: "Letzte Entscheidungen",
+    decisionRelationship: "Entscheidungsbeziehung",
+    decisionNoRelationship: "Keine frühere Entscheidung",
+    supersedesDecision: "Hebt eine frühere Entscheidung auf",
+    replacesDecision: "Ersetzt eine frühere Entscheidung",
+    supersedes: "Hebt auf",
+    replaces: "Ersetzt",
+    supersededBy: "Aufgehoben durch",
+    replacedBy: "Ersetzt durch",
+    missingDecision: "Fehlende Entscheidung",
+    whatChangedSince: "Was hat sich geändert seit…",
+    whatChangedSinceSubtitle: "Eine schreibgeschützte Ansicht der seit dem gewählten Datum erfassten Projektänderungen.",
+    sinceDate: "Seit Datum",
+    changesFound: "Gefundene Änderungen",
+    noChangesSince: "Seit diesem Datum wurden keine Änderungen erfasst.",
     relationships: "Beziehungen",
     projectMap: "Projektkarte",
     projectMapSubtitle: "Beziehungen, Nachweise und offene Arbeit rund um dieses Projekt.",
@@ -1911,11 +1956,12 @@ const LANGUAGES = {
     freshnessReviewed: "Quellenaktualität geprüft",
     staleSourceWarning: "Die Quellenprüfung ist veraltet oder fällig.",
     validationReviewDueAfterReviewed: "Die nächste Prüfung muss am oder nach dem Prüfdatum liegen.",
+    validationRelatedDecisionRequired: "Wählen Sie die frühere Entscheidung, die aufgehoben oder ersetzt wird.",
     trustBoundary: "Vertrauensgrenze",
     trustBoundaryExternal: "Externe Eingabe",
     trustBoundaryAirlock: "Airlock-Vorschlag",
     trustBoundaryCore: "Project-State-Datensatz",
-    trustBoundaryReadOnly: "Schreibgeschützter Export",
+    trustBoundaryReadOnly: "Schreibgeschützte Ansicht / Export",
     trustBoundaryEvidenceNotice: "Diese Kennzeichnung zeigt die Workflow-Position, nicht die Wahrheit. Quellen bleiben Nachweise und können sich nicht selbst genehmigen.",
     conflictRegister: "Konfliktregister",
     addConflict: "Konflikt hinzufügen",
@@ -2539,6 +2585,20 @@ const LANGUAGES = {
     currentObjects: "Objetos actuales",
     recentActivity: "Actividad reciente",
     recentDecisions: "Decisiones recientes",
+    decisionRelationship: "Relación entre decisiones",
+    decisionNoRelationship: "Ninguna decisión anterior",
+    supersedesDecision: "Anula una decisión anterior",
+    replacesDecision: "Reemplaza una decisión anterior",
+    supersedes: "Anula",
+    replaces: "Reemplaza",
+    supersededBy: "Anulada por",
+    replacedBy: "Reemplazada por",
+    missingDecision: "Decisión faltante",
+    whatChangedSince: "Qué cambió desde…",
+    whatChangedSinceSubtitle: "Una vista de solo lectura de los cambios registrados desde la fecha seleccionada.",
+    sinceDate: "Desde la fecha",
+    changesFound: "Cambios encontrados",
+    noChangesSince: "No hay cambios registrados desde esta fecha.",
     relationships: "Relaciones",
     projectMap: "Mapa del proyecto",
     projectMapSubtitle: "Relaciones, evidencia y trabajo sin resolver alrededor de este proyecto.",
@@ -2572,11 +2632,12 @@ const LANGUAGES = {
     freshnessReviewed: "Vigencia de la fuente revisada",
     staleSourceWarning: "La revisión de la fuente está vencida o próxima.",
     validationReviewDueAfterReviewed: "La próxima revisión debe ser el mismo día o posterior a la fecha de revisión.",
+    validationRelatedDecisionRequired: "Elige la decisión anterior que esta decisión anula o reemplaza.",
     trustBoundary: "Límite de confianza",
     trustBoundaryExternal: "Entrada externa",
     trustBoundaryAirlock: "Propuesta en Airlock",
     trustBoundaryCore: "Registro de Project State",
-    trustBoundaryReadOnly: "Exportación de solo lectura",
+    trustBoundaryReadOnly: "Vista / exportación de solo lectura",
     trustBoundaryEvidenceNotice: "Esta etiqueta muestra la posición en el flujo, no la verdad. Las fuentes siguen siendo evidencia y no pueden aprobarse a sí mismas.",
     conflictRegister: "Registro de conflictos",
     addConflict: "Agregar conflicto",
@@ -2956,6 +3017,7 @@ let activeRootView = "projects";
 let activeView = "dashboard";
 let activeHistoryFilter = null;
 let activeHistoryEventType = "all";
+let activeChangesSinceDate = defaultChangesSinceDate();
 let searchQuery = "";
 let saveState = {
   status: "saved",
@@ -4236,7 +4298,7 @@ function normalizeProject(project, context) {
     projectRoles: normalizeProjectRoles(project.projectRoles, context),
     sourceLinks: normalizeSourceLinksArray(project.sourceLinks, context),
     imageLinks: normalizeImageLinksArray(project.imageLinks, project.id, "Project", project.id, context),
-    decisions: Array.isArray(project.decisions) ? project.decisions.map((decision) => normalizeObject(decision, "decision", project.id, context)) : [],
+    decisions: Array.isArray(project.decisions) ? project.decisions.map((decision) => normalizeDecision(decision, project.id, context)) : [],
     facts: Array.isArray(project.facts) ? project.facts.map((fact) => normalizeObject(fact, "fact", project.id, context)) : [],
     sources: Array.isArray(project.sources) ? project.sources.map((source) => normalizeSource(source, project.id, context)) : [],
     conflicts: Array.isArray(project.conflicts) ? project.conflicts.map((conflict) => normalizeConflict(conflict, project.id, context)) : [],
@@ -4269,6 +4331,19 @@ function normalizeObject(object, prefix, projectId, context) {
   };
   if (!object.projectId || !object.reviewState || !Array.isArray(object.assignments) || !Array.isArray(object.comments)) migrationNeeded = true;
   return normalized;
+}
+
+function normalizeDecision(decision, projectId, context) {
+  const normalized = normalizeObject(decision, "decision", projectId, context);
+  const legacyRelationType = decision.supersedesDecisionId ? "supersedes" : decision.replacesDecisionId ? "replaces" : "";
+  const relationType = DECISION_RELATION_TYPES.includes(decision.relationType) ? decision.relationType : legacyRelationType;
+  const relatedDecisionId = String(decision.relatedDecisionId || decision.supersedesDecisionId || decision.replacesDecisionId || "").trim();
+  if (decision.relationType === undefined || decision.relatedDecisionId === undefined || decision.relationType !== relationType) migrationNeeded = true;
+  return {
+    ...normalized,
+    relationType: relatedDecisionId ? relationType : "",
+    relatedDecisionId
+  };
 }
 
 function normalizeConflict(conflict, projectId, context) {
@@ -6622,6 +6697,11 @@ function integrityLargeContentIssues(manifest) {
 }
 
 function scanProjectIntegrity(project, groups) {
+  for (const decision of project.decisions || []) {
+    if (decision.relatedDecisionId && !decisionById(project, decision.relatedDecisionId)) {
+      groups.orphanLinks.push(integrityIssue("decision-relation", "needs_attention", t("missingDecision"), project, "Decision", decision));
+    }
+  }
   for (const source of project.sources || []) {
     if (!source.location && !source.summary && !source.localFile?.name) {
       groups.sourceFileReferences.push(integrityIssue("source-reference", "warning", t("missingSourceDetails"), project, "Source", source));
@@ -7051,7 +7131,7 @@ function buildSearchResults() {
     );
 
     for (const decision of project.decisions) {
-      addSearchResult(results, project, "Decision", decision.id, decision.text, decision.reason, [decision.text, decision.reason, decision.confidence]);
+      addSearchResult(results, project, "Decision", decision.id, decision.text, decision.reason, [decision.text, decision.reason, decision.confidence, decisionRelationLabel(decision.relationType), decisionById(project, decision.relatedDecisionId)?.text || ""]);
       addImageSearchResults(results, project, "Decision", decision);
     }
     for (const fact of project.facts) {
@@ -7256,7 +7336,7 @@ function renderProject(project) {
             <h2 class="panel-title">${escapeHtml(t("recentDecisions"))}</h2>
             <button class="btn secondary" data-action="add-decision">${escapeHtml(t("addDecision"))}</button>
           </div>
-          ${renderDecisionList(recent(decisions, 5))}
+          ${renderDecisionList(recent(decisions, 5), project)}
         </article>
 
         <article class="panel">
@@ -7300,6 +7380,7 @@ function renderProject(project) {
       ${visibleChanges.length ? visibleChanges.map(renderHistoryItem).join("") : emptyText(t("noChangesRecordedForFilter"))}
     </section>
   `;
+  const changesSince = renderWhatChangedSince(project, changes);
   const map = renderProjectMap(project, {
     questions,
     actions,
@@ -7352,10 +7433,11 @@ function renderProject(project) {
       <button class="tab ${activeView === "dashboard" ? "active" : ""}" data-action="show-dashboard">${escapeHtml(t("dashboard"))}</button>
       <button class="tab ${activeView === "handoff" ? "active" : ""}" data-action="show-handoff">${escapeHtml(t("handoffMode"))}</button>
       <button class="tab ${activeView === "map" ? "active" : ""}" data-action="show-map">${escapeHtml(t("projectMap"))}</button>
+      <button class="tab ${activeView === "changes_since" ? "active" : ""}" data-action="show-changes-since">${escapeHtml(t("whatChangedSince"))}</button>
       <button class="tab ${activeView === "history" ? "active" : ""}" data-action="show-history">${escapeDisplay(historyTitle, DISPLAY_META_LIMIT)}</button>
     </nav>
 
-    ${activeView === "dashboard" ? dashboard : activeView === "handoff" ? handoff : activeView === "map" ? map : history}
+    ${activeView === "dashboard" ? dashboard : activeView === "handoff" ? handoff : activeView === "map" ? map : activeView === "changes_since" ? changesSince : history}
   `);
 }
 
@@ -7595,7 +7677,7 @@ function renderProjectMap(project, collections) {
           <div class="panel-head">
             <h2 class="panel-title">${escapeHtml(t("recentDecisions"))}</h2>
           </div>
-          ${renderDecisionList(recent(collections.decisions, 5))}
+          ${renderDecisionList(recent(collections.decisions, 5), project)}
         </article>
       </section>
     </section>
@@ -7688,13 +7770,84 @@ function renderUnresolvedMap(questions, actions) {
   `;
 }
 
-function renderDecisionList(decisions) {
+function normalizeDecisionRelationType(type = "") {
+  return DECISION_RELATION_TYPES.includes(type) ? type : "";
+}
+
+function decisionRelationLabel(type = "") {
+  if (type === "supersedes") return t("supersedes");
+  if (type === "replaces") return t("replaces");
+  return t("decisionNoRelationship");
+}
+
+function decisionRelationTypeOptions(selected = "") {
+  const safeSelected = normalizeDecisionRelationType(selected);
+  return [
+    ["", t("decisionNoRelationship")],
+    ["supersedes", t("supersedesDecision")],
+    ["replaces", t("replacesDecision")]
+  ].map(([value, label]) => `<option value="${value}" ${value === safeSelected ? "selected" : ""}>${escapeHtml(label)}</option>`).join("");
+}
+
+function relatedDecisionOptions(project, selectedId = "", excludedId = "") {
+  const decisions = sortNewest((project.decisions || []).filter((decision) => decision.id !== excludedId), "date");
+  return [
+    `<option value="">${escapeHtml(t("decisionNoRelationship"))}</option>`,
+    ...decisions.map((decision) => `<option value="${escapeHtml(decision.id)}" ${decision.id === selectedId ? "selected" : ""}>${escapeDisplay(decision.text, DISPLAY_META_LIMIT)} · ${escapeHtml(formatDate(decision.date, false))}</option>`)
+  ].join("");
+}
+
+function decisionRelationFields(project, decision = {}) {
+  return `
+    <div class="two-col">
+      <div class="field">
+        <label for="relationType">${escapeHtml(t("decisionRelationship"))}</label>
+        <select id="relationType" name="relationType">${decisionRelationTypeOptions(decision.relationType || "")}</select>
+      </div>
+      <div class="field">
+        <label for="relatedDecisionId">${escapeHtml(t("decision"))}</label>
+        <select id="relatedDecisionId" name="relatedDecisionId">${relatedDecisionOptions(project, decision.relatedDecisionId || "", decision.id || "")}</select>
+      </div>
+    </div>
+  `;
+}
+
+function validateDecisionRelation(data, form) {
+  if (!normalizeDecisionRelationType(data.relationType) || data.relatedDecisionId) return true;
+  const field = form.querySelector('[name="relatedDecisionId"]');
+  field?.setCustomValidity(t("validationRelatedDecisionRequired"));
+  field?.reportValidity();
+  field?.setCustomValidity("");
+  return false;
+}
+
+function decisionById(project, decisionId = "") {
+  return (project.decisions || []).find((decision) => decision.id === decisionId) || null;
+}
+
+function renderDecisionRelations(project, decision) {
+  const lines = [];
+  if (decision.relatedDecisionId) {
+    const related = decisionById(project, decision.relatedDecisionId);
+    lines.push(`${decisionRelationLabel(decision.relationType)}: ${related?.text || t("missingDecision")}`);
+  }
+  for (const candidate of project.decisions || []) {
+    if (candidate.relatedDecisionId !== decision.id) continue;
+    const reverseLabel = candidate.relationType === "replaces" ? t("replacedBy") : t("supersededBy");
+    lines.push(`${reverseLabel}: ${candidate.text}`);
+  }
+  if (!lines.length) return "";
+  return `<div class="decision-relations">${lines.map((line) => `<p class="item-meta">${escapeDisplay(line, DISPLAY_META_LIMIT)}</p>`).join("")}</div>`;
+}
+
+function renderDecisionList(decisions, project = getProject()) {
   if (!decisions.length) return emptyText(t("noDecisionsRecorded"));
   return `<div class="list">${decisions.map((decision) => `
     <div class="item">
       <p class="item-title">${escapeDisplay(decision.text)}</p>
       <p class="item-body">${escapeDisplay(decision.reason)}</p>
       <p class="item-meta">${escapeHtml(actorDisplay(decision.actorId))} · ${escapeHtml(formatDate(decision.date))} · ${escapeHtml(decision.confidence)}</p>
+      ${project ? renderDecisionRelations(project, decision) : ""}
       ${renderAssignmentsSummary(decision)}
       ${renderCommentsSummary(decision)}
       ${renderAttachedSources(decision)}
@@ -8008,7 +8161,72 @@ function renderActivityList(changes) {
   `).join("")}</div>`;
 }
 
-function renderHistoryItem(change) {
+function defaultChangesSinceDate() {
+  const date = new Date();
+  date.setDate(date.getDate() - 7);
+  return localDateInputValue(date);
+}
+
+function localDateInputValue(date = new Date()) {
+  const safeDate = date instanceof Date ? date : new Date(date);
+  if (Number.isNaN(safeDate.getTime())) return "";
+  const year = safeDate.getFullYear();
+  const month = String(safeDate.getMonth() + 1).padStart(2, "0");
+  const day = String(safeDate.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function changesSinceDateValue(value = "") {
+  return /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : defaultChangesSinceDate();
+}
+
+function filterChangesSince(changes = [], sinceDate = "") {
+  const safeDate = changesSinceDateValue(sinceDate);
+  const since = Date.parse(`${safeDate}T00:00:00`);
+  return changes.filter((change) => {
+    const timestamp = Date.parse(change.timestamp || "");
+    return Number.isFinite(timestamp) && timestamp >= since;
+  });
+}
+
+function renderWhatChangedSince(project, changes = []) {
+  const safeDate = changesSinceDateValue(activeChangesSinceDate);
+  const filtered = filterChangesSince(changes, safeDate);
+  const objectTypes = new Set(filtered.map((change) => change.details?.objectType).filter(Boolean));
+  return `
+    <section class="stack">
+      <section class="view-head compact-head">
+        <div>
+          <h2 class="panel-title">${escapeHtml(t("whatChangedSince"))}</h2>
+          <p class="view-subtitle">${escapeHtml(t("whatChangedSinceSubtitle"))}</p>
+        </div>
+        <label class="filter-label">
+          ${escapeHtml(t("sinceDate"))}
+          <input type="date" value="${escapeHtml(safeDate)}" max="${escapeHtml(localDateInputValue())}" data-changes-since-date>
+        </label>
+      </section>
+      <section class="meta-grid">
+        <div class="meta-card">
+          <p class="meta-label">${escapeHtml(t("changesFound"))}</p>
+          <p class="meta-value">${escapeHtml(String(filtered.length))}</p>
+        </div>
+        <div class="meta-card">
+          <p class="meta-label">${escapeHtml(t("currentObjects"))}</p>
+          <p class="meta-value">${escapeHtml(String(objectTypes.size))}</p>
+        </div>
+        <div class="meta-card">
+          <p class="meta-label">${escapeHtml(t("trustBoundary"))}</p>
+          <p class="meta-value">${renderTrustBoundaryLabel("ContextPack")}</p>
+        </div>
+      </section>
+      <section class="history-list">
+        ${filtered.length ? filtered.map((change) => renderHistoryItem(change, { readOnly: true })).join("") : emptyText(t("noChangesSince"))}
+      </section>
+    </section>
+  `;
+}
+
+function renderHistoryItem(change, options = {}) {
   return `
     <article class="history-item">
       <div class="history-time">
@@ -8022,9 +8240,9 @@ function renderHistoryItem(change) {
         <p class="history-detail">${escapeHtml(t("howChanged"))}: ${escapeHtml(change.howChanged || change.details?.origin || "human_ui")}</p>
         <p class="history-detail">${escapeHtml(t("languageAtChange"))}: ${escapeHtml(languageDisplayName(change.language || change.details?.language || DEFAULT_LANGUAGE))}</p>
         ${renderAttachedImages(change)}
-        <div class="item-actions">
+        ${options?.readOnly ? "" : `<div class="item-actions">
           <button class="btn secondary compact" data-action="attach-image" data-object-type="Change" data-object-id="${change.id}">${escapeHtml(t("attachImage"))}</button>
-        </div>
+        </div>`}
       </div>
     </article>
   `;
@@ -8373,7 +8591,10 @@ function compactDecisions(project, config) {
       reason: limitText(decision.reason || "", config.textLimit),
       date: decision.date || "",
       actor: actorDisplay(decision.actorId),
-      confidence: decision.confidence || ""
+      confidence: decision.confidence || "",
+      relationType: normalizeDecisionRelationType(decision.relationType),
+      relatedDecisionId: decision.relatedDecisionId || "",
+      relatedDecision: limitText(decisionById(project, decision.relatedDecisionId)?.text || "", config.textLimit)
     }));
 }
 
@@ -9638,6 +9859,8 @@ function applyApprovedIntakeToCore(intake, actor, reason, approval) {
       text,
       reason: summary || `Approved from ${armTypeLabel(intake.armType)} intake.`,
       confidence: "Approved intake",
+      relationType: "",
+      relatedDecisionId: "",
       actorId: actor.id,
       date: timestamp
     };
@@ -10130,16 +10353,22 @@ function openEditDecisionModal(project, decision) {
           ${["High", "Medium", "Low", "Unknown"].map((value) => `<option ${decision.confidence === value ? "selected" : ""}>${value}</option>`).join("")}
         </select>
       </div>
+      ${decisionRelationFields(project, decision)}
       ${auditFields()}
     `,
-    onSubmit(data) {
+    onSubmit(data, form) {
+      if (!validateDecisionRelation(data, form)) return false;
       const actor = getOrCreateActor(data.actorName, "Human");
       const previous = {
         text: decision.text,
-        confidence: decision.confidence
+        confidence: decision.confidence,
+        relationType: decision.relationType || "",
+        relatedDecisionId: decision.relatedDecisionId || ""
       };
       decision.text = data.decision.trim();
       decision.confidence = data.confidence;
+      decision.relationType = normalizeDecisionRelationType(data.relationType);
+      decision.relatedDecisionId = decision.relationType ? data.relatedDecisionId : "";
       decision.editedAt = nowIso();
       recordChange(project, actor, data.reason, "Decision edited", {
         objectType: "Decision",
@@ -10149,7 +10378,13 @@ function openEditDecisionModal(project, decision) {
           previousDecision: previous.text,
           newDecision: decision.text,
           previousConfidence: previous.confidence,
-          newConfidence: decision.confidence
+          newConfidence: decision.confidence,
+          previousRelation: decisionRelationLabel(previous.relationType),
+          newRelation: decisionRelationLabel(decision.relationType),
+          previousRelatedDecisionId: previous.relatedDecisionId,
+          newRelatedDecisionId: decision.relatedDecisionId,
+          previousRelatedDecision: decisionById(project, previous.relatedDecisionId)?.text || "",
+          newRelatedDecision: decisionById(project, decision.relatedDecisionId)?.text || ""
         }
       });
       saveStore();
@@ -11409,9 +11644,11 @@ function openDecisionModal() {
           <option>Unknown</option>
         </select>
       </div>
+      ${decisionRelationFields(project)}
       ${auditFields()}
     `,
-    onSubmit(data) {
+    onSubmit(data, form) {
+      if (!validateDecisionRelation(data, form)) return false;
       const actor = getOrCreateActor(data.actorName, "Human");
       const decision = {
         id: uid("decision"),
@@ -11420,13 +11657,21 @@ function openDecisionModal() {
         reason: data.reason.trim(),
         actorId: actor.id,
         confidence: data.confidence,
+        relationType: normalizeDecisionRelationType(data.relationType),
+        relatedDecisionId: normalizeDecisionRelationType(data.relationType) ? data.relatedDecisionId : "",
         date: nowIso()
       };
       project.decisions.unshift(decision);
       recordChange(project, actor, data.reason, "Decision added", {
         objectType: "Decision",
         objectId: decision.id,
-        objectText: decision.text
+        objectText: decision.text,
+        fields: {
+          decision: decision.text,
+          relationship: decisionRelationLabel(decision.relationType),
+          relatedDecisionId: decision.relatedDecisionId,
+          relatedDecision: decisionById(project, decision.relatedDecisionId)?.text || ""
+        }
       });
       saveStore();
     }
@@ -12183,6 +12428,10 @@ app.addEventListener("click", (event) => {
     activeView = "map";
     render();
   }
+  if (action === "show-changes-since") {
+    activeView = "changes_since";
+    render();
+  }
   if (action === "show-history" || action === "view-history") {
     activeView = "history";
     activeHistoryFilter = null;
@@ -12352,6 +12601,12 @@ app.addEventListener("submit", (event) => {
 });
 
 app.addEventListener("change", (event) => {
+  const sinceDate = event.target.closest("[data-changes-since-date]");
+  if (sinceDate) {
+    activeChangesSinceDate = changesSinceDateValue(sinceDate.value);
+    render();
+    return;
+  }
   const filter = event.target.closest("[data-history-event-filter]");
   if (!filter) return;
   activeHistoryEventType = filter.value;
