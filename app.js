@@ -220,6 +220,7 @@ const ROLE_PERMISSION_MATRIX = {
 };
 const HISTORY_POLICY_VERSION = "0.1";
 const MANDATORY_HISTORY_FIELDS = ["actor", "timestamp", "reason", "changedObject", "howChanged", "language"];
+const RECENT_PROJECT_LIMIT = 5;
 const DEFAULT_LANGUAGE = "en";
 const LANGUAGES = {
   en: {
@@ -314,6 +315,27 @@ const LANGUAGES = {
     exportJson: "Export JSON",
     addIntake: "Add Intake",
     createProject: "Create Project",
+    addMenu: "Add",
+    moreActions: "More Actions",
+    viewDetails: "View Details",
+    objectDetails: "Object Details",
+    closeDetails: "Close Details",
+    continueWorking: "Continue Working",
+    continueLastProject: "Continue Last Project",
+    recentProjects: "Recent Projects",
+    noRecentProjects: "No recently opened projects.",
+    batchTriage: "Batch Triage",
+    batchTriageNotice: "Triage changes queue state only. Each approval still requires its own human review, confirmation, actor, and reason.",
+    selectIntakeItems: "Select Intake Items",
+    applyTriage: "Apply Triage",
+    proposeCorrection: "Propose Correction",
+    correctionNotice: "This creates an Airlock proposal. It does not alter the approved record until a human approves it.",
+    correctedContent: "Corrected Content",
+    correctionProposed: "Correction proposed",
+    correctionApproved: "Correction approved",
+    permissionDenied: "The selected actor role does not permit this action.",
+    currentActorRole: "Current Actor Role",
+    openReferencedObject: "Open Referenced Object",
     backToProjects: "Back to Projects",
     saved: "Saved",
     setupTitle: "Set Up Project State",
@@ -439,7 +461,7 @@ const LANGUAGES = {
     restoredBy: "Restored By",
     restoreReason: "Restore Reason",
     permissionMatrix: "Permission Matrix",
-    permissionMatrixNote: "Role permissions are policy definitions for the future multi-user model. They are visible now but not yet enforced as login permissions.",
+    permissionMatrixNote: "Role permissions control the actions shown for the configured default actor. This remains local single-user policy, not account authentication.",
     createPermission: "Create",
     editPermission: "Edit",
     approvePermission: "Approve",
@@ -990,6 +1012,27 @@ const LANGUAGES = {
     exportJson: "Exporter JSON",
     addIntake: "Ajouter une entrée",
     createProject: "Créer un projet",
+    addMenu: "Ajouter",
+    moreActions: "Autres actions",
+    viewDetails: "Voir les détails",
+    objectDetails: "Détails de l’objet",
+    closeDetails: "Fermer les détails",
+    continueWorking: "Continuer le travail",
+    continueLastProject: "Reprendre le dernier projet",
+    recentProjects: "Projets récents",
+    noRecentProjects: "Aucun projet ouvert récemment.",
+    batchTriage: "Triage groupé",
+    batchTriageNotice: "Le triage modifie uniquement l’état de la file. Chaque approbation exige toujours sa propre révision humaine, confirmation, acteur et raison.",
+    selectIntakeItems: "Sélectionner les entrées",
+    applyTriage: "Appliquer le triage",
+    proposeCorrection: "Proposer une correction",
+    correctionNotice: "Ceci crée une proposition dans l’Airlock. L’enregistrement approuvé ne change pas avant l’approbation humaine.",
+    correctedContent: "Contenu corrigé",
+    correctionProposed: "Correction proposée",
+    correctionApproved: "Correction approuvée",
+    permissionDenied: "Le rôle de l’acteur sélectionné n’autorise pas cette action.",
+    currentActorRole: "Rôle actuel de l’acteur",
+    openReferencedObject: "Ouvrir l’objet référencé",
     backToProjects: "Retour aux projets",
     saved: "Enregistré",
     setupTitle: "Configurer Project State",
@@ -1115,7 +1158,7 @@ const LANGUAGES = {
     restoredBy: "Restauré par",
     restoreReason: "Raison de la restauration",
     permissionMatrix: "Matrice des permissions",
-    permissionMatrixNote: "Les permissions de rôle sont des définitions de politique pour le futur modèle multi-utilisateur. Elles sont visibles maintenant mais ne sont pas encore appliquées comme permissions de connexion.",
+    permissionMatrixNote: "Les permissions de rôle contrôlent les actions affichées pour l’acteur par défaut configuré. Cela reste une politique locale mono-utilisateur, pas une authentification de compte.",
     createPermission: "Créer",
     editPermission: "Modifier",
     approvePermission: "Approuver",
@@ -1666,6 +1709,27 @@ const LANGUAGES = {
     exportJson: "JSON exportieren",
     addIntake: "Eingang hinzufügen",
     createProject: "Projekt erstellen",
+    addMenu: "Hinzufügen",
+    moreActions: "Weitere Aktionen",
+    viewDetails: "Details anzeigen",
+    objectDetails: "Objektdetails",
+    closeDetails: "Details schließen",
+    continueWorking: "Weiterarbeiten",
+    continueLastProject: "Letztes Projekt fortsetzen",
+    recentProjects: "Letzte Projekte",
+    noRecentProjects: "Keine kürzlich geöffneten Projekte.",
+    batchTriage: "Sammeltriage",
+    batchTriageNotice: "Die Triage ändert nur den Warteschlangenstatus. Jede Genehmigung erfordert weiterhin eine eigene menschliche Prüfung, Bestätigung, Person und Begründung.",
+    selectIntakeItems: "Eingänge auswählen",
+    applyTriage: "Triage anwenden",
+    proposeCorrection: "Korrektur vorschlagen",
+    correctionNotice: "Dies erstellt einen Airlock-Vorschlag. Der genehmigte Datensatz ändert sich erst nach menschlicher Genehmigung.",
+    correctedContent: "Korrigierter Inhalt",
+    correctionProposed: "Korrektur vorgeschlagen",
+    correctionApproved: "Korrektur genehmigt",
+    permissionDenied: "Die Rolle der ausgewählten Person erlaubt diese Aktion nicht.",
+    currentActorRole: "Aktuelle Akteursrolle",
+    openReferencedObject: "Referenziertes Objekt öffnen",
     backToProjects: "Zurück zu Projekten",
     saved: "Gespeichert",
     setupTitle: "Project State einrichten",
@@ -1791,7 +1855,7 @@ const LANGUAGES = {
     restoredBy: "Wiederhergestellt von",
     restoreReason: "Grund der Wiederherstellung",
     permissionMatrix: "Berechtigungsmatrix",
-    permissionMatrixNote: "Rollenberechtigungen sind Richtliniendefinitionen für das zukünftige Mehrbenutzermodell. Sie sind jetzt sichtbar, werden aber noch nicht als Login-Berechtigungen erzwungen.",
+    permissionMatrixNote: "Rollenberechtigungen steuern die angezeigten Aktionen für den konfigurierten Standardakteur. Dies bleibt eine lokale Einzelbenutzer-Richtlinie und ist keine Kontoanmeldung.",
     createPermission: "Erstellen",
     editPermission: "Bearbeiten",
     approvePermission: "Genehmigen",
@@ -2342,6 +2406,27 @@ const LANGUAGES = {
     exportJson: "Exportar JSON",
     addIntake: "Agregar entrada",
     createProject: "Crear proyecto",
+    addMenu: "Agregar",
+    moreActions: "Más acciones",
+    viewDetails: "Ver detalles",
+    objectDetails: "Detalles del objeto",
+    closeDetails: "Cerrar detalles",
+    continueWorking: "Continuar trabajando",
+    continueLastProject: "Continuar último proyecto",
+    recentProjects: "Proyectos recientes",
+    noRecentProjects: "No hay proyectos abiertos recientemente.",
+    batchTriage: "Clasificación por lote",
+    batchTriageNotice: "La clasificación solo cambia el estado de la cola. Cada aprobación aún requiere su propia revisión humana, confirmación, actor y razón.",
+    selectIntakeItems: "Seleccionar entradas",
+    applyTriage: "Aplicar clasificación",
+    proposeCorrection: "Proponer corrección",
+    correctionNotice: "Esto crea una propuesta en Airlock. No cambia el registro aprobado hasta que una persona lo apruebe.",
+    correctedContent: "Contenido corregido",
+    correctionProposed: "Corrección propuesta",
+    correctionApproved: "Corrección aprobada",
+    permissionDenied: "El rol del actor seleccionado no permite esta acción.",
+    currentActorRole: "Rol actual del actor",
+    openReferencedObject: "Abrir objeto referenciado",
     backToProjects: "Volver a proyectos",
     saved: "Guardado",
     setupTitle: "Configurar Project State",
@@ -2467,7 +2552,7 @@ const LANGUAGES = {
     restoredBy: "Restaurado por",
     restoreReason: "Razón de restauración",
     permissionMatrix: "Matriz de permisos",
-    permissionMatrixNote: "Los permisos de rol son definiciones de política para el futuro modelo multiusuario. Están visibles ahora pero aún no se aplican como permisos de inicio de sesión.",
+    permissionMatrixNote: "Los permisos de rol controlan las acciones mostradas para el actor predeterminado configurado. Sigue siendo una política local de un solo usuario, no autenticación de cuenta.",
     createPermission: "Crear",
     editPermission: "Editar",
     approvePermission: "Aprobar",
@@ -2964,6 +3049,7 @@ const INPUT_LIMITS = {
   action: 2500,
   owner: 160,
   text: 5000,
+  correctedContent: 5000,
   suggestedBy: 120
 };
 
@@ -2990,6 +3076,12 @@ const defaultSettings = () => ({
   lastRestoreBy: "",
   lastRestoreReason: "",
   lastRestoreSourceFile: "",
+  uiState: {
+    recentProjectIds: [],
+    lastProjectId: "",
+    lastProjectView: "dashboard",
+    projectScrollPositions: {}
+  },
   historyPolicyVersion: HISTORY_POLICY_VERSION,
   mandatoryHistory: true,
   mandatoryHistoryFields: [...MANDATORY_HISTORY_FIELDS]
@@ -3018,6 +3110,8 @@ let activeView = "dashboard";
 let activeHistoryFilter = null;
 let activeHistoryEventType = "all";
 let activeChangesSinceDate = defaultChangesSinceDate();
+let activeObjectDetail = null;
+let postModalAction = null;
 let searchQuery = "";
 let saveState = {
   status: "saved",
@@ -4179,6 +4273,7 @@ function normalizeSettings(settings = {}) {
     lastRestoreBy: settings.lastRestoreBy || "",
     lastRestoreReason: settings.lastRestoreReason || "",
     lastRestoreSourceFile: settings.lastRestoreSourceFile || "",
+    uiState: normalizeUiState(settings.uiState),
     historyPolicyVersion: settings.historyPolicyVersion || defaults.historyPolicyVersion,
     mandatoryHistory: settings.mandatoryHistory !== false,
     mandatoryHistoryFields: Array.isArray(settings.mandatoryHistoryFields) && settings.mandatoryHistoryFields.length
@@ -4194,9 +4289,23 @@ function normalizeSettings(settings = {}) {
     settings.backupSystem !== normalized.backupSystem ||
     settings.historyPolicyVersion !== normalized.historyPolicyVersion ||
     settings.mandatoryHistory !== normalized.mandatoryHistory ||
-    !Array.isArray(settings.mandatoryHistoryFields)
+    !Array.isArray(settings.mandatoryHistoryFields) ||
+    !settings.uiState
   ) migrationNeeded = true;
   return normalized;
+}
+
+function normalizeUiState(uiState = {}) {
+  const allowedViews = ["dashboard", "handoff", "map", "changes_since", "history"];
+  const scrollPositions = uiState.projectScrollPositions && typeof uiState.projectScrollPositions === "object"
+    ? Object.fromEntries(Object.entries(uiState.projectScrollPositions).filter(([, value]) => Number.isFinite(Number(value))).map(([key, value]) => [key, Math.max(0, Number(value))]))
+    : {};
+  return {
+    recentProjectIds: Array.isArray(uiState.recentProjectIds) ? [...new Set(uiState.recentProjectIds.map(String).filter(Boolean))].slice(0, RECENT_PROJECT_LIMIT) : [],
+    lastProjectId: String(uiState.lastProjectId || ""),
+    lastProjectView: allowedViews.includes(uiState.lastProjectView) ? uiState.lastProjectView : "dashboard",
+    projectScrollPositions: scrollPositions
+  };
 }
 
 function safeStringify(value) {
@@ -4757,6 +4866,9 @@ function createIntakeItem(input = {}) {
 function approveIntakeItem(intakeId, actor, reason, applyApprovedChange) {
   const intake = store.intakeItems?.find((item) => item.id === intakeId);
   requireHumanApproval(actor, reason, { origin: "intake" });
+  if (!actorHasPermission(actor, "approve", getProject(intake?.projectId))) {
+    throw new Error(t("permissionDenied"));
+  }
   if (!intake || intake.status !== "pending" || typeof applyApprovedChange !== "function") return null;
   if (!allRequiredFlagsPass(intakeAirlockChecks(intake))) return null;
   const approval = {
@@ -5250,6 +5362,70 @@ function getActor(actorId) {
   return store.actors.find((actor) => actor.id === actorId) || null;
 }
 
+function currentActor() {
+  return getActor(store.settings?.primaryActorId) || store.actors.find((actor) => normalizeActorStatus(actor.status) === "active") || null;
+}
+
+function actorPermissionRoles(actor, project = null) {
+  if (!actor) return [];
+  const roles = [normalizeActorRole(actor.role, actor.type)];
+  if (project) {
+    for (const assignment of project.projectRoles || []) {
+      if (assignment.actorId === actor.id && assignment.status !== "archived") roles.push(normalizeActorRole(assignment.role));
+    }
+  }
+  return [...new Set(roles)];
+}
+
+function actorHasPermission(actor, permission, project = null) {
+  if (!actor || normalizeActorStatus(actor.status) !== "active") return false;
+  return actorPermissionRoles(actor, project).some((role) => Boolean(ROLE_PERMISSION_MATRIX[role]?.[permission]));
+}
+
+function validateActorPermission(actor, permission, project = null) {
+  if (actorHasPermission(actor, permission, project)) return true;
+  window.alert(t("permissionDenied"));
+  return false;
+}
+
+function currentActorCan(permission, project = getProject()) {
+  return actorHasPermission(currentActor(), permission, project);
+}
+
+function actionPermission(action = "") {
+  if (["create-project", "add-decision", "add-fact", "add-conflict", "add-source", "add-relationship", "add-question", "add-action", "add-extract", "read-file-extract", "suggest-extract", "create-draft-project"].includes(action)) return "create";
+  if (["edit-status", "edit-object", "assign-object", "mark-complete", "attach-source", "attach-image", "archive-object", "unarchive-project", "manage-project-roles", "review-source-freshness", "verify-source-file", "verify-all-source-files", "archive-ai-work-order"].includes(action)) return "edit";
+  if (["approve-intake", "approve-extract", "approve-draft-project"].includes(action)) return "approve";
+  if (["export-project", "export-handoff", "context-pack", "view-object-history", "show-history", "view-history", "show-changes-since"].includes(action)) return "audit";
+  if (["show-settings", "backup-storage", "restore-storage", "reset-local-data", "export-current-raw-data"].includes(action)) return "admin";
+  return "";
+}
+
+function actionAllowedForCurrentActor(action = "", project = getProject()) {
+  const actor = currentActor();
+  const role = normalizeActorRole(actor?.role, actor?.type);
+  if (["create-intake", "create-ai-work-order", "propose-correction"].includes(action)) return actorHasPermission(actor, "create", project);
+  if (["review-intake-queue", "batch-triage", "reject-intake", "archive-intake", "comment-object", "comment-ai-work-order"].includes(action)) {
+    return ["owner", "admin", "project_lead", "approver", "editor", "contributor", "reviewer", "auditor"].includes(role);
+  }
+  if (action === "delete-project") return role === "owner";
+  const permission = actionPermission(action);
+  if (role === "ai_tool" && permission === "create") return false;
+  return permission ? currentActorCan(permission, project) : true;
+}
+
+function applyRoleAwareControls() {
+  const actor = currentActor();
+  const project = getProject();
+  for (const control of app.querySelectorAll("[data-action]")) {
+    if (!actionAllowedForCurrentActor(control.dataset.action, project)) control.hidden = true;
+  }
+  for (const menu of app.querySelectorAll("details.action-menu")) {
+    if (!menu.querySelector(".action-menu-popover [data-action]:not([hidden])")) menu.hidden = true;
+  }
+  return actor;
+}
+
 function actorName(actorId) {
   return getActor(actorId)?.name || "Unknown actor";
 }
@@ -5543,13 +5719,62 @@ function needsFirstRunSetup() {
   return !store.settings?.setupCompletedAt || !store.settings?.primaryActorId;
 }
 
-function openProjectNow(projectId, view = "dashboard") {
+function captureWorkspacePosition() {
+  if (!activeProjectId || !store.settings) return;
+  const uiState = normalizeUiState(store.settings.uiState);
+  uiState.projectScrollPositions[activeProjectId] = Math.max(0, Math.round(window.scrollY || 0));
+  store.settings.uiState = uiState;
+}
+
+function rememberProjectVisit(projectId, view = activeView) {
+  if (!projectId || !store.settings) return;
+  const uiState = normalizeUiState(store.settings.uiState);
+  uiState.recentProjectIds = [projectId, ...uiState.recentProjectIds.filter((id) => id !== projectId)].slice(0, RECENT_PROJECT_LIMIT);
+  uiState.lastProjectId = projectId;
+  uiState.lastProjectView = ["dashboard", "handoff", "map", "changes_since", "history"].includes(view) ? view : "dashboard";
+  store.settings.uiState = uiState;
+  saveStore({ allowWithoutCoreApproval: true, reason: "workspace-ui-state" });
+}
+
+function restoreWorkspacePosition(projectId = activeProjectId) {
+  const y = normalizeUiState(store.settings?.uiState).projectScrollPositions[projectId] || 0;
+  requestAnimationFrame(() => window.scrollTo({ top: y, behavior: "auto" }));
+}
+
+function openProjectNow(projectId, view = "") {
+  const uiState = normalizeUiState(store.settings?.uiState);
   activeProjectId = projectId;
   activeRootView = "projects";
-  activeView = view;
+  activeView = view || (uiState.lastProjectId === projectId ? uiState.lastProjectView : "dashboard");
   activeHistoryFilter = null;
   activeHistoryEventType = "all";
+  activeObjectDetail = null;
   searchQuery = "";
+  rememberProjectVisit(projectId, activeView);
+}
+
+function recentProjects() {
+  const uiState = normalizeUiState(store.settings?.uiState);
+  return uiState.recentProjectIds.map((projectId) => getProject(projectId)).filter((project) => project && !project.archived);
+}
+
+function renderContinueWorking() {
+  const uiState = normalizeUiState(store.settings?.uiState);
+  const lastProjectRecord = getProject(uiState.lastProjectId);
+  const lastProject = lastProjectRecord && !lastProjectRecord.archived ? lastProjectRecord : null;
+  const recent = recentProjects();
+  if (!lastProject && !recent.length) return "";
+  return `
+    <section class="continue-working-band">
+      <div class="panel-head">
+        <h2 class="panel-title">${escapeHtml(t("continueWorking"))}</h2>
+        ${lastProject ? `<button class="btn secondary" data-action="continue-last-project" data-project-id="${escapeHtml(lastProject.id)}">${escapeHtml(t("continueLastProject"))}</button>` : ""}
+      </div>
+      <div class="recent-project-links">
+        ${recent.length ? recent.map((project) => `<button class="recent-project-link" data-action="open-project" data-project-id="${escapeHtml(project.id)}"><strong>${escapeDisplay(project.name, DISPLAY_META_LIMIT)}</strong><span>${escapeDisplay(project.currentStatus || t("noStatusRecorded"), DISPLAY_META_LIMIT)}</span></button>`).join("") : emptyText(t("noRecentProjects"))}
+      </div>
+    </section>
+  `;
 }
 
 function workInboxCount() {
@@ -5640,6 +5865,34 @@ function buildWorkInboxItems() {
 
   for (const project of store.projects || []) {
     if (project.archived) continue;
+    const incompleteFlags = projectCompletenessFlags(project).filter((flag) => !flag.passed && !["sourceFilesClear", "healthNotBlocked"].includes(flag.key));
+    if (incompleteFlags.length) {
+      push({
+        id: `project-completeness-${project.id}`,
+        level: "warning",
+        category: t("projectCompleteness"),
+        title: project.name,
+        body: incompleteFlags.map((flag) => flag.label).join(", "),
+        meta: `${t("lastUpdated")}: ${formatDate(project.updatedAt)}`,
+        projectId: project.id,
+        actionLabel: t("goToProject"),
+        sortAt: project.updatedAt
+      });
+    }
+    for (const conflict of project.conflicts || []) {
+      if (!["unresolved", "under_review"].includes(conflict.status)) continue;
+      push({
+        id: `conflict-${conflict.id}`,
+        level: conflict.status === "unresolved" ? "needs_attention" : "warning",
+        category: t("conflictRegister"),
+        title: conflict.title,
+        body: conflict.description || conflict.linkedItems || "",
+        meta: `${t("project")}: ${project.name} · ${conflictStatusLabel(conflict.status)}`,
+        projectId: project.id,
+        actionLabel: t("goToProject"),
+        sortAt: conflict.noticedAt
+      });
+    }
     for (const item of projectIntegrityObjects(project)) {
       for (const assignment of item.object.assignments || []) {
         if (assignment.status === "archived") continue;
@@ -5814,7 +6067,7 @@ function renderWorkInbox() {
   shell(`
     <section class="view-head">
       <div>
-        <h1 class="view-title">${escapeHtml(t("workInbox"))}</h1>
+        <h1 class="view-title">${escapeHtml(t("needsAttention"))}</h1>
         <p class="view-subtitle">${escapeHtml(t("workInboxSubtitle"))}</p>
       </div>
     </section>
@@ -5899,7 +6152,7 @@ function shell(inner) {
       <div class="button-row">
         ${activeProjectId ? `<button class="btn secondary" data-action="back">${escapeHtml(t("backToProjects"))}</button>` : ""}
         ${!activeProjectId ? `<button class="btn secondary" data-action="show-projects">${escapeHtml(t("projects"))}</button>` : ""}
-        ${!activeProjectId ? `<button class="btn secondary" data-action="show-inbox">${escapeHtml(t("workInbox"))}${workInboxCount() ? ` (${workInboxCount()})` : ""}</button>` : ""}
+        ${!activeProjectId ? `<button class="btn secondary" data-action="show-inbox">${escapeHtml(t("needsAttention"))}${workInboxCount() ? ` (${workInboxCount()})` : ""}</button>` : ""}
         ${!activeProjectId ? `<button class="btn secondary" data-action="show-work-orders">${escapeHtml(t("aiWorkOrders"))}${activeAiWorkOrderCount() ? ` (${activeAiWorkOrderCount()})` : ""}</button>` : ""}
         ${!activeProjectId ? `<button class="btn secondary" data-action="show-archived-projects">${escapeHtml(t("archivedProjects"))}${archivedProjectCount() ? ` (${archivedProjectCount()})` : ""}</button>` : ""}
         ${!activeProjectId ? `<button class="btn secondary" data-action="show-intake">${escapeHtml(t("intake"))}${pendingIntakeCount() ? ` (${pendingIntakeCount()})` : ""}</button>` : ""}
@@ -5907,6 +6160,7 @@ function shell(inner) {
         ${!activeProjectId ? `<button class="btn secondary" data-action="backup-storage">${escapeHtml(t("backup"))}</button>` : ""}
         ${!activeProjectId ? `<button class="btn secondary" data-action="restore-storage">${escapeHtml(t("restore"))}</button>` : ""}
         ${activeProjectId ? `<button class="btn secondary" data-action="export-project">${escapeHtml(t("exportJson"))}</button>` : ""}
+        <span class="actor-role-indicator">${escapeHtml(t("currentActorRole"))}: ${escapeHtml(actorRoleLabel(currentActor()?.role, currentActor()?.type))}</span>
         <span class="save-indicator ${saveState.status}" role="status">${escapeHtml(saveState.message || t("saved"))}</span>
         ${!activeProjectId ? `<button class="btn secondary" data-action="create-intake">${escapeHtml(t("addIntake"))}</button>` : ""}
         <button class="btn" data-action="create-project">${escapeHtml(t("createProject"))}</button>
@@ -5915,6 +6169,7 @@ function shell(inner) {
     <div data-storage-warning-slot>${runtimeWarningHtml()}${storageWarningHtml()}</div>
     <main class="main">${inner}</main>
   `;
+  applyRoleAwareControls();
 }
 
 function renderRecoveryScreen() {
@@ -6091,6 +6346,7 @@ function renderProjectList() {
         <p class="view-subtitle">${escapeHtml(t("chooseProjectEmpty"))}</p>
       </div>
     </section>
+    ${renderContinueWorking()}
     ${projects.length ? `<section class="project-grid">${projects.map(renderProjectCard).join("")}</section>` : `
       <section class="empty-state">
         <h2>${escapeHtml(t("noActiveProjects"))}</h2>
@@ -6122,6 +6378,11 @@ function renderArchivedProjectList() {
 }
 
 function renderSettings() {
+  if (!currentActorCan("admin", null)) {
+    activeRootView = "projects";
+    renderProjectList();
+    return;
+  }
   const info = storageSizeInfo();
   const diagnostics = settingsDiagnostics();
   const integrity = buildIntegrityDashboard(diagnostics, info);
@@ -6989,7 +7250,10 @@ function renderIntakeQueue() {
         <h1 class="view-title">${escapeHtml(t("intakeAirlock"))}</h1>
         <p class="view-subtitle">${escapeHtml(t("intakeAirlockSubtitle"))}</p>
       </div>
-      <button class="btn" data-action="create-intake">${escapeHtml(t("addIntake"))}</button>
+      <div class="button-row">
+        ${pending.length ? `<button class="btn secondary" data-action="batch-triage">${escapeHtml(t("batchTriage"))}</button>` : ""}
+        <button class="btn" data-action="create-intake">${escapeHtml(t("addIntake"))}</button>
+      </div>
     </section>
 
     <article class="panel">
@@ -7411,21 +7675,31 @@ function renderProject(project) {
         <p class="view-subtitle">${escapeHtml(t("stateHistorySeparate"))}</p>
       </div>
       <div class="button-row">
-        <button class="btn secondary" data-action="edit-object" data-object-type="Project" data-object-id="${project.id}">${escapeHtml(t("edit"))}</button>
-        <button class="btn secondary" data-action="archive-object" data-object-type="Project" data-object-id="${project.id}" ${project.archived ? "disabled" : ""}>${escapeHtml(t("archive"))}</button>
-        ${project.archived ? `<button class="btn secondary" data-action="unarchive-project" data-project-id="${project.id}">${escapeHtml(t("unarchiveProject"))}</button>` : ""}
-        <button class="btn secondary" data-action="delete-project" data-project-id="${project.id}" ${project.deletionStatus ? "disabled" : ""}>${escapeHtml(t("deleteProject"))}</button>
         <button class="btn secondary" data-action="project-overview">${escapeHtml(t("onePageOverview"))}</button>
-        <button class="btn secondary" data-action="export-handoff">${escapeHtml(t("exportHandoff"))}</button>
-        <button class="btn secondary" data-action="context-pack">${escapeHtml(t("contextPack"))}</button>
-        <button class="btn secondary" data-action="view-object-history" data-object-type="Project" data-object-id="${project.id}">${escapeHtml(t("viewHistory"))}</button>
-        <button class="btn secondary" data-action="add-decision">${escapeHtml(t("addDecision"))}</button>
-        <button class="btn secondary" data-action="add-fact">${escapeHtml(t("addFact"))}</button>
-        <button class="btn secondary" data-action="add-conflict">${escapeHtml(t("addConflict"))}</button>
-        <button class="btn secondary" data-action="add-source">${escapeHtml(t("addSource"))}</button>
-        <button class="btn secondary" data-action="add-relationship">${escapeHtml(t("addRelationship"))}</button>
-        <button class="btn secondary" data-action="add-question">${escapeHtml(t("addOpenQuestion"))}</button>
-        <button class="btn secondary" data-action="add-action">${escapeHtml(t("addNextAction"))}</button>
+        <details class="action-menu header-action-menu">
+          <summary class="btn">${escapeHtml(t("addMenu"))}</summary>
+          <div class="action-menu-popover">
+            <button class="btn secondary compact" data-action="add-decision">${escapeHtml(t("addDecision"))}</button>
+            <button class="btn secondary compact" data-action="add-fact">${escapeHtml(t("addFact"))}</button>
+            <button class="btn secondary compact" data-action="add-conflict">${escapeHtml(t("addConflict"))}</button>
+            <button class="btn secondary compact" data-action="add-source">${escapeHtml(t("addSource"))}</button>
+            <button class="btn secondary compact" data-action="add-relationship">${escapeHtml(t("addRelationship"))}</button>
+            <button class="btn secondary compact" data-action="add-question">${escapeHtml(t("addOpenQuestion"))}</button>
+            <button class="btn secondary compact" data-action="add-action">${escapeHtml(t("addNextAction"))}</button>
+          </div>
+        </details>
+        <details class="action-menu header-action-menu">
+          <summary class="btn secondary">${escapeHtml(t("moreActions"))}</summary>
+          <div class="action-menu-popover align-right">
+            <button class="btn secondary compact" data-action="edit-object" data-object-type="Project" data-object-id="${project.id}">${escapeHtml(t("edit"))}</button>
+            <button class="btn secondary compact" data-action="export-handoff">${escapeHtml(t("exportHandoff"))}</button>
+            <button class="btn secondary compact" data-action="context-pack">${escapeHtml(t("contextPack"))}</button>
+            <button class="btn secondary compact" data-action="view-object-history" data-object-type="Project" data-object-id="${project.id}">${escapeHtml(t("viewHistory"))}</button>
+            <button class="btn secondary compact" data-action="archive-object" data-object-type="Project" data-object-id="${project.id}" ${project.archived ? "disabled" : ""}>${escapeHtml(t("archive"))}</button>
+            ${project.archived ? `<button class="btn secondary compact" data-action="unarchive-project" data-project-id="${project.id}">${escapeHtml(t("unarchiveProject"))}</button>` : ""}
+            <button class="btn secondary compact" data-action="delete-project" data-project-id="${project.id}" ${project.deletionStatus ? "disabled" : ""}>${escapeHtml(t("deleteProject"))}</button>
+          </div>
+        </details>
       </div>
     </section>
 
@@ -7438,6 +7712,7 @@ function renderProject(project) {
     </nav>
 
     ${activeView === "dashboard" ? dashboard : activeView === "handoff" ? handoff : activeView === "map" ? map : activeView === "changes_since" ? changesSince : history}
+    ${renderObjectDetailPanel(project)}
   `);
 }
 
@@ -7826,18 +8101,18 @@ function decisionById(project, decisionId = "") {
 }
 
 function renderDecisionRelations(project, decision) {
-  const lines = [];
+  const links = [];
   if (decision.relatedDecisionId) {
     const related = decisionById(project, decision.relatedDecisionId);
-    lines.push(`${decisionRelationLabel(decision.relationType)}: ${related?.text || t("missingDecision")}`);
+    links.push({ label: `${decisionRelationLabel(decision.relationType)}: ${related?.text || t("missingDecision")}`, objectId: related?.id || "" });
   }
   for (const candidate of project.decisions || []) {
     if (candidate.relatedDecisionId !== decision.id) continue;
     const reverseLabel = candidate.relationType === "replaces" ? t("replacedBy") : t("supersededBy");
-    lines.push(`${reverseLabel}: ${candidate.text}`);
+    links.push({ label: `${reverseLabel}: ${candidate.text}`, objectId: candidate.id });
   }
-  if (!lines.length) return "";
-  return `<div class="decision-relations">${lines.map((line) => `<p class="item-meta">${escapeDisplay(line, DISPLAY_META_LIMIT)}</p>`).join("")}</div>`;
+  if (!links.length) return "";
+  return `<div class="decision-relations">${links.map((link) => link.objectId ? renderObjectReferenceButton(project.id, "Decision", link.objectId, link.label) : `<p class="item-meta">${escapeDisplay(link.label, DISPLAY_META_LIMIT)}</p>`).join("")}</div>`;
 }
 
 function renderDecisionList(decisions, project = getProject()) {
@@ -7983,6 +8258,7 @@ function renderRelationshipList(relationships) {
     <div class="item">
       <p class="item-title">${escapeDisplay(relationshipTargetLabel(relationship))}</p>
       <p class="item-meta">${escapeDisplay(relationship.relationshipType || t("related"), DISPLAY_META_LIMIT)} · ${escapeHtml(actorDisplay(relationship.actorId))} · ${escapeHtml(formatDate(relationship.createdAt))}</p>
+      ${relationship.targetProjectId ? renderObjectReferenceButton(relationship.targetProjectId, "Project", relationship.targetProjectId, t("openReferencedObject")) : ""}
       ${relationship.notes ? `<p class="item-body">${escapeDisplay(relationship.notes)}</p>` : ""}
       ${renderAssignmentsSummary(relationship)}
       ${renderCommentsSummary(relationship)}
@@ -8078,17 +8354,61 @@ function renderObjectActions(objectType, objectId, archived = false) {
   const attachImage = canAttachImage(objectType)
     ? `<button class="btn secondary compact" data-action="attach-image" data-object-type="${objectType}" data-object-id="${objectId}">${escapeHtml(t("attachImage"))}</button>`
     : "";
+  const correction = !["Change", "DraftProject", "Extract"].includes(objectType)
+    ? `<button class="btn secondary compact" data-action="propose-correction" data-object-type="${objectType}" data-object-id="${objectId}">${escapeHtml(t("proposeCorrection"))}</button>`
+    : "";
   return `
     <div class="item-actions">
+      <button class="btn secondary compact" data-action="open-object-detail" data-object-type="${objectType}" data-object-id="${objectId}">${escapeHtml(t("viewDetails"))}</button>
       <button class="btn secondary compact" data-action="edit-object" data-object-type="${objectType}" data-object-id="${objectId}">${escapeHtml(t("edit"))}</button>
-      <button class="btn secondary compact" data-action="assign-object" data-object-type="${objectType}" data-object-id="${objectId}">${escapeHtml(t("assignObject"))}</button>
-      <button class="btn secondary compact" data-action="comment-object" data-object-type="${objectType}" data-object-id="${objectId}">${escapeHtml(t("reviewThread"))}</button>
-      ${attachSource}
-      ${attachImage}
-      <button class="btn secondary compact" data-action="archive-object" data-object-type="${objectType}" data-object-id="${objectId}" ${archived ? "disabled" : ""}>${escapeHtml(t("archive"))}</button>
-      <button class="btn secondary compact" data-action="view-object-history" data-object-type="${objectType}" data-object-id="${objectId}">${escapeHtml(t("viewHistory"))}</button>
+      <details class="action-menu">
+        <summary class="btn secondary compact">${escapeHtml(t("moreActions"))}</summary>
+        <div class="action-menu-popover">
+          <button class="btn secondary compact" data-action="assign-object" data-object-type="${objectType}" data-object-id="${objectId}">${escapeHtml(t("assignObject"))}</button>
+          <button class="btn secondary compact" data-action="comment-object" data-object-type="${objectType}" data-object-id="${objectId}">${escapeHtml(t("reviewThread"))}</button>
+          ${attachSource}
+          ${attachImage}
+          ${correction}
+          <button class="btn secondary compact" data-action="archive-object" data-object-type="${objectType}" data-object-id="${objectId}" ${archived ? "disabled" : ""}>${escapeHtml(t("archive"))}</button>
+          <button class="btn secondary compact" data-action="view-object-history" data-object-type="${objectType}" data-object-id="${objectId}">${escapeHtml(t("viewHistory"))}</button>
+        </div>
+      </details>
     </div>
   `;
+}
+
+function renderObjectDetailPanel(project) {
+  if (!activeObjectDetail || activeObjectDetail.projectId !== project.id) return "";
+  const object = getProjectObject(project, activeObjectDetail.objectType, activeObjectDetail.objectId);
+  if (!object) return "";
+  return `
+    <div class="detail-backdrop" data-action="close-object-detail"></div>
+    <aside class="object-detail-panel" role="dialog" aria-modal="true" aria-label="${escapeHtml(t("objectDetails"))}">
+      <div class="detail-panel-head">
+        <div>
+          <p class="meta-label">${escapeHtml(activeObjectDetail.objectType)}</p>
+          <h2 class="panel-title">${escapeDisplay(objectLabel(activeObjectDetail.objectType, object), DISPLAY_META_LIMIT)}</h2>
+        </div>
+        <button class="icon-btn" data-action="close-object-detail" aria-label="${escapeHtml(t("closeDetails"))}">×</button>
+      </div>
+      <div class="detail-panel-body">${renderObjectDetailContent(project, activeObjectDetail.objectType, object)}</div>
+    </aside>
+  `;
+}
+
+function renderObjectDetailContent(project, objectType, object) {
+  if (objectType === "Decision") return renderDecisionList([object], project);
+  if (objectType === "Fact") return renderFactList([object]);
+  if (objectType === "Conflict") return renderConflictList([object]);
+  if (objectType === "Source") return renderSourceList([object], project);
+  if (objectType === "Extract") return renderExtractList([object]);
+  if (objectType === "DraftProject") return renderDraftProjectList([object]);
+  if (objectType === "Relationship") return renderRelationshipList([object]);
+  if (objectType === "OpenQuestion") return renderQuestionList([object]);
+  if (objectType === "NextAction") return renderActionList([object]);
+  if (objectType === "Change") return renderHistoryItem(object);
+  if (objectType === "Project") return `<p class="status-text">${escapeDisplay(project.currentStatus || t("noStatusRecorded"))}</p><p class="summary-text">${escapeDisplay(project.currentSummary || t("noCurrentSummaryRecorded"))}</p>${renderObjectActions("Project", project.id, project.archived)}`;
+  return emptyText(t("notRecorded"));
 }
 
 function canAttachSource(objectType) {
@@ -8105,9 +8425,14 @@ function renderAttachedSources(object) {
   return `
     <div class="attached-sources">
       <p class="item-meta">${escapeHtml(t("attachedSources"))}</p>
-      ${links.map((link) => `<p class="item-meta">${escapeDisplay(link.sourceTitle || t("source"), DISPLAY_META_LIMIT)} · ${escapeHtml(formatDate(link.attachedAt))}</p>`).join("")}
+      ${links.map((link) => renderObjectReferenceButton(link.sourceProjectId || object.projectId || activeProjectId, "Source", link.sourceId, `${link.sourceTitle || t("source")} · ${formatDate(link.attachedAt)}`)).join("")}
     </div>
   `;
+}
+
+function renderObjectReferenceButton(projectId, objectType, objectId, label) {
+  if (!projectId || !objectId) return `<p class="item-meta">${escapeDisplay(label, DISPLAY_META_LIMIT)}</p>`;
+  return `<button class="object-reference-link" data-action="open-referenced-object" data-project-id="${escapeHtml(projectId)}" data-object-type="${escapeHtml(objectType)}" data-object-id="${escapeHtml(objectId)}">${escapeDisplay(label, DISPLAY_META_LIMIT)}</button>`;
 }
 
 function renderAttachedImages(object) {
@@ -8239,6 +8564,7 @@ function renderHistoryItem(change, options = {}) {
         <p class="history-detail">${escapeHtml(t("historyChanged"))}: ${escapeDisplay(describeDetails(change.details))}</p>
         <p class="history-detail">${escapeHtml(t("howChanged"))}: ${escapeHtml(change.howChanged || change.details?.origin || "human_ui")}</p>
         <p class="history-detail">${escapeHtml(t("languageAtChange"))}: ${escapeHtml(languageDisplayName(change.language || change.details?.language || DEFAULT_LANGUAGE))}</p>
+        ${change.details?.objectType && change.details?.objectId ? renderObjectReferenceButton(change.projectId || activeProjectId, change.details.objectType, change.details.objectId, t("openReferencedObject")) : ""}
         ${renderAttachedImages(change)}
         ${options?.readOnly ? "" : `<div class="item-actions">
           <button class="btn secondary compact" data-action="attach-image" data-object-type="Change" data-object-id="${change.id}">${escapeHtml(t("attachImage"))}</button>
@@ -9156,6 +9482,9 @@ function showModal({ title, body, submitText, onSubmit }) {
       }
       modal.remove();
       render();
+      const nextAction = postModalAction;
+      postModalAction = null;
+      if (typeof nextAction === "function") setTimeout(nextAction, 0);
     } catch (error) {
       console.error("Project State modal action failed.", error);
       submitting = false;
@@ -9172,6 +9501,10 @@ function showModal({ title, body, submitText, onSubmit }) {
 
   document.body.appendChild(modal);
   modal.querySelector("input, textarea, select")?.focus();
+}
+
+function queuePostModalAction(callback) {
+  postModalAction = typeof callback === "function" ? callback : null;
 }
 
 function applyInputLimits(form) {
@@ -9229,10 +9562,11 @@ function wireLocalFilePickers(form) {
 }
 
 function auditFields({ actorLabel = t("approvedBy"), reasonLabel = t("reason") } = {}) {
+  const defaultActorName = currentActor()?.name || "";
   return `
     <div class="field">
       <label for="actorName">${escapeHtml(actorLabel)}</label>
-      <input id="actorName" name="actorName" autocomplete="name" required>
+      <input id="actorName" name="actorName" value="${escapeHtml(defaultActorName)}" autocomplete="name" required>
     </div>
     <div class="field">
       <label for="reason">${escapeHtml(reasonLabel)}</label>
@@ -9652,6 +9986,71 @@ function openCreateIntakeModal() {
   });
 }
 
+function correctionFieldForObjectType(objectType = "") {
+  return {
+    Project: "currentStatus",
+    Decision: "text",
+    Fact: "statement",
+    Conflict: "description",
+    Source: "summary",
+    Relationship: "notes",
+    OpenQuestion: "question",
+    NextAction: "action"
+  }[objectType] || "";
+}
+
+function proposedTypeForObjectType(objectType = "") {
+  return objectType === "Project" ? "ProjectStatus" : objectType;
+}
+
+function openProposeCorrectionModal(objectType, objectId) {
+  const project = getProject();
+  const object = getProjectObject(project, objectType, objectId);
+  const field = correctionFieldForObjectType(objectType);
+  if (!project || !object || !field) return;
+  showModal({
+    title: t("proposeCorrection"),
+    submitText: t("saveToAirlock"),
+    body: `
+      <p class="notice">${escapeHtml(t("correctionNotice"))}</p>
+      <div class="field">
+        <label for="correctedContent">${escapeHtml(t("correctedContent"))}</label>
+        <textarea id="correctedContent" name="correctedContent" required>${escapeHtml(object[field] || "")}</textarea>
+      </div>
+      ${auditFields()}
+    `,
+    onSubmit(data) {
+      const actor = getOrCreateActor(data.actorName, "Human");
+      createIntakeItem({
+        armType: "manual",
+        title: `${t("proposeCorrection")}: ${objectLabel(objectType, object)}`,
+        createdBy: actor.id,
+        sourceLabel: t("appTitle"),
+        projectId: project.id,
+        proposedObjectType: normalizeProposedObjectType(proposedTypeForObjectType(objectType)),
+        proposedChange: {
+          proposalKind: "correction",
+          targetObjectType: objectType,
+          targetObjectId: object.id,
+          targetField: field,
+          previousText: String(object[field] || ""),
+          text: String(data.correctedContent || "").trim(),
+          summary: data.reason.trim()
+        },
+        evidence: {
+          enteredAt: nowIso(),
+          proposedBy: actor.id,
+          reason: data.reason.trim()
+        }
+      });
+      activeObjectDetail = null;
+      activeRootView = "intake";
+      activeProjectId = null;
+      return true;
+    }
+  });
+}
+
 function openApproveIntakeModal(intakeId) {
   const intake = findIntakeItem(intakeId);
   if (!intake || intake.status !== "pending" || intake.archived) return;
@@ -9680,7 +10079,12 @@ function openApproveIntakeModal(intakeId) {
     `,
     onSubmit(data, form) {
       const actor = getOrCreateActor(data.actorName, "Human");
+      if (!validateActorPermission(actor, "approve", getProject(intake.projectId))) return false;
       const result = approveIntakeItem(intake.id, actor, data.reason, (item, approval) => applyApprovedIntakeToCore(item, actor, data.reason, approval));
+      if (result) {
+        const next = nextPendingIntake(intake.id, { readyOnly: true });
+        if (next) queuePostModalAction(() => openApproveIntakeModal(next.id));
+      }
       return Boolean(result);
     }
   });
@@ -9715,6 +10119,59 @@ function openReviewIntakeQueueModal(intakeId) {
       intake.queueReviewedBy = actor.id;
       intake.queueReviewReason = data.reason.trim();
       saveStore({ allowWithoutCoreApproval: true, reason: "intake-queue-reviewed" });
+      const next = nextPendingIntake(intake.id);
+      if (next) queuePostModalAction(() => openReviewIntakeQueueModal(next.id));
+      return true;
+    }
+  });
+}
+
+function nextPendingIntake(currentId = "", { readyOnly = false } = {}) {
+  return (store.intakeItems || [])
+    .filter((item) => item.id !== currentId && item.status === "pending" && !item.archived && (!readyOnly || item.queueState === "ready"))
+    .sort((a, b) => intakeQueueStateRank(a.queueState) - intakeQueueStateRank(b.queueState) || dateSortValue(a.createdAt) - dateSortValue(b.createdAt))[0] || null;
+}
+
+function openBatchTriageModal() {
+  const pending = (store.intakeItems || []).filter((item) => item.status === "pending" && !item.archived);
+  if (!pending.length) return;
+  showModal({
+    title: t("batchTriage"),
+    submitText: t("applyTriage"),
+    body: `
+      <p class="notice">${escapeHtml(t("batchTriageNotice"))}</p>
+      <div class="field">
+        <label>${escapeHtml(t("selectIntakeItems"))}</label>
+        <div class="check-list">
+          ${pending.map((item) => `<label class="check-field"><input type="checkbox" name="intakeIds" value="${escapeHtml(item.id)}"><span>${escapeDisplay(item.title, DISPLAY_META_LIMIT)} · ${escapeHtml(intakeQueueStateLabel(item.queueState))}</span></label>`).join("")}
+        </div>
+      </div>
+      <div class="field">
+        <label for="queueState">${escapeHtml(t("queueState"))}</label>
+        <select id="queueState" name="queueState" required>
+          ${INTAKE_QUEUE_STATES.map((state) => `<option value="${escapeHtml(state)}">${escapeHtml(intakeQueueStateLabel(state))}</option>`).join("")}
+        </select>
+      </div>
+      <div class="field">
+        <label for="queueNotes">${escapeHtml(t("queueReviewNotes"))}</label>
+        <textarea id="queueNotes" name="queueNotes"></textarea>
+      </div>
+      ${auditFields({ actorLabel: t("reviewedBy"), reasonLabel: t("reason") })}
+    `,
+    onSubmit(data, form) {
+      const selectedIds = [...form.querySelectorAll('[name="intakeIds"]:checked')].map((field) => field.value);
+      if (!selectedIds.length) return false;
+      const actor = getOrCreateActor(data.actorName, "Human");
+      const timestamp = nowIso();
+      for (const item of pending) {
+        if (!selectedIds.includes(item.id)) continue;
+        item.queueState = normalizeIntakeQueueState(data.queueState);
+        item.queueNotes = String(data.queueNotes || "").trim();
+        item.queueReviewedAt = timestamp;
+        item.queueReviewedBy = actor.id;
+        item.queueReviewReason = data.reason.trim();
+      }
+      saveStore({ allowWithoutCoreApproval: true, reason: "intake-batch-triage" });
       return true;
     }
   });
@@ -9803,6 +10260,9 @@ function intakeProposalDiffRows(intake) {
   const project = getProject(intake.projectId);
   const proposed = intake.proposedChange || {};
   if (!project) return [];
+  if (proposed.proposalKind === "correction") {
+    return [{ label: t("correctedContent"), current: proposed.previousText || t("notRecorded"), proposed: proposed.text }];
+  }
   if (intake.proposedObjectType === "ProjectStatus") {
     return [
       { label: t("currentStatus"), current: project.currentStatus, proposed: proposed.text },
@@ -9829,6 +10289,29 @@ function applyApprovedIntakeToCore(intake, actor, reason, approval) {
     intakeTitle: intake.title,
     intakeApprovedAt: approval.approvedAt
   };
+
+  if (proposed.proposalKind === "correction") {
+    const targetType = proposed.targetObjectType || "";
+    const target = getProjectObject(project, targetType, proposed.targetObjectId || "");
+    const field = correctionFieldForObjectType(targetType);
+    if (!target || !field || proposed.targetField !== field) return null;
+    const previousText = String(target[field] || "");
+    target[field] = text;
+    target.updatedAt = timestamp;
+    target.updatedBy = actor.id;
+    recordChange(project, actor, reason, `${t("correctionApproved")}: ${targetType}`, {
+      ...baseDetails,
+      objectType: targetType,
+      objectId: target.id,
+      objectText: objectLabel(targetType, target),
+      fields: {
+        correctedField: field,
+        previousText,
+        newText: target[field]
+      }
+    });
+    return target;
+  }
 
   if (intake.proposedObjectType === "ProjectStatus") {
     const previous = {
@@ -10052,6 +10535,7 @@ function openCreateProjectModal() {
     `,
     onSubmit(data) {
       const actor = getOrCreateActor(data.actorName, "Human");
+      if (!validateActorPermission(actor, "create", null)) return false;
       const timestamp = nowIso();
       const project = {
         id: uid("project"),
@@ -10903,6 +11387,7 @@ function openApproveDraftProjectModal(draftProjectId) {
     `,
     onSubmit(data) {
       const actor = getOrCreateActor(data.actorName, "Human");
+      if (!validateActorPermission(actor, "approve", project)) return false;
       const timestamp = nowIso();
       const source = draftProject.sourceId ? getProjectObject(project, "Source", draftProject.sourceId) : null;
       const extract = draftProject.extractId ? getProjectObject(project, "Extract", draftProject.extractId) : null;
@@ -11217,6 +11702,7 @@ function openApproveExtractModal(extractId) {
     `,
     onSubmit(data) {
       const actor = getOrCreateActor(data.actorName, "Human");
+      if (!validateActorPermission(actor, "approve", project)) return false;
       const previous = extract.suggestionStatus;
       extract.suggestionStatus = "approved";
       extract.approvedAt = nowIso();
@@ -12353,6 +12839,11 @@ app.addEventListener("click", (event) => {
     return;
   }
 
+  if (!actionAllowedForCurrentActor(action)) {
+    window.alert(t("permissionDenied"));
+    return;
+  }
+
   if (action === "create-project") openCreateProjectModal();
   if (action === "create-intake") openCreateIntakeModal();
   if (action === "backup-storage") exportStorageBackup();
@@ -12360,6 +12851,7 @@ app.addEventListener("click", (event) => {
   if (action === "export-current-raw-data") exportCurrentRawData();
   if (action === "reset-local-data") resetLocalDataFromSettings();
   if (action === "show-projects") {
+    captureWorkspacePosition();
     activeRootView = "projects";
     activeProjectId = null;
     render();
@@ -12390,6 +12882,7 @@ app.addEventListener("click", (event) => {
     render();
   }
   if (action === "approve-intake") openApproveIntakeModal(button.dataset.intakeId);
+  if (action === "batch-triage") openBatchTriageModal();
   if (action === "review-intake-queue") openReviewIntakeQueueModal(button.dataset.intakeId);
   if (action === "reject-intake") openRejectIntakeModal(button.dataset.intakeId);
   if (action === "archive-intake") openArchiveIntakeModal(button.dataset.intakeId);
@@ -12401,41 +12894,55 @@ app.addEventListener("click", (event) => {
   if (action === "export-handoff") exportProjectHandoff();
   if (action === "context-pack") openContextPackModal();
   if (action === "open-project") {
-    activeProjectId = button.dataset.projectId;
-    activeRootView = "projects";
-    activeView = "dashboard";
-    activeHistoryFilter = null;
-    activeHistoryEventType = "all";
+    openProjectNow(button.dataset.projectId);
     render();
+    restoreWorkspacePosition();
+  }
+  if (action === "continue-last-project") {
+    openProjectNow(button.dataset.projectId);
+    render();
+    restoreWorkspacePosition();
   }
   if (action === "back") {
+    captureWorkspacePosition();
+    if (activeProjectId) rememberProjectVisit(activeProjectId, activeView);
     activeProjectId = null;
     activeRootView = "projects";
     activeView = "dashboard";
     activeHistoryFilter = null;
     activeHistoryEventType = "all";
+    activeObjectDetail = null;
     render();
   }
   if (action === "show-dashboard") {
+    captureWorkspacePosition();
     activeView = "dashboard";
+    rememberProjectVisit(activeProjectId, activeView);
     render();
   }
   if (action === "show-handoff") {
+    captureWorkspacePosition();
     activeView = "handoff";
+    rememberProjectVisit(activeProjectId, activeView);
     render();
   }
   if (action === "show-map") {
+    captureWorkspacePosition();
     activeView = "map";
+    rememberProjectVisit(activeProjectId, activeView);
     render();
   }
   if (action === "show-changes-since") {
+    captureWorkspacePosition();
     activeView = "changes_since";
+    rememberProjectVisit(activeProjectId, activeView);
     render();
   }
   if (action === "show-history" || action === "view-history") {
     activeView = "history";
     activeHistoryFilter = null;
     activeHistoryEventType = "all";
+    rememberProjectVisit(activeProjectId, activeView);
     render();
   }
   if (action === "clear-history-filter") {
@@ -12449,19 +12956,16 @@ app.addEventListener("click", (event) => {
     render();
   }
   if (action === "open-search-result") {
-    activeProjectId = button.dataset.projectId;
-    if (button.dataset.objectType === "Project") {
-      activeView = "dashboard";
-      activeHistoryFilter = null;
-    } else {
-      activeView = "history";
-      activeHistoryFilter = {
-        objectType: button.dataset.objectType,
-        objectId: button.dataset.objectId
-      };
-    }
+    openProjectNow(button.dataset.projectId, "dashboard");
+    if (button.dataset.objectType !== "Project") activeObjectDetail = { projectId: button.dataset.projectId, objectType: button.dataset.objectType, objectId: button.dataset.objectId };
     activeHistoryEventType = "all";
     searchQuery = "";
+    render();
+  }
+  if (action === "open-referenced-object") {
+    const projectId = button.dataset.projectId || activeProjectId;
+    openProjectNow(projectId, "dashboard");
+    if (button.dataset.objectType !== "Project") activeObjectDetail = { projectId, objectType: button.dataset.objectType, objectId: button.dataset.objectId };
     render();
   }
   if (action === "view-object-history") {
@@ -12474,7 +12978,20 @@ app.addEventListener("click", (event) => {
     activeHistoryEventType = "all";
     render();
   }
+  if (action === "open-object-detail") {
+    activeObjectDetail = {
+      projectId: activeProjectId,
+      objectType: button.dataset.objectType,
+      objectId: button.dataset.objectId
+    };
+    render();
+  }
+  if (action === "close-object-detail") {
+    activeObjectDetail = null;
+    render();
+  }
   if (action === "edit-status") openEditStatusModal();
+  if (action === "propose-correction") openProposeCorrectionModal(button.dataset.objectType, button.dataset.objectId);
   if (action === "edit-object") {
     if (button.dataset.objectType === "Project") activeProjectId = button.dataset.objectId;
     openEditObjectModal(button.dataset.objectType, button.dataset.objectId);
@@ -12610,6 +13127,12 @@ app.addEventListener("change", (event) => {
   const filter = event.target.closest("[data-history-event-filter]");
   if (!filter) return;
   activeHistoryEventType = filter.value;
+  render();
+});
+
+document.addEventListener("keydown", (event) => {
+  if (event.key !== "Escape" || !activeObjectDetail || document.querySelector(".modal-backdrop")) return;
+  activeObjectDetail = null;
   render();
 });
 

@@ -152,6 +152,17 @@ What Changed Since
 
 Each project includes a read-only What Changed Since view. Choose a starting date to see the recorded change count, affected object types, actors, timestamps, reasons, and change details. The view reads from Change History and does not rebuild or overwrite Current State.
 
+Workflow Usability
+
+- Project headers use one Add menu and one secondary-actions menu to reduce crowding.
+- Every core object can open in a focused detail drawer while retaining the same edit, archive, source, image, review, assignment, and history pathways.
+- Stable object references in decisions, attached sources, relationships, search results, and history open the referenced object directly.
+- Continue Working remembers recent project IDs, the last project tab, and project scroll positions as local UI preference metadata. These preferences are not Project State history.
+- Needs Attention consolidates incomplete projects, overdue actions, stale or missing sources, unresolved conflicts, pending approvals, assignments, drafts, integrity warnings, and AI work orders.
+- Intake review advances to the next pending item. Batch triage can update queue state for several items, but approval remains strictly one item at a time.
+- Role-aware controls use the configured default actor and project roles. This is local policy enforcement, not account authentication.
+- Propose Correction creates an Intake Airlock proposal. Approved records remain unchanged until a permitted human approves the correction, and the applied correction records previous and new content in history.
+
 Long-Term Vision
 
 The long-term goal is a system where:

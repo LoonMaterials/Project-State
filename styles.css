@@ -139,6 +139,13 @@ button {
   background: #edf2ee;
 }
 
+.actor-role-indicator {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
 .save-indicator.unsaved {
   color: var(--warn);
   background: #fff4df;
@@ -219,6 +226,66 @@ select:focus {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
   gap: 14px;
+}
+
+.continue-working-band {
+  margin-bottom: 18px;
+  border-block: 1px solid var(--line);
+  padding: 14px 0;
+}
+
+.recent-project-links {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 8px;
+}
+
+.recent-project-link {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  padding: 10px 12px;
+  color: var(--ink);
+  background: #fff;
+  text-align: left;
+  cursor: pointer;
+}
+
+.recent-project-link:hover {
+  border-color: var(--accent);
+}
+
+.recent-project-link strong,
+.recent-project-link span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.object-reference-link {
+  display: block;
+  max-width: 100%;
+  margin: 5px 0;
+  border: 0;
+  padding: 0;
+  color: var(--accent);
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+}
+
+.object-reference-link:hover {
+  text-decoration: underline;
+}
+
+.recent-project-link span {
+  color: var(--muted);
+  font-size: 12px;
 }
 
 .project-card {
@@ -586,6 +653,97 @@ select:focus {
   flex-wrap: wrap;
   gap: 8px;
   margin-top: 12px;
+}
+
+.action-menu {
+  position: relative;
+}
+
+.action-menu > summary {
+  list-style: none;
+  cursor: pointer;
+}
+
+.action-menu > summary::-webkit-details-marker {
+  display: none;
+}
+
+.action-menu-popover {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 5px);
+  left: 0;
+  display: grid;
+  width: max-content;
+  min-width: 190px;
+  max-width: min(280px, 80vw);
+  max-height: 70vh;
+  overflow: auto;
+  gap: 5px;
+  padding: 7px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: var(--shadow);
+}
+
+.header-action-menu .action-menu-popover {
+  right: 0;
+  left: auto;
+}
+
+.action-menu-popover.align-right {
+  right: 0;
+  left: auto;
+}
+
+.action-menu-popover .btn {
+  width: 100%;
+  justify-content: flex-start;
+  white-space: normal;
+  text-align: left;
+}
+
+.detail-backdrop {
+  position: fixed;
+  z-index: 70;
+  inset: 0;
+  background: rgba(30, 38, 34, 0.24);
+}
+
+.object-detail-panel {
+  position: fixed;
+  z-index: 71;
+  top: 0;
+  right: 0;
+  width: min(620px, 92vw);
+  height: 100vh;
+  overflow: auto;
+  border-left: 1px solid var(--line);
+  background: var(--bg);
+  box-shadow: -12px 0 30px rgba(32, 44, 38, 0.18);
+}
+
+.detail-panel-head {
+  position: sticky;
+  z-index: 2;
+  top: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  border-bottom: 1px solid var(--line);
+  padding: 18px 20px;
+  background: #fff;
+}
+
+.detail-panel-body {
+  padding: 18px 20px 40px;
+}
+
+.detail-panel-body > .list,
+.detail-panel-body > .history-item {
+  margin: 0;
 }
 
 .attached-sources {
