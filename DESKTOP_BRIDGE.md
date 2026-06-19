@@ -33,6 +33,15 @@ API arm rule:
 
 API arms plug into the desktop app's Intake Airlock. They may create intake batches, source records, extracts, proposed projects, and proposal items for human review. They must never write directly to Core Project State records or bypass the storage spine through a separate browser path.
 
+The inbound proposal envelope, validation, idempotency, receipt, and authority boundary are defined by `API_ARM_CONTRACT.md` and `fixtures/api-arm-v0.1-contract.json`. The desktop bridge exposes the implemented logical operations under `window.ProjectStateDesktop.intakeArms`; Local Arm Transport v0.1 carries authenticated loopback requests, while provider-specific integrations remain uninstalled. Arm operations are not generic storage bridge methods.
+
+Transport and file rules:
+
+- `LOCAL_ARM_TRANSPORT_CONTRACT.md` governs the disabled-by-default loopback listener, encrypted token, request limits, lifecycle, and generic connector.
+- `FILE_ARM_CONTRACT.md` governs checksum-verified file uploads into managed `sources/` storage and pending Source proposals.
+- Integration secrets remain under machine-local `integrations/` storage and are excluded from backup packages.
+- Neither transport nor file acceptance can approve Intake or write Core directly.
+
 Expected shape:
 
 ```js
@@ -49,6 +58,11 @@ window.ProjectStateDesktop = {
     async createBackupPackage({ actorId, actorName, timestamp, reason }) {},
     async restoreBackupPackage({ packagePath, actorId, actorName, timestamp, reason }) {},
     async reset() {}
+  },
+  intakeArms: {
+    async describeCapabilities() {},
+    async submitEnvelope(envelope) {},
+    async getReceipt(submissionId) {}
   },
   files: {
     metadata(file) {},
@@ -109,3 +123,10 @@ Startup gate:
 - If the desktop bridge is missing, Project State opens a Browser/dev mode gate.
 - Browser/dev mode may inspect loaded local data and export raw data for migration.
 - Browser/dev mode must not silently save, migrate, back up, restore, intake, read files as authoritative sources, or edit Project State records.
+
+Web-testing isolation:
+
+- HTTP and HTTPS runtimes always select the self-contained browser adapter, even if a page attempts to inject `window.ProjectStateDesktop`.
+- The entry document blocks outbound connections, external objects, frames, and workers with Content Security Policy.
+- Browser testing exposes no API Arm transport, native filesystem dialogs, desktop storage, or provider bridge.
+- The internal Electron preload bridge remains available only to the installed `file:` desktop runtime.

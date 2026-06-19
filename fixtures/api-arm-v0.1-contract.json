@@ -1,0 +1,168 @@
+{
+  "app": "Project State",
+  "contractType": "api-arm-intake",
+  "contractVersion": "0.1",
+  "direction": "inbound-proposals-only",
+  "runtime": "desktop-required",
+  "transport": "unspecified-local-desktop-adapter",
+  "implementationStatus": "desktop-adapter",
+  "operations": [
+    "describeCapabilities",
+    "submitEnvelope",
+    "getReceipt"
+  ],
+  "envelope": {
+    "required": [
+      "contractVersion",
+      "submissionId",
+      "idempotencyKey",
+      "submittedAt",
+      "arm",
+      "target",
+      "items",
+      "provenance"
+    ],
+    "armRequired": [
+      "armId",
+      "displayName",
+      "type",
+      "armVersion"
+    ],
+    "targetRequired": [
+      "projectId"
+    ],
+    "provenanceRequired": [
+      "sourceLabel"
+    ],
+    "itemRequired": [
+      "clientItemId",
+      "title",
+      "proposedObjectType",
+      "proposedChange"
+    ],
+    "proposedChangeRequired": [
+      "text"
+    ],
+    "allowedProposedChangeFields": [
+      "text",
+      "summary",
+      "target",
+      "dueDate"
+    ]
+  },
+  "allowedArmTypes": [
+    "calendar",
+    "meeting",
+    "api",
+    "ai",
+    "codex",
+    "notes",
+    "chat",
+    "email",
+    "file",
+    "manual",
+    "other"
+  ],
+  "allowedProposalTypes": [
+    "ProjectStatus",
+    "Decision",
+    "Fact",
+    "Conflict",
+    "OpenQuestion",
+    "NextAction",
+    "Source",
+    "Relationship"
+  ],
+  "serverOwnedIntakeDefaults": {
+    "status": "pending",
+    "reviewState": "needs_review",
+    "queueState": "new",
+    "queueNotes": "",
+    "approval": null,
+    "assignments": [],
+    "comments": [],
+    "archived": false
+  },
+  "forbiddenSubmissionFields": [
+    "id",
+    "status",
+    "reviewState",
+    "queueState",
+    "queueNotes",
+    "queueReviewedAt",
+    "queueReviewedBy",
+    "queueReviewReason",
+    "approval",
+    "approvedAt",
+    "approvedBy",
+    "assignments",
+    "comments",
+    "archived",
+    "actorId",
+    "createdBy",
+    "createdAt",
+    "updatedBy",
+    "updatedAt",
+    "changeHistory",
+    "trustLevel",
+    "managedPath",
+    "localPath",
+    "fileBytes",
+    "dataUrl",
+    "credentials",
+    "secrets"
+  ],
+  "receiptStatuses": [
+    "accepted",
+    "duplicate",
+    "rejected"
+  ],
+  "acceptedReceiptRequired": [
+    "contractVersion",
+    "submissionId",
+    "idempotencyKey",
+    "batchId",
+    "itemMappings",
+    "status",
+    "receivedAt",
+    "boundary"
+  ],
+  "receiptBoundary": "airlock_pending_human_review",
+  "errorCodes": [
+    "UNSUPPORTED_CONTRACT_VERSION",
+    "INVALID_ENVELOPE",
+    "INVALID_ARM",
+    "INVALID_TARGET_PROJECT",
+    "INVALID_PROPOSAL_TYPE",
+    "DUPLICATE_CLIENT_ITEM_ID",
+    "FORBIDDEN_FIELD",
+    "IDEMPOTENCY_CONFLICT",
+    "PAYLOAD_NOT_SUPPORTED",
+    "DESKTOP_RUNTIME_REQUIRED",
+    "PERSISTENCE_FAILED"
+  ],
+  "idempotencyRules": [
+    "First valid submission creates one Intake batch and all of its Intake items.",
+    "An exact retry creates no new records and returns the original receipt as duplicate.",
+    "Reusing an idempotency key with different canonical content is rejected with IDEMPOTENCY_CONFLICT.",
+    "An invalid item rejects the entire envelope; v0.1 does not partially accept a batch.",
+    "Acceptance and receipt creation are transactional."
+  ],
+  "authorityRules": [
+    "API arms submit proposals to the desktop Intake Airlock only.",
+    "A successful receipt means Airlock retention pending human review, not approval or truth.",
+    "API arms must not write directly to Core Project State, SQLite tables, managed folders, or generic storage bridge methods.",
+    "API arms cannot set review, queue, approval, archive, trust, actor, assignment, comment, or Change History authority fields.",
+    "A permitted human must mark an item Ready and approve each item individually before the existing Intake workflow can create Core data and Change History.",
+    "Browser/dev mode is not a production ingestion path.",
+    "Context Pack export is a separate read-only boundary and does not grant write authority."
+  ],
+  "unsupportedPayloads": [
+    "file bytes",
+    "data URLs",
+    "credentials",
+    "secrets",
+    "executable content",
+    "direct managed-file paths"
+  ]
+}

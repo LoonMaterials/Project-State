@@ -8,9 +8,10 @@ const { DatabaseSync } = require("node:sqlite");
 
 const ROOT = path.join(__dirname, "..");
 const SCHEMA_FILE = path.join(__dirname, "spine-schema.sql");
+const API_ARM_CONTRACT_FILE = path.join(ROOT, "fixtures", "api-arm-v0.1-contract.json");
 const DEFAULT_STORAGE_ROOT = path.join(os.homedir(), "Project State Storage");
 const DATABASE_FILE = "project-state.db";
-const FOLDERS = ["sources", "extracts", "attachments", "backups", "recovery", "manifests", "logs", "temp"];
+const FOLDERS = ["sources", "extracts", "attachments", "backups", "recovery", "manifests", "logs", "temp", "integrations"];
 const SPLIT_TABLES = ["projects", "changes", "sources", "extracts", "attachments", "draft_projects"];
 const BACKUP_MANAGED_FOLDERS = ["sources", "extracts", "attachments", "manifests", "recovery"];
 const REQUIRED_TABLES = [
@@ -76,6 +77,17 @@ function createProjectStateDesktopBridge(options = {}) {
         return resetSpine({ storageRoot, dbPath });
       }
     },
+    intakeArms: {
+      async describeCapabilities() {
+        return describeApiArmCapabilities();
+      },
+      async submitEnvelope(envelope = {}) {
+        return submitApiArmEnvelope({ storageRoot, dbPath, envelope });
+      },
+      async getReceipt(submissionId = "") {
+        return getApiArmReceipt({ storageRoot, dbPath, submissionId });
+      }
+    },
     files: {
       metadata,
       localPath,
@@ -94,6 +106,317 @@ function createProjectStateDesktopBridge(options = {}) {
       }
     }
   };
+}
+
+function readApiArmContract() {
+  return JSON.parse(fs.readFileSync(API_ARM_CONTRACT_FILE, "utf8"));
+}
+
+function describeApiArmCapabilities() {
+  const contract = readApiArmContract();
+  return {
+    app: contract.app,
+    contractType: contract.contractType,
+    contractVersion: contract.contractVersion,
+    runtime: contract.runtime,
+    implementationStatus: contract.implementationStatus,
+    operations: [...contract.operations],
+    allowedArmTypes: [...contract.allowedArmTypes],
+    allowedProposalTypes: [...contract.allowedProposalTypes],
+    receiptBoundary: contract.receiptBoundary,
+    unsupportedPayloads: [...contract.unsupportedPayloads]
+  };
+}
+
+async function submitApiArmEnvelope({ storageRoot, dbPath, envelope }) {
+  await ensureSpine(storageRoot);
+  const db = openDatabase(dbPath);
+  const contract = readApiArmContract();
+  const submissionId = cleanText(envelope?.submissionId);
+  const idempotencyKey = cleanText(envelope?.idempotencyKey);
+  let transactionOpen = false;
+
+  try {
+    const errors = validateApiArmEnvelope(envelope, contract, db);
+    if (errors.length) return rejectedApiArmReceipt(contract, submissionId, idempotencyKey, errors);
+
+    const canonicalPayload = stableStringify(envelope);
+    const payloadChecksum = checksumText(canonicalPayload);
+    const priorBatch = findApiArmBatch(db, submissionId, idempotencyKey);
+    if (priorBatch) {
+      if (priorBatch.payloadChecksum !== payloadChecksum) {
+        return rejectedApiArmReceipt(contract, submissionId, idempotencyKey, [{
+          code: "IDEMPOTENCY_CONFLICT",
+          message: "The submission ID or idempotency key was already used with different content.",
+          path: "idempotencyKey"
+        }]);
+      }
+      return { ...priorBatch.receipt, status: "duplicate" };
+    }
+
+    const receivedAt = nowIso();
+    const batchId = makeId("intake_batch");
+    const itemMappings = envelope.items.map((item) => ({
+      clientItemId: cleanText(item.clientItemId),
+      intakeId: makeId("intake")
+    }));
+    const receipt = {
+      contractVersion: contract.contractVersion,
+      submissionId,
+      idempotencyKey,
+      batchId,
+      itemMappings,
+      status: "accepted",
+      receivedAt,
+      boundary: contract.receiptBoundary
+    };
+    const batch = {
+      id: batchId,
+      status: "pending",
+      createdAt: receivedAt,
+      submissionId,
+      idempotencyKey,
+      payloadChecksum,
+      projectId: cleanText(envelope.target.projectId),
+      arm: cloneJson(envelope.arm),
+      provenance: cloneJson(envelope.provenance),
+      itemIds: itemMappings.map((mapping) => mapping.intakeId),
+      receipt
+    };
+    const mappingByClientId = new Map(itemMappings.map((mapping) => [mapping.clientItemId, mapping.intakeId]));
+    const intakeItems = envelope.items.map((item) => ({
+      id: mappingByClientId.get(cleanText(item.clientItemId)),
+      intakeBatchId: batchId,
+      apiArmSubmissionId: submissionId,
+      apiArmClientItemId: cleanText(item.clientItemId),
+      apiArmIdempotencyKey: idempotencyKey,
+      apiArm: cloneJson(envelope.arm),
+      provenance: cloneJson(envelope.provenance),
+      armType: envelope.arm.type,
+      status: "pending",
+      reviewState: "needs_review",
+      queueState: "new",
+      queueNotes: "",
+      queueReviewedAt: "",
+      queueReviewedBy: "",
+      queueReviewReason: "",
+      title: cleanText(item.title),
+      projectId: cleanText(envelope.target.projectId),
+      createdAt: receivedAt,
+      createdBy: "",
+      sourceLabel: cleanText(item.sourceLabel) || cleanText(envelope.provenance.sourceLabel),
+      proposedObjectType: item.proposedObjectType,
+      proposedChange: cloneJson(item.proposedChange),
+      evidence: cloneJson(item.evidence || {}),
+      approval: null,
+      assignments: [],
+      comments: [],
+      archived: false
+    }));
+
+    db.exec("BEGIN IMMEDIATE TRANSACTION");
+    transactionOpen = true;
+    writeIntakeBatches(db, [batch]);
+    writeIntakeItems(db, intakeItems);
+    updateApiArmStoreMeta(db, batch, intakeItems);
+    db.exec("COMMIT");
+    transactionOpen = false;
+    return receipt;
+  } catch (error) {
+    if (transactionOpen) {
+      try {
+        db.exec("ROLLBACK");
+      } catch {}
+    }
+    await preserveRecoveryRecordWithOpenDb(db, storageRoot, {
+      stage: "api-arm-submit",
+      message: error.message,
+      stack: error.stack || "",
+      raw: safeJson(envelope)
+    });
+    return rejectedApiArmReceipt(contract, submissionId, idempotencyKey, [{
+      code: "PERSISTENCE_FAILED",
+      message: "Project State could not retain the API arm proposal.",
+      path: ""
+    }]);
+  } finally {
+    db.close();
+  }
+}
+
+async function getApiArmReceipt({ storageRoot, dbPath, submissionId }) {
+  await ensureSpine(storageRoot);
+  if (!cleanText(submissionId) || !fs.existsSync(dbPath)) return null;
+  const db = openDatabase(dbPath);
+  try {
+    const batch = readRecordJson(db, "intake_batches").find((record) => record.submissionId === cleanText(submissionId));
+    return batch?.receipt ? cloneJson(batch.receipt) : null;
+  } finally {
+    db.close();
+  }
+}
+
+function validateApiArmEnvelope(envelope, contract, db) {
+  const errors = [];
+  const add = (code, message, path = "") => errors.push({ code, message, path });
+  if (!envelope || typeof envelope !== "object" || Array.isArray(envelope)) {
+    add("INVALID_ENVELOPE", "Submission envelope must be an object.");
+    return errors;
+  }
+  if (envelope.contractVersion !== contract.contractVersion) add("UNSUPPORTED_CONTRACT_VERSION", `Contract version must be ${contract.contractVersion}.`, "contractVersion");
+  for (const field of contract.envelope.required) if (isBlank(envelope[field])) add("INVALID_ENVELOPE", `${field} is required.`, field);
+  if (!validIsoTimestamp(envelope.submittedAt)) add("INVALID_ENVELOPE", "submittedAt must be an ISO 8601 timestamp.", "submittedAt");
+
+  const allowedTopLevel = new Set([...contract.envelope.required]);
+  for (const key of Object.keys(envelope)) if (!allowedTopLevel.has(key)) add("INVALID_ENVELOPE", `Unsupported envelope field: ${key}.`, key);
+
+  const forbidden = findForbiddenFields(envelope, new Set(contract.forbiddenSubmissionFields));
+  for (const fieldPath of forbidden) add("FORBIDDEN_FIELD", "The arm cannot provide this server-owned or unsupported field.", fieldPath);
+
+  const arm = envelope.arm;
+  if (!arm || typeof arm !== "object" || Array.isArray(arm)) {
+    add("INVALID_ARM", "arm must be an object.", "arm");
+  } else {
+    for (const field of contract.envelope.armRequired) if (isBlank(arm[field])) add("INVALID_ARM", `${field} is required.`, `arm.${field}`);
+    if (!contract.allowedArmTypes.includes(arm.type)) add("INVALID_ARM", "Unsupported arm type.", "arm.type");
+    const allowed = new Set([...contract.envelope.armRequired, "instanceId"]);
+    for (const key of Object.keys(arm)) if (!allowed.has(key)) add("INVALID_ARM", `Unsupported arm field: ${key}.`, `arm.${key}`);
+  }
+
+  const target = envelope.target;
+  if (!target || typeof target !== "object" || Array.isArray(target)) {
+    add("INVALID_TARGET_PROJECT", "target must be an object.", "target");
+  } else {
+    for (const field of contract.envelope.targetRequired) if (isBlank(target[field])) add("INVALID_TARGET_PROJECT", `${field} is required.`, `target.${field}`);
+    const projectId = cleanText(target.projectId);
+    if (projectId && !db.prepare("SELECT id FROM projects WHERE id = ?").get(projectId)) add("INVALID_TARGET_PROJECT", "Target Project ID does not exist.", "target.projectId");
+    for (const key of Object.keys(target)) if (!contract.envelope.targetRequired.includes(key)) add("INVALID_TARGET_PROJECT", `Unsupported target field: ${key}.`, `target.${key}`);
+  }
+
+  const provenance = envelope.provenance;
+  if (!provenance || typeof provenance !== "object" || Array.isArray(provenance)) {
+    add("INVALID_ENVELOPE", "provenance must be an object.", "provenance");
+  } else {
+    for (const field of contract.envelope.provenanceRequired) if (isBlank(provenance[field])) add("INVALID_ENVELOPE", `${field} is required.`, `provenance.${field}`);
+    const allowed = new Set([...contract.envelope.provenanceRequired, "externalReference", "capturedAt"]);
+    for (const key of Object.keys(provenance)) if (!allowed.has(key)) add("INVALID_ENVELOPE", `Unsupported provenance field: ${key}.`, `provenance.${key}`);
+    if (provenance.capturedAt && !validIsoTimestamp(provenance.capturedAt)) add("INVALID_ENVELOPE", "capturedAt must be an ISO 8601 timestamp.", "provenance.capturedAt");
+  }
+
+  if (!Array.isArray(envelope.items) || !envelope.items.length) {
+    add("INVALID_ENVELOPE", "items must contain at least one proposal.", "items");
+  } else {
+    const clientIds = new Set();
+    envelope.items.forEach((item, index) => {
+      const base = `items[${index}]`;
+      if (!item || typeof item !== "object" || Array.isArray(item)) {
+        add("INVALID_ENVELOPE", "Proposal item must be an object.", base);
+        return;
+      }
+      for (const field of contract.envelope.itemRequired) if (isBlank(item[field])) add("INVALID_ENVELOPE", `${field} is required.`, `${base}.${field}`);
+      const clientItemId = cleanText(item.clientItemId);
+      if (clientItemId && clientIds.has(clientItemId)) add("DUPLICATE_CLIENT_ITEM_ID", "clientItemId must be unique within the envelope.", `${base}.clientItemId`);
+      clientIds.add(clientItemId);
+      if (!contract.allowedProposalTypes.includes(item.proposedObjectType)) add("INVALID_PROPOSAL_TYPE", "Unsupported proposal type.", `${base}.proposedObjectType`);
+      const allowedItem = new Set([...contract.envelope.itemRequired, "sourceLabel", "evidence"]);
+      for (const key of Object.keys(item)) if (!allowedItem.has(key)) add("INVALID_ENVELOPE", `Unsupported proposal item field: ${key}.`, `${base}.${key}`);
+      if (!item.proposedChange || typeof item.proposedChange !== "object" || Array.isArray(item.proposedChange)) {
+        add("INVALID_ENVELOPE", "proposedChange must be an object.", `${base}.proposedChange`);
+      } else {
+        for (const field of contract.envelope.proposedChangeRequired) if (isBlank(item.proposedChange[field])) add("INVALID_ENVELOPE", `${field} is required.`, `${base}.proposedChange.${field}`);
+        for (const key of Object.keys(item.proposedChange)) if (!contract.envelope.allowedProposedChangeFields.includes(key)) add("INVALID_ENVELOPE", `Unsupported proposedChange field: ${key}.`, `${base}.proposedChange.${key}`);
+      }
+    });
+  }
+  return dedupeErrors(errors);
+}
+
+function findApiArmBatch(db, submissionId, idempotencyKey) {
+  return readRecordJson(db, "intake_batches").find((batch) => batch.submissionId === submissionId || batch.idempotencyKey === idempotencyKey) || null;
+}
+
+function updateApiArmStoreMeta(db, batch, intakeItems) {
+  const storeMeta = readMeta(db, "store") || {};
+  const currentBatches = readRecordJson(db, "intake_batches");
+  const currentItems = readRecordJson(db, "intake_items");
+  writeMeta(db, "store", { ...storeMeta, intakeBatches: currentBatches, intakeItems: currentItems });
+
+  const snapshot = readMeta(db, "snapshot");
+  if (snapshot?.store) {
+    const nextStore = { ...snapshot.store, intakeBatches: currentBatches, intakeItems: currentItems };
+    writeMeta(db, "snapshot", { store: nextStore, snapshotBytes: Buffer.byteLength(JSON.stringify(nextStore), "utf8") });
+  }
+  const manifest = readMeta(db, "manifest");
+  if (manifest) writeMeta(db, "manifest", { ...manifest, counts: { ...(manifest.counts || {}), intakeBatches: currentBatches.length, intakeItems: currentItems.length } });
+}
+
+function rejectedApiArmReceipt(contract, submissionId, idempotencyKey, errors) {
+  return {
+    contractVersion: contract.contractVersion,
+    submissionId,
+    idempotencyKey,
+    status: "rejected",
+    boundary: contract.receiptBoundary,
+    errors
+  };
+}
+
+function findForbiddenFields(value, forbidden, pathParts = [], found = []) {
+  if (!value || typeof value !== "object") return found;
+  if (Array.isArray(value)) {
+    value.forEach((entry, index) => findForbiddenFields(entry, forbidden, [...pathParts, `[${index}]`], found));
+    return found;
+  }
+  for (const [key, entry] of Object.entries(value)) {
+    const nextPath = pathParts.length && pathParts[pathParts.length - 1].startsWith("[")
+      ? `${pathParts.slice(0, -1).join(".")}${pathParts[pathParts.length - 1]}.${key}`
+      : [...pathParts, key].join(".");
+    if (forbidden.has(key)) found.push(nextPath);
+    findForbiddenFields(entry, forbidden, [...pathParts, key], found);
+  }
+  return found;
+}
+
+function dedupeErrors(errors) {
+  const seen = new Set();
+  return errors.filter((error) => {
+    const key = `${error.code}|${error.path}|${error.message}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function isBlank(value) {
+  if (value === null || value === undefined) return true;
+  if (typeof value === "string") return !value.trim();
+  return false;
+}
+
+function validIsoTimestamp(value) {
+  return typeof value === "string" && /^\d{4}-\d{2}-\d{2}T/.test(value) && !Number.isNaN(Date.parse(value));
+}
+
+function stableStringify(value) {
+  if (Array.isArray(value)) return `[${value.map(stableStringify).join(",")}]`;
+  if (value && typeof value === "object") return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${stableStringify(value[key])}`).join(",")}}`;
+  return JSON.stringify(value);
+}
+
+function cloneJson(value) {
+  return JSON.parse(JSON.stringify(value ?? {}));
+}
+
+function safeJson(value) {
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return "[unserializable API arm envelope]";
+  }
+}
+
+function cleanText(value) {
+  return String(value || "").trim();
 }
 
 async function ensureSpine(storageRoot) {
@@ -150,12 +473,23 @@ async function loadStore({ storageRoot, dbPath }) {
 
 async function saveStore({ storageRoot, dbPath, payload }) {
   await ensureSpine(storageRoot);
-  const store = payload.store || {};
-  const manifest = payload.manifest || {};
+  let store = payload.store || {};
+  let manifest = payload.manifest || {};
+  const db = openDatabase(dbPath);
+  if (payload.preserveConcurrentApiIntake !== false) store = mergePersistedApiArmIntake(db, store);
+  manifest = {
+    ...manifest,
+    counts: {
+      ...(manifest.counts || {}),
+      intakeBatches: (store.intakeBatches || []).length,
+      intakeItems: (store.intakeItems || []).length
+    }
+  };
   const split = payload.split || splitStoreRecordsForBridge(store, manifest);
   const splitMeta = Array.isArray(split.meta) ? split.meta[0] : split.meta;
-  const snapshot = payload.snapshot || JSON.stringify(store);
-  const db = openDatabase(dbPath);
+  splitMeta.intakeBatches = store.intakeBatches || [];
+  splitMeta.intakeItems = store.intakeItems || [];
+  const snapshot = JSON.stringify(store);
   let committed = false;
 
   try {
@@ -166,6 +500,7 @@ async function saveStore({ storageRoot, dbPath, payload }) {
     writeMeta(db, "snapshot", { store, snapshotBytes: Buffer.byteLength(snapshot, "utf8") });
 
     writeActors(db, splitMeta?.actors || store.actors || []);
+    writeIntakeBatches(db, splitMeta?.intakeBatches || store.intakeBatches || []);
     writeIntakeItems(db, splitMeta?.intakeItems || store.intakeItems || []);
     writeProjects(db, split.projects || []);
     writeProjectChildren(db, split.projects || []);
@@ -200,6 +535,23 @@ async function saveStore({ storageRoot, dbPath, payload }) {
   } finally {
     db.close();
   }
+}
+
+function mergePersistedApiArmIntake(db, incomingStore = {}) {
+  const incomingBatches = Array.isArray(incomingStore.intakeBatches) ? incomingStore.intakeBatches : [];
+  const incomingItems = Array.isArray(incomingStore.intakeItems) ? incomingStore.intakeItems : [];
+  const persistedBatches = readRecordJson(db, "intake_batches");
+  const persistedApiItems = readRecordJson(db, "intake_items").filter((item) => item.apiArmSubmissionId || item.intakeBatchId);
+  return {
+    ...incomingStore,
+    intakeBatches: mergeRecordsById(persistedBatches, incomingBatches),
+    intakeItems: mergeRecordsById(persistedApiItems, incomingItems)
+  };
+}
+
+function mergeRecordsById(persisted = [], incoming = []) {
+  const incomingIds = new Set(incoming.map((record) => record?.id).filter(Boolean));
+  return [...incoming, ...persisted.filter((record) => record?.id && !incomingIds.has(record.id))];
 }
 
 async function importBrowserExport({ storageRoot, dbPath, payload = {} }) {
@@ -249,14 +601,14 @@ async function importBrowserExport({ storageRoot, dbPath, payload = {} }) {
     const stagingSave = await saveStore({
       storageRoot: stagingRoot,
       dbPath: stagingDbPath,
-      payload: { store, manifest, split, snapshot }
+      payload: { store, manifest, split, snapshot, preserveConcurrentApiIntake: false }
     });
     if (!stagingSave.integrity?.ok) throw new Error("Browser export failed staging integrity verification.");
 
     const liveSave = await saveStore({
       storageRoot,
       dbPath,
-      payload: { store, manifest, split, snapshot }
+      payload: { store, manifest, split, snapshot, preserveConcurrentApiIntake: false }
     });
     const loaded = await loadStore({ storageRoot, dbPath });
     const afterValidation = validateMigrationStore(loaded.store);
@@ -887,6 +1239,31 @@ function verifyManagedTextRows(report, db, storageRoot, options) {
   }
 }
 
+function verifyManagedBinaryRows(report, db, storageRoot, options) {
+  const { table, idColumn, pathColumn, checksumColumn, label } = options;
+  const rows = db.prepare(`
+    SELECT ${idColumn} AS id, ${pathColumn} AS managedPath, ${checksumColumn} AS checksum
+    FROM ${table}
+    WHERE ${pathColumn} IS NOT NULL AND ${pathColumn} != ''
+  `).all();
+  for (const row of rows) {
+    let filePath = "";
+    try {
+      filePath = resolveManagedPath(storageRoot, row.managedPath);
+    } catch (error) {
+      report.errors.push(`${label} ${row.id} has unsafe managed path: ${error.message}`);
+      continue;
+    }
+    if (!fs.existsSync(filePath)) {
+      report.errors.push(`${label} ${row.id} is missing managed file: ${row.managedPath}`);
+      continue;
+    }
+    const checksum = crypto.createHash("sha256").update(fs.readFileSync(filePath)).digest("hex");
+    if (row.checksum && checksum !== row.checksum) report.errors.push(`${label} ${row.id} checksum mismatch.`);
+    report.checkedFiles[label] = (report.checkedFiles[label] || 0) + 1;
+  }
+}
+
 async function finalizeIntegrityReport(report, { storageRoot, dbPath, preserveOnFailure }) {
   report.ok = report.errors.length === 0;
   if (!report.ok && preserveOnFailure) {
@@ -1054,6 +1431,13 @@ async function verifyIntegrity({ storageRoot, dbPath, preserveOnFailure = true }
       bytesColumn: "",
       label: "attachments"
     });
+    verifyManagedBinaryRows(report, db, storageRoot, {
+      table: "sources",
+      idColumn: "id",
+      pathColumn: "managed_path",
+      checksumColumn: "checksum",
+      label: "sources"
+    });
 
     const latestManifest = readMeta(db, "latest_manifest_file");
     if (latestManifest?.path) {
@@ -1147,6 +1531,17 @@ function writeIntakeItems(db, items) {
       arm_type: item.armType || "",
       proposed_object_type: item.proposedObjectType || "",
       record_json: JSON.stringify(item)
+    });
+  }
+}
+
+function writeIntakeBatches(db, batches) {
+  for (const batch of batches || []) {
+    insertJson(db, "intake_batches", {
+      id: batch.id,
+      status: batch.status || "",
+      created_at: batch.createdAt || "",
+      record_json: JSON.stringify(batch)
     });
   }
 }
@@ -1334,6 +1729,8 @@ function insertSourceLink(db, projectId, attachedToType, attachedToId, link) {
 function readSplitRecords(db) {
   return {
     meta: [readMeta(db, "store")].filter(Boolean),
+    intakeBatches: readRecordJson(db, "intake_batches"),
+    intakeItems: readRecordJson(db, "intake_items"),
     projects: readRecordJson(db, "projects"),
     history: readRecordJson(db, "changes"),
     sources: readRecordJson(db, "sources"),
@@ -1354,7 +1751,8 @@ async function rebuildStoreFromSplitRecords(storageRoot, split = {}) {
     schemaVersion: meta.schemaVersion || "0.1.0",
     settings: meta.settings || {},
     actors: Array.isArray(meta.actors) ? meta.actors : [],
-    intakeItems: Array.isArray(meta.intakeItems) ? meta.intakeItems : [],
+    intakeBatches: Array.isArray(split.intakeBatches) ? split.intakeBatches : (Array.isArray(meta.intakeBatches) ? meta.intakeBatches : []),
+    intakeItems: Array.isArray(split.intakeItems) ? split.intakeItems : (Array.isArray(meta.intakeItems) ? meta.intakeItems : []),
     projects: split.projects || []
   };
 
@@ -1475,6 +1873,7 @@ function splitStoreRecordsForBridge(store, manifest = {}) {
       schemaVersion: store.schemaVersion || "0.1.0",
       settings: store.settings || {},
       actors: store.actors || [],
+      intakeBatches: store.intakeBatches || [],
       intakeItems: store.intakeItems || []
     },
     projects: (store.projects || []).map((project) => ({

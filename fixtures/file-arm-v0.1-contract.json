@@ -1,0 +1,57 @@
+{
+  "app": "Project State",
+  "contractType": "file-arm-intake",
+  "contractVersion": "0.1",
+  "endpoint": {
+    "method": "POST",
+    "path": "/v0.1/files",
+    "contentType": "application/octet-stream",
+    "metadataHeader": "X-Project-State-File-Metadata",
+    "metadataEncoding": "base64url-json"
+  },
+  "limits": {
+    "maxFileBytes": 26214400,
+    "maxMetadataHeaderBytes": 8192,
+    "maxFileNameCharacters": 180
+  },
+  "requiredMetadata": [
+    "contractVersion",
+    "submissionId",
+    "idempotencyKey",
+    "submittedAt",
+    "arm",
+    "target",
+    "provenance",
+    "file"
+  ],
+  "requiredFileMetadata": [
+    "fileName",
+    "contentType",
+    "sha256"
+  ],
+  "allowedExtensions": [
+    ".pdf",
+    ".docx",
+    ".txt",
+    ".md",
+    ".csv",
+    ".json",
+    ".png",
+    ".jpg",
+    ".jpeg",
+    ".webp",
+    ".gif"
+  ],
+  "trustDefault": "unverified",
+  "approvalRequired": true,
+  "extractAutomatically": false,
+  "responseExposesManagedPath": false,
+  "safetyRules": [
+    "Uploaded bytes are checksum-verified and stored only under the managed sources folder.",
+    "An arm cannot choose a managed path or write directly to a Core Source record.",
+    "Executable and script-like file extensions are rejected.",
+    "A successful upload receipt means Airlock retention pending human review, not Source approval.",
+    "File bytes are never executed or automatically extracted.",
+    "Managed paths are server-owned and are not exposed in the transport response."
+  ]
+}

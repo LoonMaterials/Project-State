@@ -1,0 +1,70 @@
+{
+  "app": "Project State",
+  "contractType": "local-api-arm-transport",
+  "contractVersion": "0.1",
+  "defaultEnabled": false,
+  "bindHost": "127.0.0.1",
+  "defaultPort": 32145,
+  "authentication": {
+    "type": "bearer-token",
+    "randomBytes": 32,
+    "encryptedAtRest": true,
+    "electronSafeStorageRequired": true,
+    "tokenEnvironmentVariable": "PROJECT_STATE_API_ARM_TOKEN",
+    "tokenInCommandLineArguments": false
+  },
+  "endpoints": [
+    {
+      "method": "GET",
+      "path": "/v0.1/capabilities",
+      "operation": "describeCapabilities"
+    },
+    {
+      "method": "POST",
+      "path": "/v0.1/submissions",
+      "operation": "submitEnvelope"
+    },
+    {
+      "method": "GET",
+      "path": "/v0.1/receipts/<submissionId>",
+      "operation": "getReceipt"
+    },
+    {
+      "method": "POST",
+      "path": "/v0.1/files",
+      "operation": "submitFile"
+    }
+  ],
+  "limits": {
+    "maxBodyBytes": 1048576,
+    "maxFileBytes": 26214400,
+    "maxMetadataHeaderBytes": 8192,
+    "maxItemsPerEnvelope": 100,
+    "requestsPerMinutePerAddress": 60,
+    "headersTimeoutMs": 10000,
+    "requestTimeoutMs": 15000
+  },
+  "browserOriginRequests": "rejected",
+  "secretStorage": {
+    "folder": "integrations",
+    "includedInBackup": false,
+    "includedInExport": false,
+    "includedInLogs": false
+  },
+  "lifecycleOperations": [
+    "status",
+    "enable",
+    "disable",
+    "rotateToken",
+    "revoke"
+  ],
+  "safetyRules": [
+    "The listener is disabled by default and binds only to 127.0.0.1.",
+    "Every contract endpoint requires a bearer token.",
+    "Browser-origin requests are rejected.",
+    "Tokens are encrypted with Electron safeStorage and never stored or logged as plaintext.",
+    "Integration secrets are excluded from backups and exports.",
+    "Transport acceptance cannot approve Intake or write directly to Core or generic storage.",
+    "Bind failure must not fall back to another interface or bypass the Airlock."
+  ]
+}

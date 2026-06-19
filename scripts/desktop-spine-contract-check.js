@@ -11,7 +11,7 @@ const BRIDGE_IMPL = path.join(ROOT, "desktop", "project-state-desktop-bridge.cjs
 const DESKTOP_MAIN = path.join(ROOT, "desktop", "main.cjs");
 const DESKTOP_PRELOAD = path.join(ROOT, "desktop", "preload.cjs");
 
-const REQUIRED_FOLDERS = ["sources", "extracts", "attachments", "backups", "recovery", "manifests", "logs", "temp"];
+const REQUIRED_FOLDERS = ["sources", "extracts", "attachments", "backups", "recovery", "manifests", "logs", "temp", "integrations"];
 const REQUIRED_TABLES = [
   "meta",
   "actors",

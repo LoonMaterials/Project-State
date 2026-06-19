@@ -1,0 +1,36 @@
+{
+  "contractVersion": "0.1",
+  "submissionId": "replace-with-stable-submission-id",
+  "idempotencyKey": "replace-with-stable-idempotency-key",
+  "submittedAt": "2026-06-18T12:00:00.000Z",
+  "arm": {
+    "armId": "generic-local-connector",
+    "displayName": "Generic Local Connector",
+    "type": "api",
+    "armVersion": "0.1.0",
+    "instanceId": "replace-with-connector-instance-id"
+  },
+  "target": {
+    "projectId": "replace-with-existing-project-id"
+  },
+  "items": [
+    {
+      "clientItemId": "item-1",
+      "title": "Replace with proposal title",
+      "proposedObjectType": "Fact",
+      "proposedChange": {
+        "text": "Replace with outside information for human review.",
+        "summary": "Optional context for the reviewer."
+      },
+      "sourceLabel": "Generic local connector",
+      "evidence": {
+        "externalRecord": "replace-with-non-secret-reference"
+      }
+    }
+  ],
+  "provenance": {
+    "sourceLabel": "Replace with human-readable source label",
+    "externalReference": "replace-with-non-secret-external-reference",
+    "capturedAt": "2026-06-18T11:59:00.000Z"
+  }
+}

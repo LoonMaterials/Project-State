@@ -1,0 +1,54 @@
+{
+  "app": "Project State",
+  "contractType": "desktop-release",
+  "contractVersion": "0.1",
+  "platform": "windows",
+  "runtime": {
+    "electron": "42.4.1",
+    "requiredNodeModules": [
+      "node:sqlite"
+    ],
+    "contextIsolation": true,
+    "nodeIntegration": false,
+    "localEntry": "index.html"
+  },
+  "artifacts": [
+    {
+      "type": "unpacked-directory",
+      "purpose": "Pre-installer release smoke testing."
+    },
+    {
+      "type": "nsis-installer",
+      "installScope": "per-user",
+      "purpose": "Windows release candidate installation."
+    }
+  ],
+  "storage": {
+    "defaultRoot": "%USERPROFILE%\\Project State Storage",
+    "overrideEnvironmentVariable": "PROJECT_STATE_STORAGE_ROOT",
+    "insideInstallDirectory": false,
+    "deleteOnUninstall": false,
+    "overwriteOnUpgrade": false
+  },
+  "signing": {
+    "publicDistribution": "required",
+    "localTestBuild": "unsigned-allowed-with-test-label"
+  },
+  "releaseGates": [
+    "syntax",
+    "maintained-verification-suite",
+    "electron-node-sqlite-smoke",
+    "release-contract",
+    "unpacked-artifact",
+    "installer-artifact",
+    "real-time-desktop-tests"
+  ],
+  "safetyRules": [
+    "Application packages must not contain an existing project-state.db or user managed folders.",
+    "Primary storage must remain outside the installed application directory.",
+    "Ordinary uninstall must not erase the Project State storage root.",
+    "Upgrade must not overwrite the Project State storage root.",
+    "Permanent user-data deletion requires a separate explicit governed workflow.",
+    "Unsigned artifacts are local test builds and must not be represented as trusted public releases."
+  ]
+}

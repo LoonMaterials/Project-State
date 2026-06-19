@@ -493,6 +493,14 @@ Arms do not write directly to the core. They create intake items. A human must a
 
 API arms follow the same rule: they plug into the desktop app's Intake Airlock, not directly into Core or Spine. Browser/dev mode is not an equal production target for API work.
 
+API Arm Contract v0.1 is documented in `API_ARM_CONTRACT.md` with its machine-readable companion at `fixtures/api-arm-v0.1-contract.json`. The desktop bridge implements capability discovery, envelope submission, and receipt lookup under `window.ProjectStateDesktop.intakeArms`, including validation, idempotent atomic batch acceptance, durable Airlock receipts, and server-owned workflow fields. A successful receipt means only that an outside proposal is retained in the Airlock pending human review.
+
+Local Arm Transport v0.1 is documented in `LOCAL_ARM_TRANSPORT_CONTRACT.md`. It is disabled by default, binds only to `127.0.0.1`, requires an encrypted bearer token, rejects browser-origin requests, applies request and rate limits, and is controlled from Settings with actor/reason audit records. Integration secrets remain machine-local and are excluded from backup and export packages.
+
+The first maintained connectors are provider-neutral: `scripts/api-arm-submit.js` submits proposal envelopes and `scripts/api-arm-submit-file.js` submits checksum-verified files under `FILE_ARM_CONTRACT.md`. Both read the token from `PROJECT_STATE_API_ARM_TOKEN` and refuse token command-line arguments. No provider-specific calendar, email, chat, Codex, or AI connector is installed yet.
+
+Desktop Release Contract v0.1 is documented in `RELEASE_CONTRACT.md`. Electron 42.4.1 is pinned, the packaged Node 24 runtime passes SQLite write/read verification, the unpacked artifact excludes user data and secrets, and a per-user NSIS installer is available as an unsigned local test candidate. `REAL_TIME_TEST_PLAN.md` defines the remaining live desktop, connector, install, upgrade, and uninstall-preservation tests.
+
 Context Pack Foundation
 
 Each project can export a local Context Pack for future API or AI arms. A context pack is a bounded JSON packet containing the current project brief, selected scope, recent decisions, key facts, open work, relationships, evidence/source chunks, recent history, and a standard proposal schema. Context packs are read-only context. They do not change Project State and do not authorize an arm to write to Core or Spine.

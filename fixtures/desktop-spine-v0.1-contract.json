@@ -36,6 +36,10 @@
     {
       "name": "temp",
       "purpose": "Temporary import and extraction workspace."
+    },
+    {
+      "name": "integrations",
+      "purpose": "Machine-local integration configuration and encrypted secrets; excluded from backup and export packages."
     }
   ],
   "tables": [

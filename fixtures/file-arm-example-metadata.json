@@ -1,0 +1,26 @@
+{
+  "contractVersion": "0.1",
+  "submissionId": "replace-with-stable-file-submission-id",
+  "idempotencyKey": "replace-with-stable-file-idempotency-key",
+  "submittedAt": "2026-06-18T12:00:00.000Z",
+  "arm": {
+    "armId": "generic-local-file-connector",
+    "displayName": "Generic Local File Connector",
+    "type": "file",
+    "armVersion": "0.1.0",
+    "instanceId": "replace-with-connector-instance-id"
+  },
+  "target": {
+    "projectId": "replace-with-existing-project-id"
+  },
+  "provenance": {
+    "sourceLabel": "Replace with human-readable file source",
+    "externalReference": "replace-with-non-secret-reference",
+    "capturedAt": "2026-06-18T11:59:00.000Z"
+  },
+  "file": {
+    "fileName": "optional-override.pdf",
+    "contentType": "application/pdf",
+    "sha256": "computed-and-replaced-by-the-generic-file-connector"
+  }
+}

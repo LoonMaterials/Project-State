@@ -18,6 +18,7 @@ function main() {
 
   const requiredAppPieces = [
     "function desktopRuntimeReady()",
+    "function desktopBridgeAllowed()",
     "function browserDevRuntime()",
     "function seriousStorageWorkAllowed()",
     "function renderBrowserDevModeGate()",
@@ -39,6 +40,10 @@ function main() {
   const desktopAdapterText = appText.slice(desktopAdapterStart, browserAdapterStart);
   assert(desktopAdapterText.includes("return typeof storage.loadStore === \"function\" && typeof storage.saveStore === \"function\";"), "Desktop adapter supported() still appears to allow browser fallback.");
   assert(!desktopAdapterText.includes("|| browserFallback.storage.supported()"), "Desktop adapter still silently falls back to browser storage support.");
+  assert(appText.includes('return window.location?.protocol === "file:";'), "Web runtime could still accept an injected desktop bridge.");
+  const indexText = fs.readFileSync(path.join(__dirname, "..", "index.html"), "utf8");
+  assert(indexText.includes("connect-src 'none'"), "Web runtime must block all outbound network connections.");
+  assert(indexText.includes("object-src 'none'") && indexText.includes("frame-src 'none'"), "Web runtime must block external objects and frames.");
   assert(appText.includes("if (browserDevRuntime()) {\n    renderBrowserDevModeGate();\n    return;\n  }"), "Startup render path does not gate browser/dev mode.");
   assert(appText.includes("if (!seriousStorageWorkAllowed() && !options.allowInBrowserDev)"), "saveStore does not block serious storage work without the desktop bridge.");
   assert(appText.includes("if (seriousStorageWorkAllowed()) {\n      if (loaded.source === \"legacy-json\") await ProjectStateStorage.preserveLegacyRaw(loaded.raw);"), "loadStore still appears to allow silent browser migration writes.");

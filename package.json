@@ -2,14 +2,100 @@
   "name": "project-state",
   "version": "0.1.0",
   "private": true,
+  "packageManager": "pnpm@11.0.7",
   "description": "Local-first Project State desktop/web prototype.",
+  "author": "Project State",
   "main": "desktop/main.cjs",
   "scripts": {
     "desktop": "electron .",
     "check": "node --check app.js && node --check desktop/main.cjs && node --check desktop/preload.cjs && node --check desktop/project-state-desktop-bridge.cjs",
-    "check:desktop": "node scripts/desktop-wrapper-check.js && node scripts/desktop-spine-contract-check.js && node scripts/desktop-bridge-implementation-check.js"
+    "check:desktop": "node scripts/desktop-wrapper-check.js && node scripts/desktop-spine-contract-check.js && node scripts/desktop-bridge-implementation-check.js",
+    "check:api-arm": "node scripts/api-arm-contract-check.js && node scripts/api-arm-implementation-check.js",
+    "check:arm-transport": "node scripts/local-arm-transport-contract-check.js && node scripts/local-arm-transport-implementation-check.js",
+    "check:file-arm": "node scripts/file-arm-contract-check.js && node scripts/file-arm-implementation-check.js",
+    "arm:submit": "node scripts/api-arm-submit.js",
+    "arm:submit-file": "node scripts/api-arm-submit-file.js",
+    "check:release": "node scripts/release-contract-check.js && node scripts/run-electron-runtime-smoke.js",
+    "check:artifact": "node scripts/release-artifact-check.js",
+    "check:installer": "node scripts/release-installer-check.js",
+    "release:dir": "electron-builder --dir --win",
+    "release:installer": "electron-builder --win nsis"
   },
   "devDependencies": {
-    "electron": "^31.0.0"
+    "electron": "42.4.1",
+    "electron-builder": "26.15.3"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "electron",
+      "electron-winstaller"
+    ]
+  },
+  "build": {
+    "appId": "com.projectstate.desktop",
+    "productName": "Project State",
+    "asar": true,
+    "electronDownload": {
+      "cache": ".cache/electron"
+    },
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "index.html",
+      "app.js",
+      "styles.css",
+      "desktop/**/*",
+      "fixtures/api-arm-v0.1-contract.json",
+      "fixtures/local-arm-transport-v0.1-contract.json",
+      "fixtures/file-arm-v0.1-contract.json",
+      "fixtures/release-v0.1-contract.json",
+      "API_ARM_CONTRACT.md",
+      "LOCAL_ARM_TRANSPORT_CONTRACT.md",
+      "FILE_ARM_CONTRACT.md",
+      "DESKTOP_BRIDGE.md",
+      "DESKTOP_STORAGE_SPINE.md",
+      "RELEASE_CONTRACT.md",
+      "README.md",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "scripts/api-arm-submit.js",
+        "to": "connectors/api-arm-submit.js"
+      },
+      {
+        "from": "scripts/api-arm-submit-file.js",
+        "to": "connectors/api-arm-submit-file.js"
+      },
+      {
+        "from": "fixtures/api-arm-example-envelope.json",
+        "to": "connectors/api-arm-example-envelope.json"
+      },
+      {
+        "from": "fixtures/file-arm-example-metadata.json",
+        "to": "connectors/file-arm-example-metadata.json"
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "Project-State-Setup-${version}-${arch}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowElevation": true,
+      "allowToChangeInstallationDirectory": true,
+      "deleteAppDataOnUninstall": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    }
   }
 }

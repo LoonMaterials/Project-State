@@ -118,6 +118,26 @@ They must not:
 - use browser mode as an equal production runtime
 - bypass the Intake Airlock because an external system looks trustworthy
 
+API Arm Contract v0.1
+
+The inbound proposal contract lives at:
+
+```text
+API_ARM_CONTRACT.md
+fixtures/api-arm-v0.1-contract.json
+```
+
+It defines the submission envelope, strict validation before legacy normalization, idempotent whole-batch acceptance, Airlock receipts, server-owned Intake fields, and the fields an arm may never set. The desktop bridge implements the logical adapter under `intakeArms`; the separately governed local loopback transport carries requests without adding provider-specific authority.
+
+Local transport and File Arm records use the `integrations/` and `sources/` folders respectively. Encrypted connector secrets and machine-local listener configuration in `integrations/` are deliberately excluded from backup/export packages. Approved managed source files remain in `sources/` and are included in backup and integrity verification.
+
+Run:
+
+```text
+node scripts/api-arm-contract-check.js
+node scripts/api-arm-implementation-check.js
+```
+
 Migration Rule
 
 When migrating from the current prototype:

@@ -729,6 +729,8 @@ const LANGUAGES = {
     localFile: "Local File",
     modified: "Modified",
     findLocalFile: "Find Local File",
+    browseFile: "Browse for file…",
+    browseFolder: "Browse for folder…",
     verifyFile: "Verify File",
     verifySourceFiles: "Verify Source Files",
     sourceFileVerification: "Source File Verification",
@@ -885,6 +887,32 @@ const LANGUAGES = {
     extractsLabel: "Extracts",
     imagesLabel: "Images",
     integrityDashboard: "Integrity Dashboard",
+    localApiArmTransport: "Local API Arm Transport",
+    transportBoundaryNotice: "Loopback-only connector access. Submissions enter the Intake Airlock and still require individual human approval.",
+    transportStatus: "Transport Status",
+    transportRunning: "Running",
+    transportStopped: "Stopped",
+    transportAddress: "Local Address",
+    secureToken: "Secure Token",
+    secureStorage: "Secure Storage",
+    configured: "Configured",
+    notConfigured: "Not configured",
+    available: "Available",
+    unavailable: "Unavailable",
+    transportLastError: "Last transport error",
+    enableTransport: "Enable Transport",
+    disableTransport: "Disable Transport",
+    rotateTransportToken: "Rotate Token",
+    revokeTransport: "Revoke Transport",
+    transportEnableNotice: "Enabling opens a bearer-token-protected listener on 127.0.0.1 only. It does not grant approval authority.",
+    transportDisableNotice: "Disabling stops the listener but retains the encrypted token for later use.",
+    transportRotateNotice: "Rotating immediately invalidates the previous connector token.",
+    transportRevokeNotice: "Revoking stops the listener and deletes the encrypted connector token.",
+    transportPort: "Local Port",
+    transportTokenTitle: "Connector Token",
+    tokenOneTimeNotice: "Copy this token now and store it securely. Project State will not display it again unless you rotate it.",
+    tokenSaved: "I Saved the Token",
+    changedBy: "Changed By",
     integrityStatus: "Integrity Status",
     healthy: "Healthy",
     warning: "Warning",
@@ -1426,6 +1454,8 @@ const LANGUAGES = {
     localFile: "Fichier local",
     modified: "Modifié",
     findLocalFile: "Trouver un fichier local",
+    browseFile: "Parcourir les fichiers…",
+    browseFolder: "Parcourir les dossiers…",
     verifyFile: "Vérifier le fichier",
     verifySourceFiles: "Vérifier les fichiers source",
     sourceFileVerification: "Vérification des fichiers source",
@@ -1582,6 +1612,32 @@ const LANGUAGES = {
     extractsLabel: "Extraits",
     imagesLabel: "Images",
     integrityDashboard: "Tableau d’intégrité",
+    localApiArmTransport: "Transport local du bras API",
+    transportBoundaryNotice: "Accès connecteur limité à la boucle locale. Les propositions entrent dans le sas d’admission et nécessitent toujours une approbation humaine individuelle.",
+    transportStatus: "État du transport",
+    transportRunning: "En cours",
+    transportStopped: "Arrêté",
+    transportAddress: "Adresse locale",
+    secureToken: "Jeton sécurisé",
+    secureStorage: "Stockage sécurisé",
+    configured: "Configuré",
+    notConfigured: "Non configuré",
+    available: "Disponible",
+    unavailable: "Indisponible",
+    transportLastError: "Dernière erreur de transport",
+    enableTransport: "Activer le transport",
+    disableTransport: "Désactiver le transport",
+    rotateTransportToken: "Renouveler le jeton",
+    revokeTransport: "Révoquer le transport",
+    transportEnableNotice: "L’activation ouvre un écouteur protégé par jeton sur 127.0.0.1 uniquement. Elle n’accorde aucun pouvoir d’approbation.",
+    transportDisableNotice: "La désactivation arrête l’écouteur mais conserve le jeton chiffré pour plus tard.",
+    transportRotateNotice: "Le renouvellement invalide immédiatement l’ancien jeton du connecteur.",
+    transportRevokeNotice: "La révocation arrête l’écouteur et supprime le jeton chiffré du connecteur.",
+    transportPort: "Port local",
+    transportTokenTitle: "Jeton du connecteur",
+    tokenOneTimeNotice: "Copiez ce jeton maintenant et conservez-le en lieu sûr. Project State ne l’affichera plus, sauf renouvellement.",
+    tokenSaved: "J’ai enregistré le jeton",
+    changedBy: "Modifié par",
     integrityStatus: "État d’intégrité",
     healthy: "Sain",
     warning: "Avertissement",
@@ -2123,6 +2179,8 @@ const LANGUAGES = {
     localFile: "Lokale Datei",
     modified: "Geändert",
     findLocalFile: "Lokale Datei finden",
+    browseFile: "Datei auswählen…",
+    browseFolder: "Ordner auswählen…",
     verifyFile: "Datei prüfen",
     verifySourceFiles: "Quelldateien prüfen",
     sourceFileVerification: "Quelldatei-Prüfung",
@@ -2279,6 +2337,32 @@ const LANGUAGES = {
     extractsLabel: "Auszüge",
     imagesLabel: "Bilder",
     integrityDashboard: "Integritäts-Dashboard",
+    localApiArmTransport: "Lokaler API-Arm-Transport",
+    transportBoundaryNotice: "Connector-Zugriff nur über Loopback. Vorschläge gelangen in die Intake-Schleuse und benötigen weiterhin eine einzelne menschliche Genehmigung.",
+    transportStatus: "Transportstatus",
+    transportRunning: "Aktiv",
+    transportStopped: "Gestoppt",
+    transportAddress: "Lokale Adresse",
+    secureToken: "Sicheres Token",
+    secureStorage: "Sicherer Speicher",
+    configured: "Konfiguriert",
+    notConfigured: "Nicht konfiguriert",
+    available: "Verfügbar",
+    unavailable: "Nicht verfügbar",
+    transportLastError: "Letzter Transportfehler",
+    enableTransport: "Transport aktivieren",
+    disableTransport: "Transport deaktivieren",
+    rotateTransportToken: "Token erneuern",
+    revokeTransport: "Transport widerrufen",
+    transportEnableNotice: "Die Aktivierung öffnet einen durch Bearer-Token geschützten Listener ausschließlich auf 127.0.0.1. Sie erteilt keine Genehmigungsbefugnis.",
+    transportDisableNotice: "Die Deaktivierung stoppt den Listener, behält aber das verschlüsselte Token für später.",
+    transportRotateNotice: "Die Erneuerung macht das bisherige Connector-Token sofort ungültig.",
+    transportRevokeNotice: "Der Widerruf stoppt den Listener und löscht das verschlüsselte Connector-Token.",
+    transportPort: "Lokaler Port",
+    transportTokenTitle: "Connector-Token",
+    tokenOneTimeNotice: "Kopieren Sie dieses Token jetzt und bewahren Sie es sicher auf. Project State zeigt es nur nach einer Erneuerung erneut an.",
+    tokenSaved: "Token wurde gespeichert",
+    changedBy: "Geändert von",
     integrityStatus: "Integritätsstatus",
     healthy: "Gesund",
     warning: "Warnung",
@@ -2820,6 +2904,8 @@ const LANGUAGES = {
     localFile: "Archivo local",
     modified: "Modificado",
     findLocalFile: "Buscar archivo local",
+    browseFile: "Buscar archivo…",
+    browseFolder: "Buscar carpeta…",
     verifyFile: "Verificar archivo",
     verifySourceFiles: "Verificar archivos fuente",
     sourceFileVerification: "Verificación de archivos fuente",
@@ -2976,6 +3062,32 @@ const LANGUAGES = {
     extractsLabel: "Extractos",
     imagesLabel: "Imágenes",
     integrityDashboard: "Panel de integridad",
+    localApiArmTransport: "Transporte local del brazo API",
+    transportBoundaryNotice: "Acceso del conector solo mediante bucle local. Las propuestas entran en la esclusa de admisión y aún requieren aprobación humana individual.",
+    transportStatus: "Estado del transporte",
+    transportRunning: "En ejecución",
+    transportStopped: "Detenido",
+    transportAddress: "Dirección local",
+    secureToken: "Token seguro",
+    secureStorage: "Almacenamiento seguro",
+    configured: "Configurado",
+    notConfigured: "No configurado",
+    available: "Disponible",
+    unavailable: "No disponible",
+    transportLastError: "Último error de transporte",
+    enableTransport: "Activar transporte",
+    disableTransport: "Desactivar transporte",
+    rotateTransportToken: "Rotar token",
+    revokeTransport: "Revocar transporte",
+    transportEnableNotice: "La activación abre un receptor protegido con token solo en 127.0.0.1. No concede autoridad de aprobación.",
+    transportDisableNotice: "La desactivación detiene el receptor, pero conserva el token cifrado para usarlo después.",
+    transportRotateNotice: "La rotación invalida inmediatamente el token anterior del conector.",
+    transportRevokeNotice: "La revocación detiene el receptor y elimina el token cifrado del conector.",
+    transportPort: "Puerto local",
+    transportTokenTitle: "Token del conector",
+    tokenOneTimeNotice: "Copie este token ahora y guárdelo de forma segura. Project State no volverá a mostrarlo salvo que lo rote.",
+    tokenSaved: "Guardé el token",
+    changedBy: "Modificado por",
     integrityStatus: "Estado de integridad",
     healthy: "Sano",
     warning: "Advertencia",
@@ -3091,6 +3203,7 @@ const emptyStore = () => ({
   schemaVersion: "0.1.0",
   settings: defaultSettings(),
   actors: [],
+  intakeBatches: [],
   intakeItems: [],
   aiWorkOrders: [],
   projects: []
@@ -3113,6 +3226,17 @@ let activeChangesSinceDate = defaultChangesSinceDate();
 let activeObjectDetail = null;
 let postModalAction = null;
 let searchQuery = "";
+let armTransportStatus = {
+  available: false,
+  running: false,
+  configuredEnabled: false,
+  configuredPort: 32145,
+  port: 0,
+  baseUrl: "",
+  encryptionAvailable: false,
+  tokenConfigured: false,
+  lastError: ""
+};
 let saveState = {
   status: "saved",
   message: ""
@@ -3121,9 +3245,14 @@ let saveState = {
 const app = document.querySelector("#app");
 
 function createProjectStatePlatformAdapter() {
-  const desktopBridge = typeof window !== "undefined" ? window.ProjectStateDesktop : null;
+  const desktopBridge = desktopBridgeAllowed() ? window.ProjectStateDesktop : null;
   if (desktopBridge) return createDesktopPlatformAdapter(desktopBridge);
   return createBrowserPlatformAdapter();
+}
+
+function desktopBridgeAllowed() {
+  if (typeof window === "undefined" || !window.ProjectStateDesktop) return false;
+  return window.location?.protocol === "file:";
 }
 
 function createDesktopPlatformAdapter(bridge) {
@@ -3131,6 +3260,8 @@ function createDesktopPlatformAdapter(bridge) {
   const storage = bridge.storage || {};
   const files = bridge.files || {};
   const downloads = bridge.downloads || {};
+  const armTransport = bridge.armTransport || {};
+  const dialogs = bridge.dialogs || {};
   return {
     id: "desktop",
     label: bridge.label || "Desktop platform bridge",
@@ -3232,6 +3363,33 @@ function createDesktopPlatformAdapter(bridge) {
         if (typeof downloads.saveTextFile === "function") return downloads.saveTextFile({ fileName, text, type });
         return browserSaveTextFile(fileName, text, type);
       }
+    },
+    dialogs: {
+      available: typeof dialogs.pickFile === "function" && typeof dialogs.pickFolder === "function",
+      async pickFile(payload) {
+        return typeof dialogs.pickFile === "function" ? dialogs.pickFile(payload) : null;
+      },
+      async pickFolder(payload) {
+        return typeof dialogs.pickFolder === "function" ? dialogs.pickFolder(payload) : null;
+      }
+    },
+    armTransport: {
+      available: typeof armTransport.status === "function",
+      async status() {
+        return typeof armTransport.status === "function" ? armTransport.status() : null;
+      },
+      async enable(payload) {
+        return armTransport.enable(payload);
+      },
+      async disable(payload) {
+        return armTransport.disable(payload);
+      },
+      async rotateToken(payload) {
+        return armTransport.rotateToken(payload);
+      },
+      async revoke(payload) {
+        return armTransport.revoke(payload);
+      }
     }
   };
 }
@@ -3240,6 +3398,11 @@ function createBrowserPlatformAdapter() {
   return {
     id: "browser",
     label: "Browser platform adapter",
+    dialogs: {
+      available: false,
+      async pickFile() { return null; },
+      async pickFolder() { return null; }
+    },
     storage: {
       externalStore: false,
       supported() {
@@ -3282,6 +3445,12 @@ function createBrowserPlatformAdapter() {
     },
     downloads: {
       saveTextFile: browserSaveTextFile
+    },
+    armTransport: {
+      available: false,
+      async status() {
+        return null;
+      }
     }
   };
 }
@@ -3761,6 +3930,7 @@ function splitStoreRecords(nextStore, manifest) {
       schemaVersion: nextStore.schemaVersion || "",
       settings: cloneRecord(nextStore.settings),
       actors: cloneRecord(nextStore.actors || []),
+      intakeBatches: cloneRecord(nextStore.intakeBatches || []),
       intakeItems: cloneRecord(nextStore.intakeItems || [])
     },
     projects: [],
@@ -3858,6 +4028,7 @@ function rebuildStoreFromSplitRecords(split = {}) {
     schemaVersion: meta.schemaVersion || "0.1.0",
     settings: meta.settings || defaultSettings(),
     actors: Array.isArray(meta.actors) ? meta.actors : [],
+    intakeBatches: Array.isArray(meta.intakeBatches) ? meta.intakeBatches : [],
     intakeItems: Array.isArray(meta.intakeItems) ? meta.intakeItems : [],
     projects: sortSplitRecords(split.projects || [])
   };
@@ -4237,6 +4408,7 @@ function normalizeStore(parsed) {
     ...parsed,
     settings: normalizeSettings(parsed.settings),
     actors,
+    intakeBatches: Array.isArray(parsed.intakeBatches) ? parsed.intakeBatches : [],
     intakeItems: Array.isArray(parsed.intakeItems) ? parsed.intakeItems.map((item) => normalizeIntakeItem(item, context)) : [],
     aiWorkOrders: Array.isArray(parsed.aiWorkOrders) ? parsed.aiWorkOrders.map((workOrder) => normalizeAiWorkOrder(workOrder, context)) : [],
     projects: projects.map((project) => normalizeProject(project, context))
@@ -5188,6 +5360,33 @@ function sourceLocalFileMetadata(file) {
   };
 }
 
+function selectedSourceFileMetadata(form, browserFile) {
+  const selected = form?._projectStateSelectedFiles?.source;
+  return sourceLocalFileMetadata(selected || browserFile);
+}
+
+function sourceFilePickerMarkup() {
+  if (platformAdapter.dialogs?.available) {
+    return `<button class="btn secondary" type="button" data-native-file-picker data-file-key="source" data-location-target="location" data-title-target="title" data-type-target="sourceType">${escapeHtml(t("browseFile"))}</button>`;
+  }
+  return `<input id="localFile" name="localFile" type="file" data-local-file-picker data-location-target="location" data-title-target="title" data-type-target="sourceType">`;
+}
+
+function backupLocationPickerMarkup() {
+  if (!platformAdapter.dialogs?.available) return "";
+  return `<button class="btn secondary" type="button" data-native-folder-picker data-location-target="backupLocationHint">${escapeHtml(t("browseFolder"))}</button>`;
+}
+
+function restoreFilePickerMarkup() {
+  if (!platformAdapter.dialogs?.available) {
+    return `<input id="backupFile" name="backupFile" type="file" accept=".json,application/json" required>`;
+  }
+  return `
+    <input id="backupFilePath" name="backupFilePath" readonly required>
+    <button class="btn secondary" type="button" data-native-file-picker data-file-key="backup" data-location-target="backupFilePath" data-file-filter="json">${escapeHtml(t("browseFile"))}</button>
+  `;
+}
+
 function supportedImageTypes() {
   return ["image/png", "image/jpeg", "image/webp", "image/gif"];
 }
@@ -5397,7 +5596,7 @@ function actionPermission(action = "") {
   if (["edit-status", "edit-object", "assign-object", "mark-complete", "attach-source", "attach-image", "archive-object", "unarchive-project", "manage-project-roles", "review-source-freshness", "verify-source-file", "verify-all-source-files", "archive-ai-work-order"].includes(action)) return "edit";
   if (["approve-intake", "approve-extract", "approve-draft-project"].includes(action)) return "approve";
   if (["export-project", "export-handoff", "context-pack", "view-object-history", "show-history", "view-history", "show-changes-since"].includes(action)) return "audit";
-  if (["show-settings", "backup-storage", "restore-storage", "reset-local-data", "export-current-raw-data"].includes(action)) return "admin";
+  if (["show-settings", "backup-storage", "restore-storage", "reset-local-data", "export-current-raw-data", "enable-arm-transport", "disable-arm-transport", "rotate-arm-transport-token", "revoke-arm-transport"].includes(action)) return "admin";
   return "";
 }
 
@@ -6272,6 +6471,7 @@ function renderFirstRunSetup() {
           <div class="field">
             <label for="backupLocationHint">${escapeHtml(t("backupLocation"))}</label>
             <input id="backupLocationHint" name="backupLocationHint" value="${escapeHtml(store.settings?.backupLocationHint || "")}" placeholder="${escapeHtml(t("backupLocationPlaceholder"))}">
+            ${backupLocationPickerMarkup()}
           </div>
           <div class="two-col">
             <div class="field">
@@ -6303,6 +6503,7 @@ function renderFirstRunSetup() {
     </main>
   `;
   applyInputLimits(app.querySelector("[data-first-run-setup]"));
+  wireLocalFilePickers(app.querySelector("[data-first-run-setup]"));
 }
 
 function backupReminderOptions(selected = "manual") {
@@ -6388,6 +6589,7 @@ function renderSettings() {
   const integrity = buildIntegrityDashboard(diagnostics, info);
   const runtimeStatus = desktopRuntimeReady() ? t("desktopRuntimeReady") : t("browserRuntimeWarning");
   const runtimeLabel = desktopRuntimeReady() ? t("desktopRuntime") : t("browserDevRuntime");
+  const transport = armTransportStatus;
   shell(`
     <section class="view-head">
       <div>
@@ -6556,6 +6758,7 @@ function renderSettings() {
             <div class="field">
               <label for="backupLocationHint">${escapeHtml(t("backupLocation"))}</label>
               <input id="backupLocationHint" name="backupLocationHint" value="${escapeHtml(store.settings?.backupLocationHint || "")}" placeholder="${escapeHtml(t("backupLocationPlaceholder"))}">
+              ${backupLocationPickerMarkup()}
             </div>
             <div class="field">
               <label for="backupReminder">${escapeHtml(t("backupReminder"))}</label>
@@ -6611,6 +6814,41 @@ function renderSettings() {
 
       <section class="panel">
         <div class="panel-head">
+          <h2 class="panel-title">${escapeHtml(t("localApiArmTransport"))}</h2>
+        </div>
+        <div class="form">
+          <p class="notice">${escapeHtml(t("transportBoundaryNotice"))}</p>
+          <div class="meta-grid">
+            <div>
+              <p class="meta-label">${escapeHtml(t("transportStatus"))}</p>
+              <p>${escapeHtml(transport.running ? t("transportRunning") : t("transportStopped"))}</p>
+            </div>
+            <div>
+              <p class="meta-label">${escapeHtml(t("transportAddress"))}</p>
+              <p>${escapeHtml(transport.baseUrl || `127.0.0.1:${transport.configuredPort || 32145}`)}</p>
+            </div>
+            <div>
+              <p class="meta-label">${escapeHtml(t("secureToken"))}</p>
+              <p>${escapeHtml(transport.tokenConfigured ? t("configured") : t("notConfigured"))}</p>
+            </div>
+            <div>
+              <p class="meta-label">${escapeHtml(t("secureStorage"))}</p>
+              <p>${escapeHtml(transport.encryptionAvailable ? t("available") : t("unavailable"))}</p>
+            </div>
+          </div>
+          ${transport.lastError ? `<p class="notice">${escapeHtml(t("transportLastError"))}: ${escapeDisplay(transport.lastError, DISPLAY_META_LIMIT)}</p>` : ""}
+          <div class="button-row">
+            ${transport.running
+              ? `<button class="btn secondary" data-action="disable-arm-transport">${escapeHtml(t("disableTransport"))}</button>`
+              : `<button class="btn" data-action="enable-arm-transport" ${transport.available && transport.encryptionAvailable ? "" : "disabled"}>${escapeHtml(t("enableTransport"))}</button>`}
+            <button class="btn secondary" data-action="rotate-arm-transport-token" ${transport.available && transport.encryptionAvailable ? "" : "disabled"}>${escapeHtml(t("rotateTransportToken"))}</button>
+            <button class="btn danger" data-action="revoke-arm-transport" ${transport.tokenConfigured ? "" : "disabled"}>${escapeHtml(t("revokeTransport"))}</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
           <h2 class="panel-title">${escapeHtml(t("integrityDashboard"))}</h2>
         </div>
         ${renderIntegrityDashboard(integrity, diagnostics)}
@@ -6618,6 +6856,7 @@ function renderSettings() {
     </section>
   `);
   app.querySelectorAll("form").forEach(applyInputLimits);
+  app.querySelectorAll("form").forEach(wireLocalFilePickers);
 }
 
 function renderRoleDefinitions() {
@@ -7407,7 +7646,7 @@ function buildSearchResults() {
       addImageSearchResults(results, project, "Conflict", conflict);
     }
     for (const source of project.sources) {
-      addSearchResult(results, project, "Source", source.id, source.title, source.summary || source.location, [source.title, source.sourceType, sourceTrustLabel(source.trustLevel), sourceStalenessLabel(sourceStalenessState(source)), trustBoundaryLabel(trustBoundaryForRecord("Source", source)), source.location, source.summary, tagsToText(source.tags), linkedActorNames(source.linkedActorIds).join(" ")]);
+      addSearchResult(results, project, "Source", source.id, source.title, source.summary || source.location, [source.title, source.sourceType, sourceTrustLabel(source.trustLevel), sourceStalenessLabel(sourceStalenessState(source)), trustBoundaryLabel(trustBoundaryForRecord("Source", source)), source.location, source.localPath, source.managedPath, source.localFile?.name, source.localFile?.localPath, source.summary, tagsToText(source.tags), linkedActorNames(source.linkedActorIds).join(" ")]);
       for (const extract of source.extracts || []) {
         addSearchResult(results, project, "Extract", extract.id, extract.text, extract.summary, [extract.text, extract.summary, extractModeLabel(extract.extractMode), tagsToText(extract.tags), extract.extractedFromFile?.fileName, extract.extractedFromFile?.localPath]);
       }
@@ -9188,7 +9427,7 @@ function openRestoreStorageModal() {
       <p class="notice">${escapeHtml(t("restoreBackupNotice"))}</p>
       <div class="field">
         <label for="backupFile">${escapeHtml(t("backupFile"))}</label>
-        <input id="backupFile" name="backupFile" type="file" accept=".json,application/json" required>
+        ${restoreFilePickerMarkup()}
       </div>
       ${confirmationField("confirmRestore", "I understand this will replace the current local Project State storage.")}
       ${auditFields({ actorLabel: t("restoredBy"), reasonLabel: t("restoreReason") })}
@@ -9208,8 +9447,8 @@ function openRestoreStorageModal() {
         reasonField?.setCustomValidity("");
         return false;
       }
-      const fileField = form.querySelector('[name="backupFile"]');
-      const file = fileField?.files?.[0] || data.backupFile;
+      const fileField = form.querySelector('[name="backupFile"], [name="backupFilePath"]');
+      const file = form._projectStateSelectedFiles?.backup || fileField?.files?.[0] || data.backupFile;
       if (!file) {
         fileField?.setCustomValidity(t("validationBackupFileType"));
         fileField?.reportValidity();
@@ -9546,6 +9785,7 @@ function validateAuditFields(form, data) {
 }
 
 function wireLocalFilePickers(form) {
+  if (!form) return;
   for (const field of form.querySelectorAll("[data-local-file-picker]")) {
     field.addEventListener("change", () => {
       const file = field.files?.[0];
@@ -9557,6 +9797,31 @@ function wireLocalFilePickers(form) {
       if (locationField) locationField.value = fileLocation;
       if (titleField && !titleField.value.trim()) titleField.value = file.name;
       if (typeField && !typeField.value.trim()) typeField.value = file.type || file.name.split(".").pop() || "";
+    });
+  }
+  for (const button of form.querySelectorAll("[data-native-file-picker]")) {
+    button.addEventListener("click", async () => {
+      const filters = button.dataset.fileFilter === "json"
+        ? [{ name: "Project State backup", extensions: ["json"] }]
+        : [];
+      const file = await platformAdapter.dialogs.pickFile({ title: t("findLocalFile"), filters });
+      if (!file?.localPath) return;
+      form._projectStateSelectedFiles = form._projectStateSelectedFiles || {};
+      form._projectStateSelectedFiles[button.dataset.fileKey || "source"] = file;
+      const locationField = form.querySelector(`[name="${button.dataset.locationTarget}"]`);
+      const titleField = form.querySelector(`[name="${button.dataset.titleTarget}"]`);
+      const typeField = form.querySelector(`[name="${button.dataset.typeTarget}"]`);
+      if (locationField) locationField.value = file.localPath;
+      if (titleField && !titleField.value.trim()) titleField.value = file.name || "";
+      if (typeField && !typeField.value.trim()) typeField.value = (file.name || "").split(".").pop() || "";
+    });
+  }
+  for (const button of form.querySelectorAll("[data-native-folder-picker]")) {
+    button.addEventListener("click", async () => {
+      const folder = await platformAdapter.dialogs.pickFolder({ title: t("backupLocation") });
+      if (!folder?.localPath) return;
+      const locationField = form.querySelector(`[name="${button.dataset.locationTarget}"]`);
+      if (locationField) locationField.value = folder.localPath;
     });
   }
 }
@@ -10454,6 +10719,7 @@ function applyApprovedIntakeToCore(intake, actor, reason, approval) {
   }
 
   if (intake.proposedObjectType === "Source") {
+    const managedFile = intake.evidence?.managedFile || null;
     const source = {
       id: uid("source"),
       projectId: project.id,
@@ -10465,11 +10731,26 @@ function applyApprovedIntakeToCore(intake, actor, reason, approval) {
       reviewedBy: "",
       dateAdded: timestamp,
       actorId: actor.id,
-      location: intake.sourceLabel || "",
+      location: managedFile?.managedPath || intake.sourceLabel || "",
       summary,
       tags: [],
       extracts: [],
-      status: "active"
+      status: "active",
+      managedPath: managedFile?.managedPath || "",
+      checksum: managedFile?.sha256 || "",
+      localFile: managedFile ? {
+        name: managedFile.fileName || text || intake.title,
+        type: managedFile.contentType || "",
+        size: Number(managedFile.size || 0),
+        lastModified: "",
+        localPath: ""
+      } : null,
+      fileVerification: managedFile ? {
+        status: "verified",
+        exists: true,
+        checkedAt: timestamp,
+        reason: "Checksum verified during File Arm intake."
+      } : null
     };
     project.sources.unshift(source);
     recordChange(project, actor, reason, "Intake approved: Source added", {
@@ -10477,7 +10758,7 @@ function applyApprovedIntakeToCore(intake, actor, reason, approval) {
       objectType: "Source",
       objectId: source.id,
       objectText: source.title,
-      fields: { source: source.title, type: source.sourceType, trustLevel: sourceTrustLabel(source.trustLevel), location: source.location, summary: source.summary }
+      fields: { source: source.title, type: source.sourceType, trustLevel: sourceTrustLabel(source.trustLevel), location: source.location, summary: source.summary, managedFile: managedFile?.fileName || "", checksum: managedFile?.sha256 || "" }
     });
     return source;
   }
@@ -11023,7 +11304,7 @@ function openEditSourceModal(project, source) {
       </div>
       <div class="field">
         <label for="localFile">${escapeHtml(t("findLocalFile"))}</label>
-        <input id="localFile" name="localFile" type="file" data-local-file-picker data-location-target="location" data-title-target="title" data-type-target="sourceType">
+        ${sourceFilePickerMarkup()}
       </div>
       <div class="field">
         <label>${escapeHtml(t("linkedProjectStateUsers"))}</label>
@@ -11053,7 +11334,7 @@ function openEditSourceModal(project, source) {
         tags: tagsToText(source.tags),
         linkedUsers: linkedActorNames(source.linkedActorIds).join(", ")
       };
-      const localFile = sourceLocalFileMetadata(data.localFile);
+      const localFile = selectedSourceFileMetadata(form, data.localFile);
       const linkedActorIds = selectedLinkedActorIds(form);
       source.title = data.title.trim();
       source.sourceType = data.sourceType.trim();
@@ -12312,7 +12593,7 @@ function openSourceModal() {
       </div>
       <div class="field">
         <label for="localFile">${escapeHtml(t("findLocalFile"))}</label>
-        <input id="localFile" name="localFile" type="file" data-local-file-picker data-location-target="location" data-title-target="title" data-type-target="sourceType">
+        ${sourceFilePickerMarkup()}
       </div>
       <div class="field">
         <label>${escapeHtml(t("linkedProjectStateUsers"))}</label>
@@ -12331,7 +12612,7 @@ function openSourceModal() {
     `,
     onSubmit(data, form) {
       const actor = getOrCreateActor(data.actorName, "Human");
-      const localFile = sourceLocalFileMetadata(data.localFile);
+      const localFile = selectedSourceFileMetadata(form, data.localFile);
       const linkedActorIds = selectedLinkedActorIds(form);
       const source = {
         id: uid("source"),
@@ -12818,6 +13099,71 @@ function addSettingsActor(data, form) {
   render();
 }
 
+async function refreshArmTransportStatus() {
+  if (!platformAdapter.armTransport?.available) {
+    armTransportStatus = { ...armTransportStatus, available: false };
+    return armTransportStatus;
+  }
+  try {
+    const status = await platformAdapter.armTransport.status();
+    armTransportStatus = { ...armTransportStatus, ...(status || {}), available: true };
+  } catch (error) {
+    armTransportStatus = { ...armTransportStatus, available: true, running: false, lastError: error?.message || "STATUS_FAILED" };
+  }
+  return armTransportStatus;
+}
+
+function openArmTransportActionModal(operation) {
+  const definitions = {
+    enable: { title: t("enableTransport"), submit: t("enableTransport"), notice: t("transportEnableNotice") },
+    disable: { title: t("disableTransport"), submit: t("disableTransport"), notice: t("transportDisableNotice") },
+    rotate: { title: t("rotateTransportToken"), submit: t("rotateTransportToken"), notice: t("transportRotateNotice") },
+    revoke: { title: t("revokeTransport"), submit: t("revokeTransport"), notice: t("transportRevokeNotice") }
+  };
+  const definition = definitions[operation];
+  if (!definition || !platformAdapter.armTransport?.available) return;
+  showModal({
+    title: definition.title,
+    submitText: definition.submit,
+    body: `
+      <p class="notice">${escapeHtml(definition.notice)}</p>
+      ${operation === "enable" ? `
+        <div class="field">
+          <label for="transportPort">${escapeHtml(t("transportPort"))}</label>
+          <input id="transportPort" name="transportPort" type="number" min="1024" max="65535" value="${escapeHtml(armTransportStatus.configuredPort || 32145)}" required>
+        </div>
+      ` : ""}
+      ${auditFields({ actorLabel: t("changedBy"), reasonLabel: t("reason") })}
+    `,
+    async onSubmit(data) {
+      const actor = getOrCreateActor(data.actorName, "Human");
+      const payload = { actorId: actor.id, reason: data.reason };
+      let result = null;
+      if (operation === "enable") result = await platformAdapter.armTransport.enable({ ...payload, port: Number(data.transportPort) });
+      if (operation === "disable") result = await platformAdapter.armTransport.disable(payload);
+      if (operation === "rotate") result = await platformAdapter.armTransport.rotateToken(payload);
+      if (operation === "revoke") result = await platformAdapter.armTransport.revoke(payload);
+      armTransportStatus = { ...armTransportStatus, ...(result || {}), available: true };
+      if (result?.token) queuePostModalAction(() => openArmTransportTokenModal(result.token));
+    }
+  });
+}
+
+function openArmTransportTokenModal(token) {
+  showModal({
+    title: t("transportTokenTitle"),
+    submitText: t("tokenSaved"),
+    body: `
+      <p class="notice">${escapeHtml(t("tokenOneTimeNotice"))}</p>
+      <div class="field">
+        <label for="transportToken">${escapeHtml(t("secureToken"))}</label>
+        <textarea id="transportToken" name="transportToken" readonly>${escapeHtml(token)}</textarea>
+      </div>
+    `,
+    onSubmit() {}
+  });
+}
+
 app.addEventListener("click", (event) => {
   const button = event.target.closest("[data-action]");
   if (!button) return;
@@ -12880,7 +13226,14 @@ app.addEventListener("click", (event) => {
     activeRootView = "settings";
     activeProjectId = null;
     render();
+    refreshArmTransportStatus().then(() => {
+      if (activeRootView === "settings") render();
+    });
   }
+  if (action === "enable-arm-transport") openArmTransportActionModal("enable");
+  if (action === "disable-arm-transport") openArmTransportActionModal("disable");
+  if (action === "rotate-arm-transport-token") openArmTransportActionModal("rotate");
+  if (action === "revoke-arm-transport") openArmTransportActionModal("revoke");
   if (action === "approve-intake") openApproveIntakeModal(button.dataset.intakeId);
   if (action === "batch-triage") openBatchTriageModal();
   if (action === "review-intake-queue") openReviewIntakeQueueModal(button.dataset.intakeId);
@@ -13154,6 +13507,7 @@ app.addEventListener("input", (event) => {
 async function initializeApp() {
   render();
   store = await loadStore() || emptyStore();
+  await refreshArmTransportStatus();
   storageReady = true;
   render();
 }

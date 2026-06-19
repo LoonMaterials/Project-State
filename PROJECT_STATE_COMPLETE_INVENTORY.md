@@ -23,6 +23,7 @@ This inventory describes the implementation currently present in this repository
 - Browser mode retained only as a read-only development, inspection, export, and legacy-migration harness.
 - Startup gate warns when the desktop bridge is unavailable.
 - No silent fallback from desktop storage to browser storage for authoritative work.
+- Web testing is externally isolated: HTTP/HTTPS cannot activate an injected desktop bridge, and Content Security Policy blocks outbound connections, objects, frames, and workers.
 - Platform adapter boundary separates UI behavior from desktop storage, file access, extraction, and downloads.
 - API arms are designed to connect through the desktop Intake Airlock rather than Core or storage directly.
 
@@ -253,6 +254,39 @@ Airlock safeguards:
 - Approval produces Core data and Change History together.
 - Rejection and archive preserve the Intake record.
 
+API Arm Contract v0.1 and desktop adapter:
+
+- Inbound proposal boundary with desktop adapter; no provider-specific external integration is installed.
+- Desktop runtime required; browser/dev mode is not a production ingestion path.
+- Implemented bridge operations: describe capabilities, submit an envelope, and retrieve its receipt.
+- Submission envelope requires arm identity, target Project ID, provenance, stable submission and idempotency IDs, and one or more proposal items.
+- Whole-envelope validation occurs before legacy normalization; unsupported types are rejected rather than silently converted.
+- First acceptance creates one Intake batch; exact retries create no duplicates; conflicting idempotency reuse is rejected.
+- Workflow, approval, trust, actor, archive, comment, assignment, Change History, file-path, credential, and secret fields remain server-owned or forbidden.
+- Acceptance receipt means Airlock retention pending human review, never approval, truth, or a Core write.
+- Partial batch acceptance is unavailable in v0.1.
+- Intake batches, item mappings, provenance, payload checksums, and receipts persist through normal desktop save/load cycles.
+
+Local Arm Transport v0.1:
+
+- Disabled by default and owned by the Electron main process.
+- Binds only to `127.0.0.1`; browser-origin requests are rejected.
+- Bearer token uses cryptographic randomness and Electron secure storage.
+- Encrypted integration token and local transport configuration live under `integrations/` and are excluded from backups and exports.
+- Settings provides enable, disable, rotate-token, and revoke controls with actor/reason audit logging.
+- Metadata submissions are limited to 1 MiB and 100 proposal items; authenticated traffic is rate limited.
+- Generic metadata connector reads its token only from `PROJECT_STATE_API_ARM_TOKEN`.
+
+File Arm Contract v0.1:
+
+- Checksum-verified binary uploads enter as pending Source proposals.
+- 25 MiB file limit, 8 KiB metadata-header limit, safe file names, and an explicit extension allowlist.
+- Executable/script-like files are rejected; uploaded bytes are never executed or automatically extracted.
+- Managed files are stored under `sources/`, included in backups, and verified by binary SHA-256 integrity checks.
+- Transport receipts do not expose managed paths.
+- Human approval creates the Source record and Change History together, retaining Unverified trust and verified-file metadata.
+- Generic file connector computes SHA-256 and uses the same environment-only token handoff.
+
 ## 9. Source, File, and Extraction Support
 
 - Local file picker for Source records.
@@ -449,11 +483,27 @@ Implemented storage behavior:
 - `README.md`: product, workflow, role, storage-phase, and architecture documentation.
 - `DESKTOP_BRIDGE.md`: desktop bridge contract and runtime rules.
 - `DESKTOP_STORAGE_SPINE.md`: desktop storage layout, Airlock contract, migration, backup, and implementation notes.
+- `API_ARM_CONTRACT.md`: API Arm Contract v0.1 submission envelope, validation, idempotency, receipt, and authority boundary.
+- `LOCAL_ARM_TRANSPORT_CONTRACT.md`: loopback transport, encrypted token, lifecycle, request-limit, and endpoint contract.
+- `FILE_ARM_CONTRACT.md`: checksum-verified managed-file Intake and Source approval contract.
+- `RELEASE_CONTRACT.md`: Electron runtime, packaging, installer, user-data, signing, and release-gate contract.
+- `REAL_TIME_TEST_PLAN.md`: remaining live desktop, connector, installer, upgrade, and uninstall test sequence.
 - `desktop/main.cjs`: Electron application process.
 - `desktop/preload.cjs`: isolated renderer-to-desktop bridge exposure.
 - `desktop/project-state-desktop-bridge.cjs`: SQLite, managed-file, migration, backup, restore, integrity, extraction, and recovery implementation.
+- `desktop/api-arm-transport.cjs`: authenticated loopback HTTP transport.
+- `desktop/api-arm-transport-manager.cjs`: Settings-controlled lifecycle and audit manager.
+- `desktop/api-arm-secret-store.cjs`: Electron-secured connector-token storage.
+- `desktop/api-arm-file-intake.cjs`: checksum-verified managed source-file Intake.
 - `desktop/spine-schema.sql`: desktop SQLite schema.
 - `fixtures/storage-spine-v0.1-baseline.json`: representative persistence fixture.
+- `fixtures/api-arm-v0.1-contract.json`: machine-readable inbound API arm proposal contract.
+- `scripts/api-arm-contract-check.js`: contract, vocabulary, authority-boundary, documentation, and adapter-drift verification.
+- `scripts/api-arm-implementation-check.js`: desktop submission, receipt, idempotency, rejection, Core-isolation, stale-save, and backup/restore verification.
+- `scripts/api-arm-submit.js`: provider-neutral metadata connector.
+- `scripts/api-arm-submit-file.js`: provider-neutral managed-file connector.
+- `scripts/release-artifact-check.js`: unpacked ASAR, connector, secret-exclusion, and packaged-runtime verification.
+- `scripts/release-installer-check.js`: installer checksum, signature status, and release-candidate manifest generation.
 - `scripts/*.js`: maintained syntax, runtime, migration, storage, backup, restore, and interaction verification tools.
 
 ## 18. Deliberately Not Implemented
@@ -463,15 +513,15 @@ Implemented storage behavior:
 - Login or account authentication.
 - Real concurrent multi-user editing.
 - Network sync or conflict-free replication.
-- Live calendar, meeting, Teams, email, chat, notes, API, Codex, or AI provider connections.
+- Provider-specific calendar, meeting, Teams, email, chat, notes, Codex, or AI connections.
 - Automatic AI authority or direct AI writes to Core/Spine.
 - Automatic translation of user-entered project content.
 - Permanent project deletion; deletion remains archived and pending a future approval process.
-- A final installer/packaged executable workflow; Electron wrapper and desktop bridge exist, but packaging is a later release step.
+- A signed public installer, final application icon/branding, and real-time desktop/install validation. The unsigned local test installer is built but is not a public release.
 
 ## 19. Deep Debug Status
 
-Status: Passed on 2026-06-18. The complete implementation inventory was generated before the deep-debug run began.
+Status: Pre-real-time implementation complete on 2026-06-18. The final non-live regression results and release artifacts are recorded below.
 
 ### Syntax
 
@@ -485,12 +535,12 @@ Passed syntax checks:
 
 ### Interactions and Languages
 
-- 70 rendered actions checked.
-- 71 handled actions checked, including two approved dynamic actions.
+- 74 rendered actions checked.
+- 75 handled actions checked, including two approved dynamic actions.
 - No missing button handlers.
 - No orphan click handlers.
-- English, French, German, and Spanish each contain 695 language keys.
-- 672 translated keys are actively referenced by the current application.
+- English, French, German, and Spanish each contain 721 language keys.
+- 698 translated keys are actively referenced by the current application.
 - Language dictionaries are in parity.
 - Hardcoded-label regression scan passed.
 - Character/display limits and duplicate-submit guards are present.
@@ -533,9 +583,25 @@ Passed syntax checks:
 - Desktop bridge contract passed.
 - 17 bridge methods verified.
 - 21 required SQLite tables verified.
-- 8 managed folders verified.
+- 9 managed folders verified, including machine-local integrations excluded from backups.
 - Temporary desktop spine save, managed-file write, reload, and reset passed.
 - Browser JSON to desktop migration preserved IDs, history, recovery records, and links.
+- API Arm Contract v0.1 passed: 3 implemented desktop operations, 11 arm types, 8 proposal types, 27 forbidden fields, and 11 stable error codes verified against the current Intake model and documentation.
+- API arm implementation passed: atomic acceptance, durable receipt mapping, exact-retry deduplication, idempotency conflict rejection, forbidden-authority rejection, missing-project rejection, Core isolation, stale-save merging, normal save/load, and backup/restore round trips.
+- Local Arm Transport passed: loopback-only binding, authentication, browser-origin rejection, rate/item limits, encrypted token storage, rotation/revocation, and generic connector submission.
+- File Arm passed: checksum verification, managed source storage, executable rejection, hidden managed paths, exact-retry deduplication, generic file connector submission, and backup inclusion.
+
+### Desktop Release Candidate
+
+- Electron 42.4.1 pinned with bundled Node 24.16.0 and SQLite 3.53.0.
+- Electron runtime SQLite write/read smoke passed.
+- Unpacked Windows x64 application built successfully.
+- Packaged ASAR and resources contained required runtime contracts and connectors with no user database or integration token.
+- Packaged executable SQLite write/read smoke passed.
+- Per-user NSIS installer built at `release/Project-State-Setup-0.1.0-x64.exe`.
+- Installer SHA-256 recorded in `release/release-candidate-manifest.json`.
+- Installer is unsigned and labeled test-only; public distribution remains blocked on code signing and real-time tests.
+- Real-time test sequence is ready in `REAL_TIME_TEST_PLAN.md`.
 
 ### Backup and Restore
 
@@ -551,7 +617,7 @@ Passed syntax checks:
 
 - 13 required application, documentation, schema, fixture, and desktop files existed and were non-empty.
 - SHA-256 hashes were generated for each required file during the run.
-- `app.js` contained 13,162 lines at test time.
+- `app.js` contained 13,431 lines at test time.
 - Longest source line was 408 characters; stored/displayed user content remains protected by explicit input and display limits.
 
 ### Debug Warnings and Boundaries
