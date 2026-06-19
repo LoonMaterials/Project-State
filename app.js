@@ -731,6 +731,24 @@ const LANGUAGES = {
     findLocalFile: "Find Local File",
     browseFile: "Browse for file…",
     browseFolder: "Browse for folder…",
+    filesLibrary: "Files",
+    filesLibrarySubtitle: "Import, review, and track managed project files.",
+    importFiles: "Import Files",
+    importFolder: "Import Folder",
+    noManagedFiles: "No managed files have been imported.",
+    pendingFileImports: "Pending File Imports",
+    approvedManagedFiles: "Approved Managed Files",
+    fileImportReview: "Review File Import",
+    fileImportReviewNotice: "Review the selected files and choose their destination project. Importing creates managed copies in Intake; it does not approve them into the project.",
+    importToIntake: "Import to Intake",
+    fileImportComplete: "Managed copies were created and sent to Intake.",
+    unsupportedFilesSkipped: "Unsupported or unreadable files skipped",
+    originalFilePreserved: "Original files remain in place and are never moved or deleted.",
+    managedCopy: "Managed copy",
+    originalLocation: "Original location",
+    selectedFiles: "Selected files",
+    fileImportFailed: "No files could be imported.",
+    recursiveFolderImport: "Folders are scanned recursively for supported files.",
     verifyFile: "Verify File",
     verifySourceFiles: "Verify Source Files",
     sourceFileVerification: "Source File Verification",
@@ -1456,6 +1474,24 @@ const LANGUAGES = {
     findLocalFile: "Trouver un fichier local",
     browseFile: "Parcourir les fichiers…",
     browseFolder: "Parcourir les dossiers…",
+    filesLibrary: "Fichiers",
+    filesLibrarySubtitle: "Importer, réviser et suivre les fichiers de projet gérés.",
+    importFiles: "Importer des fichiers",
+    importFolder: "Importer un dossier",
+    noManagedFiles: "Aucun fichier géré n’a été importé.",
+    pendingFileImports: "Importations de fichiers en attente",
+    approvedManagedFiles: "Fichiers gérés approuvés",
+    fileImportReview: "Réviser l’importation de fichiers",
+    fileImportReviewNotice: "Révisez les fichiers sélectionnés et choisissez leur projet de destination. L’importation crée des copies gérées dans l’entrée sans les approuver dans le projet.",
+    importToIntake: "Importer vers l’entrée",
+    fileImportComplete: "Des copies gérées ont été créées et envoyées à l’entrée.",
+    unsupportedFilesSkipped: "Fichiers non pris en charge ou illisibles ignorés",
+    originalFilePreserved: "Les fichiers originaux restent en place et ne sont jamais déplacés ni supprimés.",
+    managedCopy: "Copie gérée",
+    originalLocation: "Emplacement d’origine",
+    selectedFiles: "Fichiers sélectionnés",
+    fileImportFailed: "Aucun fichier n’a pu être importé.",
+    recursiveFolderImport: "Les dossiers sont analysés récursivement pour les fichiers pris en charge.",
     verifyFile: "Vérifier le fichier",
     verifySourceFiles: "Vérifier les fichiers source",
     sourceFileVerification: "Vérification des fichiers source",
@@ -2181,6 +2217,24 @@ const LANGUAGES = {
     findLocalFile: "Lokale Datei finden",
     browseFile: "Datei auswählen…",
     browseFolder: "Ordner auswählen…",
+    filesLibrary: "Dateien",
+    filesLibrarySubtitle: "Verwaltete Projektdateien importieren, prüfen und verfolgen.",
+    importFiles: "Dateien importieren",
+    importFolder: "Ordner importieren",
+    noManagedFiles: "Es wurden noch keine verwalteten Dateien importiert.",
+    pendingFileImports: "Ausstehende Dateiimporte",
+    approvedManagedFiles: "Genehmigte verwaltete Dateien",
+    fileImportReview: "Dateiimport prüfen",
+    fileImportReviewNotice: "Prüfen Sie die ausgewählten Dateien und wählen Sie das Zielprojekt. Der Import erstellt verwaltete Kopien im Eingang, genehmigt sie jedoch nicht für das Projekt.",
+    importToIntake: "In den Eingang importieren",
+    fileImportComplete: "Verwaltete Kopien wurden erstellt und an den Eingang gesendet.",
+    unsupportedFilesSkipped: "Nicht unterstützte oder unlesbare Dateien übersprungen",
+    originalFilePreserved: "Originaldateien bleiben erhalten und werden nie verschoben oder gelöscht.",
+    managedCopy: "Verwaltete Kopie",
+    originalLocation: "Ursprünglicher Speicherort",
+    selectedFiles: "Ausgewählte Dateien",
+    fileImportFailed: "Es konnten keine Dateien importiert werden.",
+    recursiveFolderImport: "Ordner werden rekursiv nach unterstützten Dateien durchsucht.",
     verifyFile: "Datei prüfen",
     verifySourceFiles: "Quelldateien prüfen",
     sourceFileVerification: "Quelldatei-Prüfung",
@@ -2906,6 +2960,24 @@ const LANGUAGES = {
     findLocalFile: "Buscar archivo local",
     browseFile: "Buscar archivo…",
     browseFolder: "Buscar carpeta…",
+    filesLibrary: "Archivos",
+    filesLibrarySubtitle: "Importa, revisa y controla archivos administrados del proyecto.",
+    importFiles: "Importar archivos",
+    importFolder: "Importar carpeta",
+    noManagedFiles: "No se han importado archivos administrados.",
+    pendingFileImports: "Importaciones de archivos pendientes",
+    approvedManagedFiles: "Archivos administrados aprobados",
+    fileImportReview: "Revisar importación de archivos",
+    fileImportReviewNotice: "Revisa los archivos seleccionados y elige su proyecto de destino. La importación crea copias administradas en Entrada; no las aprueba dentro del proyecto.",
+    importToIntake: "Importar a Entrada",
+    fileImportComplete: "Se crearon copias administradas y se enviaron a Entrada.",
+    unsupportedFilesSkipped: "Archivos no compatibles o ilegibles omitidos",
+    originalFilePreserved: "Los archivos originales permanecen en su lugar y nunca se mueven ni eliminan.",
+    managedCopy: "Copia administrada",
+    originalLocation: "Ubicación original",
+    selectedFiles: "Archivos seleccionados",
+    fileImportFailed: "No se pudo importar ningún archivo.",
+    recursiveFolderImport: "Las carpetas se analizan recursivamente en busca de archivos compatibles.",
     verifyFile: "Verificar archivo",
     verifySourceFiles: "Verificar archivos fuente",
     sourceFileVerification: "Verificación de archivos fuente",
@@ -3333,6 +3405,14 @@ function createDesktopPlatformAdapter(bridge) {
         if (typeof files.localPath === "function") return files.localPath(file);
         return browserLocalFilePath(file);
       },
+      async inspectImportSelection(payload) {
+        if (typeof files.inspectImportSelection === "function") return files.inspectImportSelection(payload);
+        return { candidates: [], skipped: [] };
+      },
+      async stageManagedFiles(payload) {
+        if (typeof files.stageManagedFiles === "function") return files.stageManagedFiles(payload);
+        return { staged: [], errors: [{ message: "Managed file import is unavailable." }] };
+      },
       async verifyLocalFile(reference) {
         if (typeof files.verifyLocalFile === "function") return files.verifyLocalFile(reference);
         return browserVerifyLocalFile(reference);
@@ -3371,6 +3451,9 @@ function createDesktopPlatformAdapter(bridge) {
       },
       async pickFolder(payload) {
         return typeof dialogs.pickFolder === "function" ? dialogs.pickFolder(payload) : null;
+      },
+      async pickFiles(payload) {
+        return typeof dialogs.pickFiles === "function" ? dialogs.pickFiles(payload) : [];
       }
     },
     armTransport: {
@@ -3401,6 +3484,7 @@ function createBrowserPlatformAdapter() {
     dialogs: {
       available: false,
       async pickFile() { return null; },
+      async pickFiles() { return []; },
       async pickFolder() { return null; }
     },
     storage: {
@@ -3434,6 +3518,8 @@ function createBrowserPlatformAdapter() {
     files: {
       metadata: browserFileMetadata,
       localPath: browserLocalFilePath,
+      async inspectImportSelection() { return { candidates: [], skipped: [] }; },
+      async stageManagedFiles() { return { staged: [], errors: [] }; },
       verifyLocalFile: browserVerifyLocalFile,
       readAsDataUrl: browserReadFileAsDataUrl,
       readAsText: browserReadFileAsText,
@@ -5007,7 +5093,7 @@ function normalizeIntakeQueueState(value, context = {}) {
 
 function createIntakeItem(input = {}) {
   const item = {
-    id: uid("intake"),
+    id: input.id || uid("intake"),
     armType: normalizeArmType(input.armType),
     status: "pending",
     reviewState: "needs_review",
@@ -5031,7 +5117,7 @@ function createIntakeItem(input = {}) {
   };
   store.intakeItems = Array.isArray(store.intakeItems) ? store.intakeItems : [];
   store.intakeItems.unshift(item);
-  saveStore({ allowWithoutCoreApproval: true, reason: "intake-only" });
+  if (input.save !== false) saveStore({ allowWithoutCoreApproval: true, reason: "intake-only" });
   return item;
 }
 
@@ -5592,10 +5678,10 @@ function currentActorCan(permission, project = getProject()) {
 }
 
 function actionPermission(action = "") {
-  if (["create-project", "add-decision", "add-fact", "add-conflict", "add-source", "add-relationship", "add-question", "add-action", "add-extract", "read-file-extract", "suggest-extract", "create-draft-project"].includes(action)) return "create";
-  if (["edit-status", "edit-object", "assign-object", "mark-complete", "attach-source", "attach-image", "archive-object", "unarchive-project", "manage-project-roles", "review-source-freshness", "verify-source-file", "verify-all-source-files", "archive-ai-work-order"].includes(action)) return "edit";
+  if (["create-project", "add-decision", "add-fact", "add-conflict", "add-source", "add-relationship", "add-question", "add-action", "add-extract", "read-file-extract", "suggest-extract", "create-draft-project", "import-files", "import-folder"].includes(action)) return "create";
+  if (["edit-status", "edit-object", "assign-object", "mark-complete", "attach-source", "attach-image", "archive-object", "unarchive-project", "manage-project-roles", "review-source-freshness", "verify-source-file", "verify-all-source-files", "archive-ai-work-order", "edit-file-source", "archive-file-source"].includes(action)) return "edit";
   if (["approve-intake", "approve-extract", "approve-draft-project"].includes(action)) return "approve";
-  if (["export-project", "export-handoff", "context-pack", "view-object-history", "show-history", "view-history", "show-changes-since"].includes(action)) return "audit";
+  if (["export-project", "export-handoff", "context-pack", "view-object-history", "show-history", "view-history", "show-changes-since", "history-file-source"].includes(action)) return "audit";
   if (["show-settings", "backup-storage", "restore-storage", "reset-local-data", "export-current-raw-data", "enable-arm-transport", "disable-arm-transport", "rotate-arm-transport-token", "revoke-arm-transport"].includes(action)) return "admin";
   return "";
 }
@@ -5897,6 +5983,7 @@ function render() {
   if (!activeProjectId) {
     if (activeRootView === "inbox") renderWorkInbox();
     else if (activeRootView === "work-orders") renderAiWorkOrders();
+    else if (activeRootView === "files") renderFilesLibrary();
     else if (activeRootView === "intake") renderIntakeQueue();
     else if (activeRootView === "archived") renderArchivedProjectList();
     else if (activeRootView === "settings") renderSettings();
@@ -6353,6 +6440,7 @@ function shell(inner) {
         ${!activeProjectId ? `<button class="btn secondary" data-action="show-projects">${escapeHtml(t("projects"))}</button>` : ""}
         ${!activeProjectId ? `<button class="btn secondary" data-action="show-inbox">${escapeHtml(t("needsAttention"))}${workInboxCount() ? ` (${workInboxCount()})` : ""}</button>` : ""}
         ${!activeProjectId ? `<button class="btn secondary" data-action="show-work-orders">${escapeHtml(t("aiWorkOrders"))}${activeAiWorkOrderCount() ? ` (${activeAiWorkOrderCount()})` : ""}</button>` : ""}
+        ${!activeProjectId ? `<button class="btn secondary" data-action="show-files">${escapeHtml(t("filesLibrary"))}</button>` : ""}
         ${!activeProjectId ? `<button class="btn secondary" data-action="show-archived-projects">${escapeHtml(t("archivedProjects"))}${archivedProjectCount() ? ` (${archivedProjectCount()})` : ""}</button>` : ""}
         ${!activeProjectId ? `<button class="btn secondary" data-action="show-intake">${escapeHtml(t("intake"))}${pendingIntakeCount() ? ` (${pendingIntakeCount()})` : ""}</button>` : ""}
         ${!activeProjectId ? `<button class="btn secondary" data-action="show-settings">${escapeHtml(t("settings"))}</button>` : ""}
@@ -7473,6 +7561,178 @@ function renderApprovalQueueSummary(stats) {
       `).join("")}
     </section>
   `;
+}
+
+function managedFileIntakeItems() {
+  return (store.intakeItems || []).filter((item) => item.evidence?.managedFile);
+}
+
+function managedSourceFiles() {
+  const files = [];
+  for (const project of store.projects || []) {
+    for (const source of project.sources || []) {
+      if (!source.managedPath) continue;
+      files.push({ project, source });
+    }
+  }
+  return files.sort((a, b) => dateSortValue(b.source.dateAdded) - dateSortValue(a.source.dateAdded));
+}
+
+function renderFilesLibrary() {
+  const intakeFiles = sortNewest(managedFileIntakeItems(), "createdAt");
+  const pending = intakeFiles.filter((item) => item.status !== "approved" && !item.archived);
+  const approved = managedSourceFiles();
+  shell(`
+    <section class="view-head">
+      <div>
+        <h1 class="view-title">${escapeHtml(t("filesLibrary"))}</h1>
+        <p class="view-subtitle">${escapeHtml(t("filesLibrarySubtitle"))}</p>
+      </div>
+      <div class="button-row">
+        <button class="btn" data-action="import-files">${escapeHtml(t("importFiles"))}</button>
+        <button class="btn secondary" data-action="import-folder">${escapeHtml(t("importFolder"))}</button>
+      </div>
+    </section>
+    <p class="notice">${escapeHtml(t("originalFilePreserved"))} ${escapeHtml(t("recursiveFolderImport"))}</p>
+    <section class="two-col-layout">
+      <article class="panel">
+        <div class="panel-head"><h2 class="panel-title">${escapeHtml(t("pendingFileImports"))}</h2></div>
+        ${pending.length ? `<div class="list">${pending.map(renderPendingManagedFile).join("")}</div>` : emptyText(t("noPendingIntake"))}
+      </article>
+      <article class="panel">
+        <div class="panel-head"><h2 class="panel-title">${escapeHtml(t("approvedManagedFiles"))}</h2></div>
+        ${approved.length ? `<div class="list">${approved.map(renderApprovedManagedFile).join("")}</div>` : emptyText(t("noManagedFiles"))}
+      </article>
+    </section>
+  `);
+}
+
+function renderPendingManagedFile(intake) {
+  const managed = intake.evidence.managedFile;
+  const original = intake.evidence.originalFile || {};
+  return `
+    <article class="item">
+      <p class="item-title">${escapeDisplay(managed.fileName || intake.title, DISPLAY_META_LIMIT)}</p>
+      <p class="item-meta">${escapeHtml(t("project"))}: ${escapeDisplay(projectNameById(intake.projectId) || t("missingProject"), DISPLAY_META_LIMIT)} · ${escapeHtml(t("status"))}: ${escapeHtml(intakeStatusLabel(intake))}</p>
+      <p class="item-meta">${escapeHtml(t("managedCopy"))}: ${escapeDisplay(managed.managedPath, DISPLAY_META_LIMIT)} · ${escapeHtml(formatBytes(managed.size || 0))}</p>
+      ${original.localPath ? `<p class="item-meta">${escapeHtml(t("originalLocation"))}: ${escapeDisplay(original.localPath, DISPLAY_META_LIMIT)}</p>` : ""}
+      <div class="item-actions"><button class="btn secondary compact" data-action="show-intake">${escapeHtml(t("goToIntake"))}</button></div>
+    </article>
+  `;
+}
+
+function renderApprovedManagedFile({ project, source }) {
+  const originalPath = source.localFile?.localPath || "";
+  return `
+    <article class="item">
+      <p class="item-title">${escapeDisplay(source.localFile?.name || source.title, DISPLAY_META_LIMIT)}</p>
+      <p class="item-meta">${escapeHtml(t("project"))}: ${escapeDisplay(project.name, DISPLAY_META_LIMIT)} · ${escapeHtml(t("status"))}: ${escapeHtml(source.status || "active")}</p>
+      <p class="item-meta">${escapeHtml(t("managedCopy"))}: ${escapeDisplay(source.managedPath, DISPLAY_META_LIMIT)}${source.localFile?.size ? ` · ${escapeHtml(formatBytes(source.localFile.size))}` : ""}</p>
+      ${originalPath ? `<p class="item-meta">${escapeHtml(t("originalLocation"))}: ${escapeDisplay(originalPath, DISPLAY_META_LIMIT)}</p>` : ""}
+      <div class="item-actions">
+        <button class="btn secondary compact" data-action="open-file-source" data-project-id="${escapeHtml(project.id)}" data-source-id="${escapeHtml(source.id)}">${escapeHtml(t("goToProject"))}</button>
+        <button class="btn secondary compact" data-action="edit-file-source" data-project-id="${escapeHtml(project.id)}" data-source-id="${escapeHtml(source.id)}">${escapeHtml(t("edit"))}</button>
+        ${source.status !== "archived" ? `<button class="btn secondary compact" data-action="archive-file-source" data-project-id="${escapeHtml(project.id)}" data-source-id="${escapeHtml(source.id)}">${escapeHtml(t("archive"))}</button>` : ""}
+        <button class="btn secondary compact" data-action="history-file-source" data-project-id="${escapeHtml(project.id)}" data-source-id="${escapeHtml(source.id)}">${escapeHtml(t("viewHistory"))}</button>
+      </div>
+    </article>
+  `;
+}
+
+async function beginFileImport(kind = "files") {
+  if (!platformAdapter.dialogs?.available) {
+    window.alert(t("fileImportFailed"));
+    return;
+  }
+  let paths = [];
+  if (kind === "folder") {
+    const folder = await platformAdapter.dialogs.pickFolder({ title: t("importFolder") });
+    if (folder?.localPath) paths = [folder.localPath];
+  } else {
+    const files = await platformAdapter.dialogs.pickFiles({ title: t("importFiles") });
+    paths = files.map((file) => file.localPath).filter(Boolean);
+  }
+  if (!paths.length) return;
+  const selection = await platformAdapter.files.inspectImportSelection({ paths });
+  if (!selection.candidates?.length) {
+    window.alert(t("fileImportFailed"));
+    return;
+  }
+  openFileImportReviewModal(selection);
+}
+
+function openFileImportReviewModal(selection) {
+  showModal({
+    title: t("fileImportReview"),
+    submitText: t("importToIntake"),
+    body: `
+      <p class="notice">${escapeHtml(t("fileImportReviewNotice"))}</p>
+      <p class="notice">${escapeHtml(t("originalFilePreserved"))}</p>
+      <div class="field">
+        <label for="projectId">${escapeHtml(t("project"))}</label>
+        <select id="projectId" name="projectId" required>${projectOptions()}</select>
+      </div>
+      <div class="field">
+        <label>${escapeHtml(t("selectedFiles"))} (${selection.candidates.length})</label>
+        <div class="list import-file-list">
+          ${selection.candidates.map((file) => `
+            <label class="check-field">
+              <input type="checkbox" data-import-path="${escapeHtml(file.localPath)}" checked>
+              <span><strong>${escapeDisplay(file.name, DISPLAY_META_LIMIT)}</strong><br>${escapeDisplay(file.localPath, DISPLAY_META_LIMIT)} · ${escapeHtml(formatBytes(file.size))}</span>
+            </label>
+          `).join("")}
+        </div>
+      </div>
+      ${selection.skipped?.length ? `<p class="notice">${escapeHtml(t("unsupportedFilesSkipped"))}: ${selection.skipped.length}</p>` : ""}
+      ${auditFields({ reasonLabel: t("reason") })}
+    `,
+    async onSubmit(data, form) {
+      const selectedPaths = [...form.querySelectorAll("[data-import-path]:checked")].map((field) => field.dataset.importPath);
+      const candidates = selection.candidates.filter((file) => selectedPaths.includes(file.localPath));
+      if (!candidates.length) return false;
+      const actor = getOrCreateActor(data.actorName, "Human");
+      const stagingInput = candidates.map((file) => ({ ...file, intakeId: uid("intake") }));
+      const result = await platformAdapter.files.stageManagedFiles({ files: stagingInput });
+      for (const staged of result.staged || []) {
+        createIntakeItem({
+          id: staged.intakeId,
+          armType: "file",
+          title: staged.fileName,
+          projectId: data.projectId,
+          createdBy: actor.id,
+          sourceLabel: staged.originalPath,
+          proposedObjectType: "Source",
+          proposedChange: {
+            text: staged.fileName,
+            summary: String(data.reason || "").trim()
+          },
+          evidence: {
+            managedFile: {
+              fileName: staged.fileName,
+              contentType: staged.contentType,
+              size: staged.size,
+              sha256: staged.sha256,
+              managedPath: staged.managedPath
+            },
+            originalFile: {
+              localPath: staged.originalPath,
+              lastModified: staged.lastModified
+            }
+          },
+          save: false
+        });
+      }
+      if (!result.staged?.length) {
+        window.alert(t("fileImportFailed"));
+        return false;
+      }
+      saveStore({ allowWithoutCoreApproval: true, reason: "managed-file-intake" });
+      activeRootView = "files";
+      activeProjectId = null;
+      setSaveStatus("saved", t("fileImportComplete"));
+      return true;
+    }
+  });
 }
 
 function renderIntakeQueue() {
@@ -10736,14 +10996,15 @@ function applyApprovedIntakeToCore(intake, actor, reason, approval) {
       tags: [],
       extracts: [],
       status: "active",
+      intakeId: intake.id,
       managedPath: managedFile?.managedPath || "",
       checksum: managedFile?.sha256 || "",
       localFile: managedFile ? {
         name: managedFile.fileName || text || intake.title,
         type: managedFile.contentType || "",
         size: Number(managedFile.size || 0),
-        lastModified: "",
-        localPath: ""
+        lastModified: intake.evidence?.originalFile?.lastModified || "",
+        localPath: intake.evidence?.originalFile?.localPath || ""
       } : null,
       fileVerification: managedFile ? {
         status: "verified",
@@ -12334,11 +12595,13 @@ function sourceFileReference(source = {}) {
   return {
     localPath,
     path: localPath,
+    managedPath: source.managedPath || "",
     expected: {
       name: localFile.name || source.title || "",
       type: localFile.type || source.sourceType || "",
       size: Number(localFile.size || 0),
-      lastModified: localFile.lastModified || ""
+      lastModified: localFile.lastModified || "",
+      sha256: source.checksum || ""
     }
   };
 }
@@ -13212,6 +13475,11 @@ app.addEventListener("click", (event) => {
     activeProjectId = null;
     render();
   }
+  if (action === "show-files") {
+    activeRootView = "files";
+    activeProjectId = null;
+    render();
+  }
   if (action === "show-archived-projects") {
     activeRootView = "archived";
     activeProjectId = null;
@@ -13229,6 +13497,33 @@ app.addEventListener("click", (event) => {
     refreshArmTransportStatus().then(() => {
       if (activeRootView === "settings") render();
     });
+  }
+  if (action === "import-files") beginFileImport("files");
+  if (action === "import-folder") beginFileImport("folder");
+  if (action === "open-file-source") {
+    openProjectNow(button.dataset.projectId, "dashboard");
+    activeObjectDetail = { projectId: button.dataset.projectId, objectType: "Source", objectId: button.dataset.sourceId };
+    render();
+  }
+  if (action === "edit-file-source") {
+    const project = getProject(button.dataset.projectId);
+    const source = project?.sources.find((item) => item.id === button.dataset.sourceId);
+    if (project && source) {
+      activeProjectId = project.id;
+      openEditSourceModal(project, source);
+    }
+  }
+  if (action === "archive-file-source") {
+    activeProjectId = button.dataset.projectId;
+    openArchiveObjectModal("Source", button.dataset.sourceId);
+  }
+  if (action === "history-file-source") {
+    activeProjectId = button.dataset.projectId;
+    activeRootView = "projects";
+    activeHistoryFilter = { objectType: "Source", objectId: button.dataset.sourceId };
+    activeView = "history";
+    activeHistoryEventType = "all";
+    render();
   }
   if (action === "enable-arm-transport") openArmTransportActionModal("enable");
   if (action === "disable-arm-transport") openArmTransportActionModal("disable");

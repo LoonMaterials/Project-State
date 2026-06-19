@@ -18,6 +18,8 @@ Project State Storage/
 ├─ sources/
 ├─ extracts/
 ├─ attachments/
+├─ quarantine/
+├─ discovery/
 ├─ backups/
 ├─ recovery/
 ├─ manifests/
@@ -50,6 +52,13 @@ Use SQLite for structured records:
 - `draft_projects`
 - `approval_records`
 - `recovery_records`
+- `file_assets`
+- `file_versions`
+- `discovery_cases`
+- `discovery_case_files`
+- `discovery_interactions`
+- `security_receipts`
+- `discovery_events`
 
 Managed Folders
 
@@ -58,6 +67,8 @@ Use folders for large evidence and source material:
 - `sources/`: original imported files, copied source documents, chat exports, notes, and evidence files.
 - `extracts/`: long extract text, chunk text, parsed chat segments, OCR/transcription output later.
 - `attachments/`: screenshots, images, and attached media.
+- `quarantine/`: immutable incoming File Versions awaiting or carrying exact-checksum Security receipts. Files here are not eligible for preview, extraction, indexing, AI transmission, or routing until Security permits it.
+- `discovery/`: Discovery metadata artifacts and future deterministic derivatives kept outside approved Core sources.
 - `backups/`: user-controlled backup packages.
 - `recovery/`: failed loads, failed migrations, corrupt raw data exports.
 - `manifests/`: file checksums, table counts, backup manifests, integrity reports.
@@ -78,7 +89,22 @@ extracts/extract_456/full-text.txt
 extracts/extract_456/chunks/chunk_001.txt
 attachments/image_789/screenshot.webp
 manifests/2026-06-15-integrity.json
+quarantine/file_asset_123/file_version_456/original.pdf
 ```
+
+Discovery Foundation Rule
+
+Discovery storage is additive and project-independent:
+
+```text
+FileAsset
+  -> FileVersion
+  -> SecurityReceipt
+  -> DiscoveryCase membership
+  -> Interaction and DiscoveryEvent history
+```
+
+A DiscoveryCase does not require a project. File Versions, Security Receipts, Discovery Interactions, and Discovery Events are append-only. A SecurityReceipt is linked by database constraint to the exact File Asset, File Version, and SHA-256 it reports on. These storage records do not grant an outside arm human confirmation, Intake approval, or Core authority.
 
 Intake Airlock Rule
 
@@ -155,7 +181,7 @@ Backup cannot silently be the same location as primary storage.
 A desktop backup package should include:
 
 - SQLite database snapshot
-- managed source/extract/attachment files
+- managed source/extract/attachment, quarantine, and Discovery files
 - manifest with counts and checksums
 - actor
 - timestamp

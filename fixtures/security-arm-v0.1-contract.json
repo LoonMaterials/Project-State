@@ -1,0 +1,63 @@
+{
+  "app": "Project State",
+  "contractType": "SecurityArm",
+  "contractVersion": "0.1",
+  "implementationStatus": "foundation_contract",
+  "requiredAtFirstRun": true,
+  "failClosed": true,
+  "operations": [
+    "describeCapabilities",
+    "healthCheck",
+    "scanStagedFile",
+    "getScanReceipt",
+    "rescanStagedFile",
+    "revokeProvider"
+  ],
+  "verdicts": [
+    "clean",
+    "threat_detected",
+    "suspicious",
+    "unknown",
+    "error"
+  ],
+  "contentEligibleVerdicts": [
+    "clean"
+  ],
+  "stableErrors": [
+    "SECURITY_ARM_NOT_CONFIGURED",
+    "SECURITY_ARM_UNAVAILABLE",
+    "SECURITY_HEALTH_CHECK_FAILED",
+    "SCAN_FAILED",
+    "THREAT_DETECTED",
+    "VERDICT_SUSPICIOUS",
+    "VERDICT_UNKNOWN",
+    "SECURITY_RECEIPT_STALE",
+    "FILE_VERSION_MISMATCH",
+    "SCAN_SCOPE_REJECTED"
+  ],
+  "receiptRequiredFields": [
+    "receiptId",
+    "scanJobId",
+    "fileAssetId",
+    "fileVersionId",
+    "sha256",
+    "verdict",
+    "eligible",
+    "providerId",
+    "startedAt",
+    "completedAt"
+  ],
+  "forbiddenAuthority": [
+    "selectProject",
+    "createProject",
+    "confirmDiscoveryAnswer",
+    "confirmRouting",
+    "approveIntake",
+    "writeCore",
+    "deleteOriginalFile",
+    "scanArbitraryPath",
+    "rewriteReceiptHistory"
+  ],
+  "aetherInitialProviderProfile": "windows_defender",
+  "providerSpecificCommands": "TBD_PENDING_OFFICIAL_PROVIDER_DOCUMENTATION"
+}

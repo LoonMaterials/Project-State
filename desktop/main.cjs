@@ -90,6 +90,19 @@ function registerNativeDialogIpc() {
     if (result.canceled || !result.filePaths[0]) return null;
     return { localPath: path.resolve(result.filePaths[0]) };
   });
+
+  ipcMain.handle("native-dialog:pick-files", async (event, payload = {}) => {
+    if (!trustedRenderer(event)) throw new Error("Untrusted renderer request.");
+    const filters = Array.isArray(payload.filters) ? payload.filters : [];
+    const options = {
+      title: String(payload.title || "Choose files"),
+      properties: ["openFile", "multiSelections"],
+      filters
+    };
+    const result = mainWindow ? await dialog.showOpenDialog(mainWindow, options) : await dialog.showOpenDialog(options);
+    if (result.canceled) return [];
+    return result.filePaths.map((filePath) => ({ localPath: path.resolve(filePath), name: path.basename(filePath) }));
+  });
 }
 
 app.whenReady().then(async () => {

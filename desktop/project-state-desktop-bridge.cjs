@@ -11,9 +11,12 @@ const SCHEMA_FILE = path.join(__dirname, "spine-schema.sql");
 const API_ARM_CONTRACT_FILE = path.join(ROOT, "fixtures", "api-arm-v0.1-contract.json");
 const DEFAULT_STORAGE_ROOT = path.join(os.homedir(), "Project State Storage");
 const DATABASE_FILE = "project-state.db";
-const FOLDERS = ["sources", "extracts", "attachments", "backups", "recovery", "manifests", "logs", "temp", "integrations"];
+const FOLDERS = ["sources", "extracts", "attachments", "quarantine", "discovery", "backups", "recovery", "manifests", "logs", "temp", "integrations"];
 const SPLIT_TABLES = ["projects", "changes", "sources", "extracts", "attachments", "draft_projects"];
-const BACKUP_MANAGED_FOLDERS = ["sources", "extracts", "attachments", "manifests", "recovery"];
+const BACKUP_MANAGED_FOLDERS = ["sources", "extracts", "attachments", "quarantine", "discovery", "manifests", "recovery"];
+const IMPORT_FILE_EXTENSIONS = new Set([".pdf", ".docx", ".txt", ".md", ".csv", ".json", ".png", ".jpg", ".jpeg", ".webp", ".gif"]);
+const MAX_IMPORT_FILE_BYTES = 26214400;
+const MAX_IMPORT_FILES = 500;
 const REQUIRED_TABLES = [
   "meta",
   "actors",
@@ -35,7 +38,14 @@ const REQUIRED_TABLES = [
   "proposal_items",
   "draft_projects",
   "approval_records",
-  "recovery_records"
+  "recovery_records",
+  "file_assets",
+  "file_versions",
+  "discovery_cases",
+  "discovery_case_files",
+  "discovery_interactions",
+  "security_receipts",
+  "discovery_events"
 ];
 
 function createProjectStateDesktopBridge(options = {}) {
@@ -88,14 +98,71 @@ function createProjectStateDesktopBridge(options = {}) {
         return getApiArmReceipt({ storageRoot, dbPath, submissionId });
       }
     },
+    discoveryStorage: {
+      async initialize() {
+        return initializeDiscoveryStorage({ storageRoot, dbPath });
+      },
+      async registerFileVersion(payload = {}) {
+        return registerDiscoveryFileVersion({ storageRoot, dbPath, payload });
+      },
+      async createCase(payload = {}) {
+        return createDiscoveryCase({ storageRoot, dbPath, payload });
+      },
+      async attachFileVersion(payload = {}) {
+        return attachDiscoveryFileVersion({ storageRoot, dbPath, payload });
+      },
+      async appendInteraction(payload = {}) {
+        return appendDiscoveryInteraction({ storageRoot, dbPath, payload });
+      },
+      async appendSecurityReceipt(payload = {}) {
+        return appendDiscoverySecurityReceipt({ storageRoot, dbPath, payload });
+      },
+      async appendEvent(payload = {}) {
+        return appendDiscoveryEvent({ storageRoot, dbPath, payload });
+      },
+      async readFoundationState(payload = {}) {
+        return readDiscoveryFoundationState({ storageRoot, dbPath, payload });
+      }
+    },
+    securityArms: {
+      async authorizeContentAccess(reference = {}) {
+        return authorizeDiscoveryContentAccess({ storageRoot, dbPath, reference });
+      }
+    },
     files: {
       metadata,
       localPath,
-      verifyLocalFile,
-      readAsDataUrl,
-      readAsText,
-      readAsArrayBuffer,
-      extractText,
+      async inspectImportSelection(payload = {}) {
+        return inspectImportSelection(payload);
+      },
+      async stageManagedFiles(payload = {}) {
+        return stageManagedFiles({ storageRoot, ...payload });
+      },
+      verifyLocalFile(reference = {}) {
+        if (reference?.managedPath) {
+          return verifyLocalFile({
+            ...reference,
+            path: resolveManagedPath(storageRoot, reference.managedPath)
+          });
+        }
+        return verifyLocalFile(reference);
+      },
+      async readAsDataUrl(file) {
+        await authorizeDiscoveryContentAccess({ storageRoot, dbPath, reference: file });
+        return readAsDataUrl(resolveDiscoveryReadReference(storageRoot, file));
+      },
+      async readAsText(file) {
+        await authorizeDiscoveryContentAccess({ storageRoot, dbPath, reference: file });
+        return readAsText(resolveDiscoveryReadReference(storageRoot, file));
+      },
+      async readAsArrayBuffer(file) {
+        await authorizeDiscoveryContentAccess({ storageRoot, dbPath, reference: file });
+        return readAsArrayBuffer(resolveDiscoveryReadReference(storageRoot, file));
+      },
+      async extractText(file) {
+        await authorizeDiscoveryContentAccess({ storageRoot, dbPath, reference: file });
+        return extractText(resolveDiscoveryReadReference(storageRoot, file));
+      },
       async inflateRaw(bytes) {
         return new Uint8Array(zlib.inflateRawSync(Buffer.from(bytes)));
       }
@@ -106,6 +173,102 @@ function createProjectStateDesktopBridge(options = {}) {
       }
     }
   };
+}
+
+async function inspectImportSelection({ paths = [] } = {}) {
+  const candidates = [];
+  const skipped = [];
+  const seen = new Set();
+
+  async function inspectPath(inputPath) {
+    if (candidates.length >= MAX_IMPORT_FILES) {
+      skipped.push({ localPath: String(inputPath || ""), reason: "File selection limit reached." });
+      return;
+    }
+    const localPath = path.resolve(String(inputPath || ""));
+    if (seen.has(localPath)) return;
+    seen.add(localPath);
+    let stat;
+    try {
+      stat = await fsp.lstat(localPath);
+    } catch {
+      skipped.push({ localPath, reason: "File or folder could not be read." });
+      return;
+    }
+    if (stat.isSymbolicLink()) {
+      skipped.push({ localPath, reason: "Symbolic links are not imported." });
+      return;
+    }
+    if (stat.isDirectory()) {
+      const entries = await fsp.readdir(localPath);
+      for (const entry of entries.sort((a, b) => a.localeCompare(b))) await inspectPath(path.join(localPath, entry));
+      return;
+    }
+    if (!stat.isFile()) return;
+    const extension = path.extname(localPath).toLowerCase();
+    if (!IMPORT_FILE_EXTENSIONS.has(extension)) {
+      skipped.push({ localPath, reason: "File type is not supported." });
+      return;
+    }
+    if (!stat.size) {
+      skipped.push({ localPath, reason: "Empty files are not imported." });
+      return;
+    }
+    if (stat.size > MAX_IMPORT_FILE_BYTES) {
+      skipped.push({ localPath, reason: "File exceeds the 25 MB import limit." });
+      return;
+    }
+    candidates.push({
+      localPath,
+      name: path.basename(localPath),
+      contentType: mimeFromFileName(localPath),
+      size: stat.size,
+      lastModified: stat.mtime.toISOString()
+    });
+  }
+
+  for (const inputPath of Array.isArray(paths) ? paths : []) await inspectPath(inputPath);
+  return { candidates, skipped, limits: { maxFiles: MAX_IMPORT_FILES, maxFileBytes: MAX_IMPORT_FILE_BYTES } };
+}
+
+async function stageManagedFiles({ storageRoot, files = [] } = {}) {
+  await ensureSpine(storageRoot);
+  const staged = [];
+  const errors = [];
+  for (const file of Array.isArray(files) ? files.slice(0, MAX_IMPORT_FILES) : []) {
+    const intakeId = String(file.intakeId || "").trim();
+    const localPath = path.resolve(String(file.localPath || ""));
+    try {
+      if (!/^intake_[A-Za-z0-9_-]+$/.test(intakeId)) throw new Error("A valid Intake ID is required.");
+      const stat = await fsp.lstat(localPath);
+      const extension = path.extname(localPath).toLowerCase();
+      if (!stat.isFile() || stat.isSymbolicLink()) throw new Error("Only regular files can be imported.");
+      if (!IMPORT_FILE_EXTENSIONS.has(extension)) throw new Error("File type is not supported.");
+      if (!stat.size || stat.size > MAX_IMPORT_FILE_BYTES) throw new Error("File size is outside the allowed range.");
+      const bytes = await fsp.readFile(localPath);
+      const sha256 = crypto.createHash("sha256").update(bytes).digest("hex");
+      const fileName = safeFileName(path.basename(localPath));
+      const targetPath = path.join(storageRoot, "sources", intakeId, fileName);
+      const tempPath = path.join(storageRoot, "temp", `${intakeId}-${Date.now()}-${fileName}.import`);
+      await fsp.mkdir(path.dirname(tempPath), { recursive: true });
+      await fsp.writeFile(tempPath, bytes, { flag: "wx" });
+      await fsp.mkdir(path.dirname(targetPath), { recursive: true });
+      await fsp.rename(tempPath, targetPath);
+      staged.push({
+        intakeId,
+        fileName,
+        contentType: mimeFromFileName(fileName),
+        size: bytes.length,
+        sha256,
+        managedPath: relativeManagedPath(storageRoot, targetPath),
+        originalPath: localPath,
+        lastModified: stat.mtime.toISOString()
+      });
+    } catch (error) {
+      errors.push({ intakeId, localPath, message: error.message });
+    }
+  }
+  return { staged, errors };
 }
 
 function readApiArmContract() {
@@ -429,6 +592,424 @@ function openDatabase(dbPath) {
   const db = new DatabaseSync(dbPath);
   db.exec(fs.readFileSync(SCHEMA_FILE, "utf8"));
   return db;
+}
+
+const DISCOVERY_CASE_STATUSES = new Set(["created", "security_pending", "security_blocked", "extracting", "questioning", "routing", "ready_for_intake", "promoted", "archived"]);
+const DISCOVERY_STAGES = new Set(["add", "quarantine", "security", "extract", "discovery", "questions", "routing", "intake", "human_approval", "core"]);
+const DISCOVERY_PRIVACY_CLASSES = new Set(["local_only", "personal", "confidential", "restricted", "provider_allowed"]);
+const DISCOVERY_INTERACTION_TYPES = new Set(["system_question", "user_answer", "user_correction", "machine_suggestion", "routing_proposal", "routing_confirmation", "processing_event"]);
+const SECURITY_VERDICTS = new Set(["clean", "threat_detected", "suspicious", "unknown", "error"]);
+
+async function initializeDiscoveryStorage({ storageRoot, dbPath }) {
+  await ensureSpine(storageRoot);
+  const db = openDatabase(dbPath);
+  try {
+    return {
+      ok: true,
+      source: "discovery-storage-foundation",
+      schema: readMeta(db, "discovery_schema"),
+      counts: discoveryTableCounts(db)
+    };
+  } finally {
+    db.close();
+  }
+}
+
+async function registerDiscoveryFileVersion({ storageRoot, dbPath, payload = {} }) {
+  await ensureSpine(storageRoot);
+  const requestedAssetId = requiredDiscoveryId(payload.fileAssetId || payload.assetId, "File Asset ID");
+  const requestedVersionId = requiredDiscoveryId(payload.fileVersionId || payload.versionId, "File Version ID");
+  const sha256 = requiredSha256(payload.sha256);
+  const byteSize = Number(payload.byteSize);
+  if (!Number.isSafeInteger(byteSize) || byteSize < 0) throw new Error("File Version byte size must be a non-negative integer.");
+  const originalName = requiredDiscoveryText(payload.originalName, "File Version original name");
+  const managedPath = requiredQuarantinePath(payload.managedPath);
+  const createdAt = requiredDiscoveryTimestamp(payload.createdAt || nowIso(), "File Version createdAt");
+  const privacyClass = String(payload.privacyClass || "local_only");
+  if (!DISCOVERY_PRIVACY_CLASSES.has(privacyClass)) throw new Error("File Asset privacy class is not supported.");
+
+  const physicalPath = resolveManagedPath(storageRoot, managedPath);
+  if (!fs.existsSync(physicalPath) || !fs.statSync(physicalPath).isFile()) throw new Error("Quarantined File Version is missing.");
+  const physicalSize = fs.statSync(physicalPath).size;
+  if (physicalSize !== byteSize) throw new Error("Quarantined File Version byte size mismatch.");
+  if (await checksumFile(physicalPath) !== sha256) throw new Error("Quarantined File Version checksum mismatch.");
+
+  const db = openDatabase(dbPath);
+  try {
+    db.exec("BEGIN IMMEDIATE TRANSACTION");
+    const assetMatch = db.prepare("SELECT id, record_json FROM file_assets WHERE sha256 = ?").get(sha256);
+    const assetId = assetMatch?.id || requestedAssetId;
+    if (!assetMatch) {
+      const asset = {
+        id: assetId,
+        sha256,
+        createdAt,
+        privacyClass,
+        retentionState: payload.retentionState || "active"
+      };
+      insertStrict(db, "file_assets", {
+        id: asset.id,
+        sha256,
+        created_at: createdAt,
+        privacy_class: privacyClass,
+        retention_state: asset.retentionState,
+        record_json: JSON.stringify(asset)
+      });
+    }
+
+    const versionMatch = db.prepare("SELECT id, record_json FROM file_versions WHERE file_asset_id = ? AND sha256 = ?").get(assetId, sha256);
+    if (versionMatch) {
+      db.exec("COMMIT");
+      return {
+        ok: true,
+        deduplicated: true,
+        fileAsset: JSON.parse(assetMatch?.record_json || db.prepare("SELECT record_json FROM file_assets WHERE id = ?").get(assetId).record_json),
+        fileVersion: JSON.parse(versionMatch.record_json)
+      };
+    }
+
+    const version = {
+      id: requestedVersionId,
+      fileAssetId: assetId,
+      sha256,
+      byteSize,
+      originalName,
+      managedPath,
+      createdAt,
+      securityState: "pending"
+    };
+    insertStrict(db, "file_versions", {
+      id: version.id,
+      file_asset_id: assetId,
+      sha256,
+      byte_size: byteSize,
+      original_name: originalName,
+      managed_path: managedPath,
+      created_at: createdAt,
+      record_json: JSON.stringify(version)
+    });
+    db.exec("COMMIT");
+    return {
+      ok: true,
+      deduplicated: Boolean(assetMatch),
+      fileAsset: assetMatch ? JSON.parse(assetMatch.record_json) : dbRecord(db, "file_assets", assetId),
+      fileVersion: version
+    };
+  } catch (error) {
+    try { db.exec("ROLLBACK"); } catch {}
+    throw error;
+  } finally {
+    db.close();
+  }
+}
+
+async function createDiscoveryCase({ storageRoot, dbPath, payload = {} }) {
+  await ensureSpine(storageRoot);
+  const id = requiredDiscoveryId(payload.id || payload.discoveryCaseId, "Discovery Case ID");
+  const createdBy = requiredDiscoveryId(payload.createdBy || payload.actorId, "Discovery Case creator");
+  const createdAt = requiredDiscoveryTimestamp(payload.createdAt || nowIso(), "Discovery Case createdAt");
+  const stage = String(payload.stage || "quarantine");
+  const status = String(payload.status || "created");
+  if (!DISCOVERY_STAGES.has(stage)) throw new Error("Discovery Case stage is not supported.");
+  if (!DISCOVERY_CASE_STATUSES.has(status)) throw new Error("Discovery Case status is not supported.");
+  const record = {
+    ...cloneJson(payload),
+    id,
+    createdBy,
+    createdAt,
+    updatedAt: createdAt,
+    stage,
+    status,
+    confirmedProjectId: payload.confirmedProjectId || null
+  };
+  const db = openDatabase(dbPath);
+  try {
+    insertStrict(db, "discovery_cases", {
+      id,
+      created_by: createdBy,
+      created_at: createdAt,
+      updated_at: createdAt,
+      stage,
+      status,
+      confirmed_project_id: record.confirmedProjectId,
+      record_json: JSON.stringify(record)
+    });
+    return { ok: true, discoveryCase: record };
+  } finally {
+    db.close();
+  }
+}
+
+async function attachDiscoveryFileVersion({ storageRoot, dbPath, payload = {} }) {
+  await ensureSpine(storageRoot);
+  const id = requiredDiscoveryId(payload.id || payload.membershipId, "Discovery file membership ID");
+  const discoveryCaseId = requiredDiscoveryId(payload.discoveryCaseId, "Discovery Case ID");
+  const fileAssetId = requiredDiscoveryId(payload.fileAssetId, "File Asset ID");
+  const fileVersionId = requiredDiscoveryId(payload.fileVersionId, "File Version ID");
+  const addedAt = requiredDiscoveryTimestamp(payload.addedAt || nowIso(), "Discovery file addedAt");
+  const record = { id, discoveryCaseId, fileAssetId, fileVersionId, addedAt, groupingRationale: String(payload.groupingRationale || "") };
+  const db = openDatabase(dbPath);
+  try {
+    insertStrict(db, "discovery_case_files", {
+      id,
+      discovery_case_id: discoveryCaseId,
+      file_asset_id: fileAssetId,
+      file_version_id: fileVersionId,
+      added_at: addedAt,
+      grouping_rationale: record.groupingRationale,
+      record_json: JSON.stringify(record)
+    });
+    return { ok: true, membership: record };
+  } finally {
+    db.close();
+  }
+}
+
+async function appendDiscoveryInteraction({ storageRoot, dbPath, payload = {} }) {
+  await ensureSpine(storageRoot);
+  const id = requiredDiscoveryId(payload.id, "Interaction ID");
+  const discoveryCaseId = requiredDiscoveryId(payload.discoveryCaseId, "Discovery Case ID");
+  const actorId = requiredDiscoveryId(payload.actorId, "Interaction actor ID");
+  const actorType = requiredDiscoveryText(payload.actorType, "Interaction actor type");
+  const interactionType = String(payload.interactionType || "");
+  if (!DISCOVERY_INTERACTION_TYPES.has(interactionType)) throw new Error("Discovery interaction type is not supported.");
+  if (actorType !== "human" && ["user_answer", "user_correction", "routing_confirmation"].includes(interactionType)) {
+    throw new Error("Only a human actor may append a user answer, correction, or routing confirmation.");
+  }
+  const createdAt = requiredDiscoveryTimestamp(payload.createdAt || nowIso(), "Interaction createdAt");
+  const record = { ...cloneJson(payload), id, discoveryCaseId, actorId, actorType, interactionType, createdAt };
+  const db = openDatabase(dbPath);
+  try {
+    insertStrict(db, "discovery_interactions", {
+      id,
+      discovery_case_id: discoveryCaseId,
+      actor_id: actorId,
+      actor_type: actorType,
+      interaction_type: interactionType,
+      created_at: createdAt,
+      supersedes_interaction_id: payload.supersedesInteractionId || null,
+      record_json: JSON.stringify(record)
+    });
+    return { ok: true, interaction: record };
+  } finally {
+    db.close();
+  }
+}
+
+async function appendDiscoverySecurityReceipt({ storageRoot, dbPath, payload = {} }) {
+  await ensureSpine(storageRoot);
+  const id = requiredDiscoveryId(payload.id, "Security Receipt ID");
+  const scanJobId = requiredDiscoveryId(payload.scanJobId, "Security scan job ID");
+  const fileAssetId = requiredDiscoveryId(payload.fileAssetId, "File Asset ID");
+  const fileVersionId = requiredDiscoveryId(payload.fileVersionId, "File Version ID");
+  const sha256 = requiredSha256(payload.sha256);
+  const verdict = String(payload.verdict || "");
+  if (!SECURITY_VERDICTS.has(verdict)) throw new Error("Security Receipt verdict is not supported.");
+  const eligible = verdict === "clean";
+  const providerId = requiredDiscoveryText(payload.providerId, "Security provider ID");
+  const startedAt = requiredDiscoveryTimestamp(payload.startedAt, "Security Receipt startedAt");
+  const completedAt = requiredDiscoveryTimestamp(payload.completedAt, "Security Receipt completedAt");
+  const record = { ...cloneJson(payload), id, scanJobId, fileAssetId, fileVersionId, sha256, verdict, eligible, providerId, startedAt, completedAt };
+  const db = openDatabase(dbPath);
+  try {
+    insertStrict(db, "security_receipts", {
+      id,
+      scan_job_id: scanJobId,
+      file_asset_id: fileAssetId,
+      file_version_id: fileVersionId,
+      sha256,
+      verdict,
+      eligible: eligible ? 1 : 0,
+      provider_id: providerId,
+      started_at: startedAt,
+      completed_at: completedAt,
+      supersedes_receipt_id: payload.supersedesReceiptId || null,
+      record_json: JSON.stringify(record)
+    });
+    return { ok: true, securityReceipt: record };
+  } finally {
+    db.close();
+  }
+}
+
+async function appendDiscoveryEvent({ storageRoot, dbPath, payload = {} }) {
+  await ensureSpine(storageRoot);
+  const id = requiredDiscoveryId(payload.id, "Discovery Event ID");
+  const discoveryCaseId = requiredDiscoveryId(payload.discoveryCaseId, "Discovery Case ID");
+  const eventType = requiredDiscoveryText(payload.eventType, "Discovery Event type");
+  const actorId = requiredDiscoveryId(payload.actorId, "Discovery Event actor ID");
+  const actorType = requiredDiscoveryText(payload.actorType, "Discovery Event actor type");
+  const occurredAt = requiredDiscoveryTimestamp(payload.occurredAt || nowIso(), "Discovery Event occurredAt");
+  const record = { ...cloneJson(payload), id, discoveryCaseId, eventType, actorId, actorType, occurredAt };
+  const db = openDatabase(dbPath);
+  try {
+    insertStrict(db, "discovery_events", {
+      id,
+      discovery_case_id: discoveryCaseId,
+      event_type: eventType,
+      actor_id: actorId,
+      actor_type: actorType,
+      occurred_at: occurredAt,
+      record_json: JSON.stringify(record)
+    });
+    return { ok: true, discoveryEvent: record };
+  } finally {
+    db.close();
+  }
+}
+
+async function readDiscoveryFoundationState({ storageRoot, dbPath, payload = {} }) {
+  await ensureSpine(storageRoot);
+  const db = openDatabase(dbPath);
+  try {
+    const caseId = String(payload.discoveryCaseId || "").trim();
+    const cases = caseId
+      ? db.prepare("SELECT record_json FROM discovery_cases WHERE id = ?").all(caseId).map(parseRecordRow)
+      : readRecordJson(db, "discovery_cases");
+    const whereCase = (table) => caseId
+      ? db.prepare(`SELECT record_json FROM ${table} WHERE discovery_case_id = ? ORDER BY rowid`).all(caseId).map(parseRecordRow)
+      : readRecordJson(db, table);
+    return {
+      ok: true,
+      schema: readMeta(db, "discovery_schema"),
+      counts: discoveryTableCounts(db),
+      fileAssets: readRecordJson(db, "file_assets"),
+      fileVersions: readRecordJson(db, "file_versions"),
+      discoveryCases: cases,
+      caseFiles: whereCase("discovery_case_files"),
+      interactions: whereCase("discovery_interactions"),
+      securityReceipts: readRecordJson(db, "security_receipts"),
+      events: whereCase("discovery_events")
+    };
+  } finally {
+    db.close();
+  }
+}
+
+function discoveryTableCounts(db) {
+  return {
+    fileAssets: countRows(db, "file_assets"),
+    fileVersions: countRows(db, "file_versions"),
+    discoveryCases: countRows(db, "discovery_cases"),
+    caseFiles: countRows(db, "discovery_case_files"),
+    interactions: countRows(db, "discovery_interactions"),
+    securityReceipts: countRows(db, "security_receipts"),
+    events: countRows(db, "discovery_events")
+  };
+}
+
+function requiredDiscoveryId(value, label) {
+  const text = String(value || "").trim();
+  if (!text || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(text)) throw new Error(`${label} is required and must be a stable ID.`);
+  return text;
+}
+
+function requiredDiscoveryText(value, label) {
+  const text = String(value || "").trim();
+  if (!text) throw new Error(`${label} is required.`);
+  return text;
+}
+
+function requiredDiscoveryTimestamp(value, label) {
+  if (!validIsoTimestamp(value)) throw new Error(`${label} must be a valid ISO timestamp.`);
+  return String(value);
+}
+
+function requiredSha256(value) {
+  const text = String(value || "").trim().toLowerCase();
+  if (!/^[a-f0-9]{64}$/.test(text)) throw new Error("File Version SHA-256 must contain 64 hexadecimal characters.");
+  return text;
+}
+
+function requiredQuarantinePath(value) {
+  const text = String(value || "").replace(/\\/g, "/").replace(/^\.\//, "");
+  if (!text.startsWith("quarantine/") || text.includes("../") || path.isAbsolute(text)) throw new Error("File Version managed path must remain inside quarantine/.");
+  return text;
+}
+
+function insertStrict(db, table, row) {
+  const keys = Object.keys(row);
+  const placeholders = keys.map(() => "?").join(", ");
+  db.prepare(`INSERT INTO ${table} (${keys.join(", ")}) VALUES (${placeholders})`).run(...keys.map((key) => row[key]));
+}
+
+function dbRecord(db, table, id) {
+  const row = db.prepare(`SELECT record_json FROM ${table} WHERE id = ?`).get(id);
+  return row ? JSON.parse(row.record_json) : null;
+}
+
+function parseRecordRow(row) {
+  return JSON.parse(row.record_json);
+}
+
+async function authorizeDiscoveryContentAccess({ storageRoot, dbPath, reference = {} }) {
+  await ensureSpine(storageRoot);
+  const suppliedPath = reference?.managedPath
+    ? resolveManagedPath(storageRoot, reference.managedPath)
+    : pathFromFileLike(reference?.path || reference?.localPath || reference);
+  if (!suppliedPath) return { ok: true, governed: false, reason: "non-path file reference" };
+
+  const quarantineRoot = path.resolve(storageRoot, "quarantine");
+  const resolvedPath = path.resolve(suppliedPath);
+  if (resolvedPath !== quarantineRoot && !resolvedPath.startsWith(`${quarantineRoot}${path.sep}`)) {
+    return { ok: true, governed: false, reason: "outside Discovery quarantine" };
+  }
+
+  const managedPath = relativeManagedPath(storageRoot, resolvedPath);
+  const db = openDatabase(dbPath);
+  try {
+    const versionRow = db.prepare("SELECT id, file_asset_id, sha256, byte_size FROM file_versions WHERE managed_path = ?").get(managedPath);
+    if (!versionRow) throw securityGateError("FILE_VERSION_MISMATCH", "Quarantined content is not registered as a File Version.");
+    if (!fs.existsSync(resolvedPath) || !fs.statSync(resolvedPath).isFile()) {
+      throw securityGateError("FILE_VERSION_MISMATCH", "Registered quarantined content is missing.");
+    }
+    const stat = fs.statSync(resolvedPath);
+    if (stat.size !== versionRow.byte_size || await checksumFile(resolvedPath) !== versionRow.sha256) {
+      throw securityGateError("FILE_VERSION_MISMATCH", "Quarantined content no longer matches its immutable File Version.");
+    }
+    const receipt = db.prepare(`
+      SELECT id, sha256, verdict, eligible, provider_id, completed_at
+      FROM security_receipts
+      WHERE file_version_id = ? AND file_asset_id = ?
+      ORDER BY rowid DESC
+      LIMIT 1
+    `).get(versionRow.id, versionRow.file_asset_id);
+    if (!receipt) throw securityGateError("SECURITY_RECEIPT_STALE", "No Security Receipt exists for this File Version.");
+    if (receipt.sha256 !== versionRow.sha256) throw securityGateError("FILE_VERSION_MISMATCH", "Security Receipt checksum does not match the File Version.");
+    if (receipt.verdict !== "clean" || receipt.eligible !== 1) {
+      const errorCode = receipt.verdict === "threat_detected"
+        ? "THREAT_DETECTED"
+        : receipt.verdict === "suspicious"
+          ? "VERDICT_SUSPICIOUS"
+          : receipt.verdict === "unknown"
+            ? "VERDICT_UNKNOWN"
+            : "SCAN_FAILED";
+      throw securityGateError(errorCode, `Security Receipt verdict does not permit content access: ${receipt.verdict}.`);
+    }
+    return {
+      ok: true,
+      governed: true,
+      fileAssetId: versionRow.file_asset_id,
+      fileVersionId: versionRow.id,
+      sha256: versionRow.sha256,
+      receiptId: receipt.id,
+      providerId: receipt.provider_id,
+      completedAt: receipt.completed_at
+    };
+  } finally {
+    db.close();
+  }
+}
+
+function securityGateError(code, message) {
+  const error = new Error(message);
+  error.code = code;
+  return error;
+}
+
+function resolveDiscoveryReadReference(storageRoot, reference) {
+  if (reference?.managedPath) return resolveManagedPath(storageRoot, reference.managedPath);
+  return reference;
 }
 
 async function loadStore({ storageRoot, dbPath }) {
@@ -1377,6 +1958,7 @@ async function verifyIntegrity({ storageRoot, dbPath, preserveOnFailure = true }
     checkedFiles: {
       extracts: 0,
       attachments: 0,
+      quarantine: 0,
       manifests: 0
     },
     errors: []
@@ -1404,7 +1986,8 @@ async function verifyIntegrity({ storageRoot, dbPath, preserveOnFailure = true }
       sources: countRows(db, "sources"),
       extracts: countRows(db, "extracts"),
       attachments: countRows(db, "attachments"),
-      drafts: countRows(db, "draft_projects")
+      drafts: countRows(db, "draft_projects"),
+      ...discoveryTableCounts(db)
     };
 
     const manifest = readMeta(db, "manifest") || {};
@@ -1438,6 +2021,17 @@ async function verifyIntegrity({ storageRoot, dbPath, preserveOnFailure = true }
       checksumColumn: "checksum",
       label: "sources"
     });
+    verifyManagedBinaryRows(report, db, storageRoot, {
+      table: "file_versions",
+      idColumn: "id",
+      pathColumn: "managed_path",
+      checksumColumn: "sha256",
+      label: "quarantine"
+    });
+
+    for (const issue of db.prepare("PRAGMA foreign_key_check").all()) {
+      report.errors.push(`SQLite foreign key violation: ${issue.table} row ${issue.rowid}.`);
+    }
 
     const latestManifest = readMeta(db, "latest_manifest_file");
     if (latestManifest?.path) {
@@ -1988,7 +2582,9 @@ function verifyLocalFile(reference = {}) {
     lastModified: stat.mtime.toISOString()
   };
   const expectedSize = Number(expected.size || 0);
-  const changed = expectedSize > 0 && expectedSize !== actual.size;
+  const expectedChecksum = String(expected.sha256 || "").toLowerCase();
+  const actualChecksum = expectedChecksum ? crypto.createHash("sha256").update(fs.readFileSync(filePath)).digest("hex") : "";
+  const changed = (expectedSize > 0 && expectedSize !== actual.size) || (expectedChecksum && expectedChecksum !== actualChecksum);
 
   return {
     status: changed ? "changed" : "verified",
@@ -2000,9 +2596,11 @@ function verifyLocalFile(reference = {}) {
       name: expected.name || "",
       type: expected.type || "",
       size: expectedSize || 0,
-      lastModified: expected.lastModified || ""
+      lastModified: expected.lastModified || "",
+      sha256: expectedChecksum
     },
-    reason: changed ? "The file exists, but its size differs from the recorded source metadata." : "The file exists and matches recorded size metadata."
+    actualChecksum,
+    reason: changed ? "The file exists, but it differs from the recorded managed file metadata." : "The file exists and matches recorded managed file metadata."
   };
 }
 

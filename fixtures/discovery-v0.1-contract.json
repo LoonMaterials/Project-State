@@ -1,0 +1,91 @@
+{
+  "app": "Project State",
+  "contractType": "Discovery",
+  "contractVersion": "0.1",
+  "implementationStatus": "storage_foundation_implemented",
+  "governingSequence": [
+    "add",
+    "quarantine",
+    "security",
+    "extract",
+    "discovery",
+    "questions",
+    "routing",
+    "intake",
+    "human_approval",
+    "core"
+  ],
+  "operations": [
+    "describeCapabilities",
+    "createCase",
+    "getCase",
+    "attachFileAssets",
+    "getProcessingStatus",
+    "submitAnalysisSuggestions",
+    "recordAnswers",
+    "confirmRouting",
+    "promoteToIntake"
+  ],
+  "caseStatuses": [
+    "created",
+    "security_pending",
+    "security_blocked",
+    "extracting",
+    "questioning",
+    "routing",
+    "ready_for_intake",
+    "promoted",
+    "archived"
+  ],
+  "extractionStatuses": [
+    "pending",
+    "complete",
+    "partial",
+    "metadata_only",
+    "unsupported",
+    "failed"
+  ],
+  "destinations": [
+    "existing_project",
+    "additional_project_link",
+    "proposed_new_project",
+    "general_reference",
+    "orphaned_idea",
+    "unassigned",
+    "rejected"
+  ],
+  "privacyClasses": [
+    "local_only",
+    "personal",
+    "confidential",
+    "restricted",
+    "provider_allowed"
+  ],
+  "interactionTypes": [
+    "system_question",
+    "user_answer",
+    "user_correction",
+    "machine_suggestion",
+    "routing_proposal",
+    "routing_confirmation",
+    "processing_event"
+  ],
+  "requiredFoundationObjects": [
+    "FileAsset",
+    "FileVersion",
+    "DiscoveryCase",
+    "Interaction",
+    "SecurityReceipt",
+    "DiscoveryEvent"
+  ],
+  "invariants": [
+    "No file content access before an eligible clean Security Receipt exists for the exact File Version checksum.",
+    "Discovery does not require a project.",
+    "Machine suggestions are never user confirmations or Core authority.",
+    "A user may leave a case unassigned or answer not sure.",
+    "Intake promotion requires confirmed routing or an explicit new-project proposal.",
+    "Core writes still require human approval.",
+    "One File Asset may link to multiple projects without duplicating immutable bytes.",
+    "All Discovery to Intake to Core lineage remains queryable."
+  ]
+}

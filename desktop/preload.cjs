@@ -19,6 +19,7 @@ desktopBridge.armTransport = {
 
 desktopBridge.dialogs = {
   pickFile: (payload) => ipcRenderer.invoke("native-dialog:pick-file", payload),
+  pickFiles: (payload) => ipcRenderer.invoke("native-dialog:pick-files", payload),
   pickFolder: (payload) => ipcRenderer.invoke("native-dialog:pick-folder", payload)
 };
 

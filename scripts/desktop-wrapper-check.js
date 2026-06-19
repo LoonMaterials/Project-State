@@ -36,6 +36,7 @@ function main() {
   assert(mainSource.includes("nodeIntegration: false"), "Desktop wrapper should keep node integration off in the renderer.");
   assert(mainSource.includes('native-dialog:pick-file'), "Desktop main must provide the native file chooser.");
   assert(mainSource.includes('native-dialog:pick-folder'), "Desktop main must provide the native folder chooser.");
+  assert(mainSource.includes('native-dialog:pick-files'), "Desktop main must provide multi-file selection.");
   assert(mainSource.includes('properties: ["openFile"]'), "Native file chooser must be limited to files.");
   assert(mainSource.includes('properties: ["openDirectory", "createDirectory"]'), "Native folder chooser must support choosing and creating folders.");
 
@@ -43,6 +44,7 @@ function main() {
   assert(preloadSource.includes("ProjectStateDesktop"), "Preload must expose window.ProjectStateDesktop.");
   assert(preloadSource.includes("createProjectStateDesktopBridge"), "Preload must create the desktop bridge implementation.");
   assert(preloadSource.includes("desktopBridge.dialogs"), "Preload must expose native chooser methods through the desktop bridge.");
+  assert(preloadSource.includes("pickFiles"), "Preload must expose multi-file selection.");
 
   assert(indexSource.includes("app.js"), "index.html must still load app.js.");
   assert(!mainSource.includes("http://") && !mainSource.includes("https://localhost"), "Desktop wrapper should not depend on a local server.");

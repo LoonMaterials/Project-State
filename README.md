@@ -80,6 +80,8 @@ Approval Queue
 
 The Intake Airlock includes an approval queue for outside inputs from files, notes, chat, email, AI, APIs, Codex, and other arms.
 
+The desktop **Files** screen is the human file-import path. It can select multiple files or recursively scan a selected folder, shows a review step, requires a destination project, preserves originals in place, and creates checksum-verified managed copies as pending Source proposals in Intake. Files do not become authoritative project Sources until individually reviewed and approved.
+
 Queue review is separate from approval:
 
 New

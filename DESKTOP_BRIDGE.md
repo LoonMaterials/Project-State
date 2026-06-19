@@ -64,6 +64,19 @@ window.ProjectStateDesktop = {
     async submitEnvelope(envelope) {},
     async getReceipt(submissionId) {}
   },
+  discoveryStorage: {
+    async initialize() {},
+    async registerFileVersion(payload) {},
+    async createCase(payload) {},
+    async attachFileVersion(payload) {},
+    async appendInteraction(payload) {},
+    async appendSecurityReceipt(payload) {},
+    async appendEvent(payload) {},
+    async readFoundationState(payload) {}
+  },
+  securityArms: {
+    async authorizeContentAccess(reference) {}
+  },
   files: {
     metadata(file) {},
     localPath(file) {},
@@ -82,7 +95,7 @@ window.ProjectStateDesktop = {
 Desktop storage should eventually use a purpose-built local spine, likely:
 
 - SQLite or equivalent for project metadata, history, relationships, actors, and review state
-- Managed local folders for original source files, images, long extracts, and backups
+- Managed local folders for original source files, images, long extracts, quarantine, Discovery artifacts, and backups
 - Checksums or manifests for file integrity
 - Recovery records that preserve failed loads or failed migrations
 - Integrity checks that compare SQLite rows, manifests, managed extract files, and managed attachment files before storage is trusted
@@ -97,7 +110,7 @@ Desktop Backup Package v0.1:
 - Folder name: `backups/project-state-backup-package-<timestamp>-<id>/`
 - Required audit fields: `createdBy`, `createdAt`, and `reason`
 - Database snapshot: `project-state.db`
-- Managed files: `managed/sources/`, `managed/extracts/`, `managed/attachments/`, `managed/manifests/`, and `managed/recovery/`
+- Managed files: `managed/sources/`, `managed/extracts/`, `managed/attachments/`, `managed/quarantine/`, `managed/discovery/`, `managed/manifests/`, and `managed/recovery/`
 - Manifest: `manifest.json` with package identity, audit fields, database checksum, managed file checksums, and the source integrity report
 
 Desktop Restore Package v0.1:
@@ -108,6 +121,10 @@ Desktop Restore Package v0.1:
 - Restore replaces the live DB and managed folders only after validation and preservation complete
 
 The bridge currently uses Node's built-in SQLite support. If the final packaging runtime changes SQLite support, the bridge should keep the same `window.ProjectStateDesktop` API and swap only the implementation underneath.
+
+Discovery storage foundation:
+
+The `discoveryStorage` methods persist project-independent File Assets, append-only File Versions, Discovery Cases, append-only Interactions, exact-checksum Security Receipts, and append-only Discovery Events. They are a storage boundary only: they do not scan, preview, extract, route, approve Intake, or write Core. A Discovery Case may exist without a project, and machine actors cannot record user answers, corrections, or routing confirmations.
 
 Core rule:
 

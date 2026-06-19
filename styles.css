@@ -109,6 +109,12 @@ button {
   gap: 10px;
 }
 
+.import-file-list {
+  max-height: 360px;
+  overflow: auto;
+  padding-right: 4px;
+}
+
 .search-box {
   display: grid;
   gap: 4px;

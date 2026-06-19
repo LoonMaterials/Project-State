@@ -18,6 +18,14 @@
       "purpose": "Images, screenshots, and non-source attached files."
     },
     {
+      "name": "quarantine",
+      "purpose": "Immutable selected file versions awaiting or carrying exact-checksum Security receipts; content access remains blocked until eligible."
+    },
+    {
+      "name": "discovery",
+      "purpose": "Managed Discovery metadata artifacts and future deterministic derivatives kept separate from approved Core sources."
+    },
+    {
       "name": "backups",
       "purpose": "User-controlled backup packages separate from primary storage."
     },
@@ -126,6 +134,34 @@
     {
       "name": "recovery_records",
       "purpose": "Load, migration, and integrity failure records."
+    },
+    {
+      "name": "file_assets",
+      "purpose": "Global content-addressed file identities independent of projects."
+    },
+    {
+      "name": "file_versions",
+      "purpose": "Append-only exact-checksum file versions whose managed bytes remain in quarantine."
+    },
+    {
+      "name": "discovery_cases",
+      "purpose": "Resumable pre-routing cases that may exist without a project."
+    },
+    {
+      "name": "discovery_case_files",
+      "purpose": "Case membership linking exact File Versions without duplicating bytes."
+    },
+    {
+      "name": "discovery_interactions",
+      "purpose": "Append-only questions, answers, corrections, and non-authoritative suggestions with actor provenance."
+    },
+    {
+      "name": "security_receipts",
+      "purpose": "Append-only provider results bound by foreign key to an exact File Version asset and checksum."
+    },
+    {
+      "name": "discovery_events",
+      "purpose": "Append-only Discovery lineage and processing history."
     }
   ],
   "largeContentRules": [
@@ -133,6 +169,8 @@
     "Original source files live in sources/.",
     "Long extract text and chunks live in extracts/.",
     "Images and screenshots live in attachments/.",
+    "Untrusted incoming File Versions live in quarantine/ until an eligible exact-checksum Security Receipt exists.",
+    "Discovery artifacts remain separate from approved Core source material.",
     "SQLite records store IDs, metadata, checksums, and managed paths instead of embedded large content."
   ],
   "safetyRules": [
@@ -143,7 +181,10 @@
     "Human approval is required before proposed records enter core project tables.",
     "Change history is append-only and records actor, timestamp, reason, changed object ID, readable object title, language, and origin.",
     "If load, migration, or integrity checks fail, preserve raw data and enter recovery mode instead of returning a blank store.",
-    "Backup location must remain separate from primary storage unless a future server deployment explicitly changes that rule."
+    "Backup location must remain separate from primary storage unless a future server deployment explicitly changes that rule.",
+    "Discovery Cases do not require a project.",
+    "File Versions, Security Receipts, Discovery Interactions, and Discovery Events are append-only.",
+    "No Discovery storage record grants external arms human approval or Core authority."
   ],
   "minimumBridgeMethods": {
     "storage": [
@@ -168,6 +209,19 @@
     ],
     "downloads": [
       "saveTextFile"
+    ],
+    "discoveryStorage": [
+      "initialize",
+      "registerFileVersion",
+      "createCase",
+      "attachFileVersion",
+      "appendInteraction",
+      "appendSecurityReceipt",
+      "appendEvent",
+      "readFoundationState"
+    ],
+    "securityArms": [
+      "authorizeContentAccess"
     ]
   }
 }

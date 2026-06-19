@@ -178,3 +178,152 @@ CREATE TABLE IF NOT EXISTS recovery_records (
   managed_path TEXT,
   record_json TEXT NOT NULL
 );
+
+-- Discovery foundation v0.1. These tables are additive and project-independent.
+CREATE TABLE IF NOT EXISTS file_assets (
+  id TEXT PRIMARY KEY,
+  sha256 TEXT NOT NULL UNIQUE CHECK(length(sha256) = 64),
+  created_at TEXT NOT NULL,
+  privacy_class TEXT NOT NULL DEFAULT 'local_only',
+  retention_state TEXT NOT NULL DEFAULT 'active',
+  record_json TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS file_versions (
+  id TEXT PRIMARY KEY,
+  file_asset_id TEXT NOT NULL,
+  sha256 TEXT NOT NULL CHECK(length(sha256) = 64),
+  byte_size INTEGER NOT NULL CHECK(byte_size >= 0),
+  original_name TEXT NOT NULL,
+  managed_path TEXT NOT NULL CHECK(managed_path LIKE 'quarantine/%'),
+  created_at TEXT NOT NULL,
+  record_json TEXT NOT NULL,
+  UNIQUE(file_asset_id, sha256),
+  UNIQUE(id, file_asset_id),
+  UNIQUE(id, file_asset_id, sha256),
+  FOREIGN KEY(file_asset_id) REFERENCES file_assets(id) ON UPDATE RESTRICT ON DELETE RESTRICT
+);
+
+CREATE TABLE IF NOT EXISTS discovery_cases (
+  id TEXT PRIMARY KEY,
+  created_by TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  stage TEXT NOT NULL,
+  status TEXT NOT NULL,
+  confirmed_project_id TEXT,
+  record_json TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS discovery_case_files (
+  id TEXT PRIMARY KEY,
+  discovery_case_id TEXT NOT NULL,
+  file_asset_id TEXT NOT NULL,
+  file_version_id TEXT NOT NULL,
+  added_at TEXT NOT NULL,
+  grouping_rationale TEXT NOT NULL DEFAULT '',
+  record_json TEXT NOT NULL,
+  UNIQUE(discovery_case_id, file_version_id),
+  FOREIGN KEY(discovery_case_id) REFERENCES discovery_cases(id) ON UPDATE RESTRICT ON DELETE RESTRICT,
+  FOREIGN KEY(file_version_id, file_asset_id) REFERENCES file_versions(id, file_asset_id) ON UPDATE RESTRICT ON DELETE RESTRICT
+);
+
+CREATE TABLE IF NOT EXISTS discovery_interactions (
+  id TEXT PRIMARY KEY,
+  discovery_case_id TEXT NOT NULL,
+  actor_id TEXT NOT NULL,
+  actor_type TEXT NOT NULL,
+  interaction_type TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  supersedes_interaction_id TEXT,
+  record_json TEXT NOT NULL,
+  FOREIGN KEY(discovery_case_id) REFERENCES discovery_cases(id) ON UPDATE RESTRICT ON DELETE RESTRICT,
+  FOREIGN KEY(supersedes_interaction_id) REFERENCES discovery_interactions(id) ON UPDATE RESTRICT ON DELETE RESTRICT
+);
+
+CREATE TABLE IF NOT EXISTS security_receipts (
+  id TEXT PRIMARY KEY,
+  scan_job_id TEXT NOT NULL,
+  file_asset_id TEXT NOT NULL,
+  file_version_id TEXT NOT NULL,
+  sha256 TEXT NOT NULL CHECK(length(sha256) = 64),
+  verdict TEXT NOT NULL CHECK(verdict IN ('clean', 'threat_detected', 'suspicious', 'unknown', 'error')),
+  eligible INTEGER NOT NULL CHECK(eligible IN (0, 1)),
+  provider_id TEXT NOT NULL,
+  started_at TEXT NOT NULL,
+  completed_at TEXT NOT NULL,
+  supersedes_receipt_id TEXT,
+  record_json TEXT NOT NULL,
+  UNIQUE(scan_job_id),
+  FOREIGN KEY(file_version_id, file_asset_id, sha256) REFERENCES file_versions(id, file_asset_id, sha256) ON UPDATE RESTRICT ON DELETE RESTRICT,
+  FOREIGN KEY(supersedes_receipt_id) REFERENCES security_receipts(id) ON UPDATE RESTRICT ON DELETE RESTRICT,
+  CHECK((verdict = 'clean' AND eligible = 1) OR (verdict <> 'clean' AND eligible = 0))
+);
+
+CREATE TABLE IF NOT EXISTS discovery_events (
+  id TEXT PRIMARY KEY,
+  discovery_case_id TEXT NOT NULL,
+  event_type TEXT NOT NULL,
+  actor_id TEXT NOT NULL,
+  actor_type TEXT NOT NULL,
+  occurred_at TEXT NOT NULL,
+  record_json TEXT NOT NULL,
+  FOREIGN KEY(discovery_case_id) REFERENCES discovery_cases(id) ON UPDATE RESTRICT ON DELETE RESTRICT
+);
+
+CREATE TRIGGER IF NOT EXISTS file_assets_sha256_immutable
+BEFORE UPDATE OF sha256 ON file_assets
+BEGIN
+  SELECT RAISE(ABORT, 'file asset checksum is immutable');
+END;
+
+CREATE TRIGGER IF NOT EXISTS file_versions_append_only_update
+BEFORE UPDATE ON file_versions
+BEGIN
+  SELECT RAISE(ABORT, 'file versions are append-only');
+END;
+
+CREATE TRIGGER IF NOT EXISTS file_versions_append_only_delete
+BEFORE DELETE ON file_versions
+BEGIN
+  SELECT RAISE(ABORT, 'file versions are append-only');
+END;
+
+CREATE TRIGGER IF NOT EXISTS discovery_interactions_append_only_update
+BEFORE UPDATE ON discovery_interactions
+BEGIN
+  SELECT RAISE(ABORT, 'discovery interactions are append-only');
+END;
+
+CREATE TRIGGER IF NOT EXISTS discovery_interactions_append_only_delete
+BEFORE DELETE ON discovery_interactions
+BEGIN
+  SELECT RAISE(ABORT, 'discovery interactions are append-only');
+END;
+
+CREATE TRIGGER IF NOT EXISTS security_receipts_append_only_update
+BEFORE UPDATE ON security_receipts
+BEGIN
+  SELECT RAISE(ABORT, 'security receipts are append-only');
+END;
+
+CREATE TRIGGER IF NOT EXISTS security_receipts_append_only_delete
+BEFORE DELETE ON security_receipts
+BEGIN
+  SELECT RAISE(ABORT, 'security receipts are append-only');
+END;
+
+CREATE TRIGGER IF NOT EXISTS discovery_events_append_only_update
+BEFORE UPDATE ON discovery_events
+BEGIN
+  SELECT RAISE(ABORT, 'discovery events are append-only');
+END;
+
+CREATE TRIGGER IF NOT EXISTS discovery_events_append_only_delete
+BEFORE DELETE ON discovery_events
+BEGIN
+  SELECT RAISE(ABORT, 'discovery events are append-only');
+END;
+
+INSERT OR IGNORE INTO meta (key, value_json, updated_at)
+VALUES ('discovery_schema', '{"version":"0.1","migration":"additive"}', '2026-06-19T00:00:00.000Z');

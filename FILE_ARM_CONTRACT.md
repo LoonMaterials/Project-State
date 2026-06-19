@@ -6,6 +6,15 @@ This contract lets a local connector submit one source file to the Project State
 
 The upload is staged and checksum-verified, then represented by a pending `Source` Intake proposal. The file does not become an approved Source record until a permitted human marks the Intake item Ready and approves it individually.
 
+The desktop Files screen uses the same authority path for human-selected files and folders:
+
+- files may be selected individually or discovered by recursively scanning a chosen folder;
+- unsupported, unreadable, empty, symbolic-link, and oversized files are skipped;
+- Project State copies accepted files into managed `sources/` storage and never moves or deletes the originals;
+- the user reviews the selection and chooses a destination project before staging;
+- each managed copy creates its own pending `Source` Intake item;
+- approval, rejection, archive, trust, and Change History rules remain the same as connector-submitted files.
+
 The machine-readable companion is `fixtures/file-arm-v0.1-contract.json`.
 
 ## Endpoint

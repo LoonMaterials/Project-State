@@ -11,7 +11,7 @@ const BRIDGE_IMPL = path.join(ROOT, "desktop", "project-state-desktop-bridge.cjs
 const DESKTOP_MAIN = path.join(ROOT, "desktop", "main.cjs");
 const DESKTOP_PRELOAD = path.join(ROOT, "desktop", "preload.cjs");
 
-const REQUIRED_FOLDERS = ["sources", "extracts", "attachments", "backups", "recovery", "manifests", "logs", "temp", "integrations"];
+const REQUIRED_FOLDERS = ["sources", "extracts", "attachments", "quarantine", "discovery", "backups", "recovery", "manifests", "logs", "temp", "integrations"];
 const REQUIRED_TABLES = [
   "meta",
   "actors",
@@ -33,7 +33,14 @@ const REQUIRED_TABLES = [
   "proposal_items",
   "draft_projects",
   "approval_records",
-  "recovery_records"
+  "recovery_records",
+  "file_assets",
+  "file_versions",
+  "discovery_cases",
+  "discovery_case_files",
+  "discovery_interactions",
+  "security_receipts",
+  "discovery_events"
 ];
 const REQUIRED_SAFETY_PHRASES = [
   "Human approval is required",
@@ -46,6 +53,8 @@ const REQUIRED_SAFETY_PHRASES = [
 ];
 const REQUIRED_BRIDGE_METHODS = {
   storage: ["loadStore", "saveStore", "saveMeta", "preserveRecoveryRecord", "verifyIntegrity", "importBrowserExport", "createBackupPackage", "restoreBackupPackage", "reset"],
+  discoveryStorage: ["initialize", "registerFileVersion", "createCase", "attachFileVersion", "appendInteraction", "appendSecurityReceipt", "appendEvent", "readFoundationState"],
+  securityArms: ["authorizeContentAccess"],
   files: ["metadata", "localPath", "readAsDataUrl", "readAsText", "readAsArrayBuffer", "extractText", "inflateRaw"],
   downloads: ["saveTextFile"]
 };
@@ -110,6 +119,9 @@ function validateDocs(contract, bridgeDoc, spineDoc, appSource, schemaSource, br
     "API Arm Rule",
     "ProposedProject",
     "ApprovalRecord",
+    "DiscoveryCase",
+    "SecurityReceipt",
+    "quarantine/",
     "fixtures/desktop-spine-v0.1-contract.json"
   ];
   const missingDocTerms = requiredDocTerms.filter((term) => !spineDoc.includes(term));

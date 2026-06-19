@@ -1,8 +1,22 @@
 # Project State v0.1 Complete Implementation Inventory
 
-Generated: 2026-06-18
+Generated: 2026-06-18; Discovery-stage boundary recorded 2026-06-19
 
 This inventory describes the implementation currently present in this repository. It distinguishes completed behavior from future or deliberately excluded work.
+
+## 0. Final Pre-Discovery Stage Boundary
+
+The current executable and source were frozen as `final-pre-discovery-v0.1` before Discovery-first implementation began.
+
+- Checkpoint definition: `PRE_DISCOVERY_CHECKPOINT.md`.
+- Preserved installer: `checkpoints/Project-State-Final-Pre-Discovery-0.1.0-x64.exe`.
+- Preserved source: `checkpoints/Project-State-Final-Pre-Discovery-Source.zip`.
+- Installer SHA-256: `8F4CA66E9FB1C9D690E9556CA9F0E8D022EDEEBEDECAE80D77A05D786E4DE5D1`.
+- Source archive SHA-256: `426A86DB32F11856C8B47427E53FF298B8D4683B92268D0F720A6F2E3413A95B`.
+- The checkpoint includes the global Files screen and managed Intake import flow.
+- The checkpoint does not include Discovery Cases, mandatory Security scanning, global File Assets, provider-neutral Interactions, adaptive questions, project suggestions, or Discovery-to-Intake promotion.
+
+The approved next-stage system is defined in `DISCOVERY_FIRST_SYSTEM.md`, `SECURITY_ARM_CONTRACT.md`, `fixtures/discovery-v0.1-contract.json`, and `fixtures/security-arm-v0.1-contract.json`. Items in those files remain planned until the implementation and verification sections below explicitly mark them complete.
 
 ## 1. Governing Product Rules
 
@@ -279,6 +293,12 @@ Local Arm Transport v0.1:
 
 File Arm Contract v0.1:
 
+- Global Files screen lists pending imports and approved managed Sources.
+- Native multi-file selection and recursive folder import are supported in the desktop runtime.
+- Import review requires a destination project and preserves every original file in place.
+- Accepted selections are copied into managed source storage and enter Intake as individual pending Source proposals.
+- Approved managed files expose project navigation plus Edit, Archive, and View History controls.
+
 - Checksum-verified binary uploads enter as pending Source proposals.
 - 25 MiB file limit, 8 KiB metadata-header limit, safe file names, and an explicit extension allowlist.
 - Executable/script-like files are rejected; uploaded bytes are never executed or automatically extracted.
@@ -488,6 +508,9 @@ Implemented storage behavior:
 - `FILE_ARM_CONTRACT.md`: checksum-verified managed-file Intake and Source approval contract.
 - `RELEASE_CONTRACT.md`: Electron runtime, packaging, installer, user-data, signing, and release-gate contract.
 - `REAL_TIME_TEST_PLAN.md`: remaining live desktop, connector, installer, upgrade, and uninstall test sequence.
+- `PRE_DISCOVERY_CHECKPOINT.md`: immutable stage boundary, artifact checksums, and continuation rule.
+- `DISCOVERY_FIRST_SYSTEM.md`: approved Discovery-first flow, foundation objects, API evolution, and staged implementation roadmap.
+- `SECURITY_ARM_CONTRACT.md`: mandatory provider-neutral quarantine scan gate and Aether Windows Defender profile.
 - `desktop/main.cjs`: Electron application process.
 - `desktop/preload.cjs`: isolated renderer-to-desktop bridge exposure.
 - `desktop/project-state-desktop-bridge.cjs`: SQLite, managed-file, migration, backup, restore, integrity, extraction, and recovery implementation.
@@ -498,6 +521,8 @@ Implemented storage behavior:
 - `desktop/spine-schema.sql`: desktop SQLite schema.
 - `fixtures/storage-spine-v0.1-baseline.json`: representative persistence fixture.
 - `fixtures/api-arm-v0.1-contract.json`: machine-readable inbound API arm proposal contract.
+- `fixtures/discovery-v0.1-contract.json`: machine-readable Discovery state, operation, destination, privacy, and invariant contract.
+- `fixtures/security-arm-v0.1-contract.json`: machine-readable Security Arm operations, verdicts, receipts, errors, and authority prohibitions.
 - `scripts/api-arm-contract-check.js`: contract, vocabulary, authority-boundary, documentation, and adapter-drift verification.
 - `scripts/api-arm-implementation-check.js`: desktop submission, receipt, idempotency, rejection, Core-isolation, stale-save, and backup/restore verification.
 - `scripts/api-arm-submit.js`: provider-neutral metadata connector.
@@ -627,3 +652,57 @@ Passed syntax checks:
 - Tests used fixtures and temporary desktop storage roots; the user’s live desktop spine was not modified.
 - No server was started.
 - No live visual/manual desktop UI pass was performed during this internal debug run.
+
+## 20. Approved Discovery-First Next Stage
+
+Status: Stage 2 storage foundation implemented and verified; Stage 3 Security gate started with fail-closed exact-checksum quarantine read authorization.
+
+### Governing flow
+
+`Add → Quarantine → Security → Read/Extract → Discovery → Questions → Routing → Intake → Human Approval → Core`
+
+### Required foundation objects
+
+- Global content-addressed File Asset and immutable File Version.
+- Discovery Case that may exist without a project.
+- Provider-neutral Interaction for questions, answers, corrections, machine suggestions, and routing confirmations.
+- Immutable Security Receipt linked to the exact File Version checksum.
+- Append-only Discovery Event history.
+
+### Required end-user behavior
+
+- First-run Security Arm setup occurs immediately after owner/storage setup and before file content access.
+- Files and folders enter quarantine before any preview, extraction, indexing, AI analysis, Discovery interpretation, or Intake promotion.
+- Only a current clean Security Receipt permits content access.
+- Deterministic parsing runs before optional AI assistance.
+- AI suggestions retain provider, evidence, confidence, privacy, and non-authority labels.
+- Project State asks adaptive questions and accepts `Not sure` or unassigned material.
+- Discovery may route to an existing project, several project links, a proposed new project, general reference, orphaned idea, unassigned, or rejection.
+- One File Asset can support several project Sources without duplicating immutable bytes.
+- The default UI simplifies the internal stages to `Add → Review → Confirm` while preserving technical details and history.
+
+### API and authority direction
+
+- Target-known API Arm v0.1 remains compatible and continues to require a project.
+- Every file submission path gains the mandatory Security gate.
+- Discovery receives a separate provider-neutral contract rather than weakening Intake.
+- External arms may stage or analyze inputs but cannot mark Security clean, confirm user answers, confirm routing, approve Intake, create Core projects directly, or rewrite history.
+- Aether initially uses a Windows Defender Security Arm adapter, but Project State remains provider-neutral.
+
+### Implementation sequence
+
+1. Contracts and checkpoint.
+2. Storage schema, managed quarantine/discovery folders, migrations, integrity, and recovery.
+3. Security setup, health checks, receipts, and enforcement.
+4. Deterministic extraction, chunking, duplicates, and file versions.
+5. Discovery Cases, grouping, adaptive questions, privacy, and routing UX.
+6. Discovery-to-Intake promotion and full lineage.
+7. Optional AI Analysis Arms.
+8. Real mixed-file pilot, backup/restore validation, blocker fixes, and contract freeze.
+
+### Session continuation
+
+- Stage 1 is complete and verified.
+- Stage 2 is complete and verified: 11 managed folders, 28 required SQLite tables, 8 Discovery storage methods, exact-byte deduplication, project-optional cases, exact-checksum receipt lineage, append-only triggers, legacy-save isolation, backup/restore, reset, and additive migration all pass.
+- Stage 3 has begun: registered quarantine reads now require an eligible clean receipt for the exact current bytes, and changed bytes fail closed. Machine-local provider configuration, provider-neutral health/scan adapters, quarantine staging orchestration, and first-run setup are next. Discovery extraction remains disabled.
+- The exact continuation and completion gate are recorded in `DISCOVERY_IMPLEMENTATION_HANDOFF.md`.
