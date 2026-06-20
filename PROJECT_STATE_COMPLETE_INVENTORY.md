@@ -14,7 +14,7 @@ The current executable and source were frozen as `final-pre-discovery-v0.1` befo
 - Installer SHA-256: `8F4CA66E9FB1C9D690E9556CA9F0E8D022EDEEBEDECAE80D77A05D786E4DE5D1`.
 - Source archive SHA-256: `426A86DB32F11856C8B47427E53FF298B8D4683B92268D0F720A6F2E3413A95B`.
 - The checkpoint includes the global Files screen and managed Intake import flow.
-- The checkpoint does not include Discovery Cases, mandatory Security scanning, global File Assets, provider-neutral Interactions, adaptive questions, project suggestions, or Discovery-to-Intake promotion.
+- The checkpoint does not include Discovery Cases, external-security acknowledgment, global File Assets, provider-neutral Interactions, adaptive questions, project suggestions, or Discovery-to-Intake promotion.
 
 The approved next-stage system is defined in `DISCOVERY_FIRST_SYSTEM.md`, `SECURITY_ARM_CONTRACT.md`, `fixtures/discovery-v0.1-contract.json`, and `fixtures/security-arm-v0.1-contract.json`. Items in those files remain planned until the implementation and verification sections below explicitly mark them complete.
 
@@ -510,7 +510,7 @@ Implemented storage behavior:
 - `REAL_TIME_TEST_PLAN.md`: remaining live desktop, connector, installer, upgrade, and uninstall test sequence.
 - `PRE_DISCOVERY_CHECKPOINT.md`: immutable stage boundary, artifact checksums, and continuation rule.
 - `DISCOVERY_FIRST_SYSTEM.md`: approved Discovery-first flow, foundation objects, API evolution, and staged implementation roadmap.
-- `SECURITY_ARM_CONTRACT.md`: mandatory provider-neutral quarantine scan gate and Aether Windows Defender profile.
+- `SECURITY_ARM_CONTRACT.md`: external-security responsibility boundary, exact-byte enforcement, prohibited safety claims, and optional future provider compatibility.
 - `desktop/main.cjs`: Electron application process.
 - `desktop/preload.cjs`: isolated renderer-to-desktop bridge exposure.
 - `desktop/project-state-desktop-bridge.cjs`: SQLite, managed-file, migration, backup, restore, integrity, extraction, and recovery implementation.
@@ -522,7 +522,7 @@ Implemented storage behavior:
 - `fixtures/storage-spine-v0.1-baseline.json`: representative persistence fixture.
 - `fixtures/api-arm-v0.1-contract.json`: machine-readable inbound API arm proposal contract.
 - `fixtures/discovery-v0.1-contract.json`: machine-readable Discovery state, operation, destination, privacy, and invariant contract.
-- `fixtures/security-arm-v0.1-contract.json`: machine-readable Security Arm operations, verdicts, receipts, errors, and authority prohibitions.
+- `fixtures/security-arm-v0.1-contract.json`: machine-readable external-security acknowledgment, exact-byte controls, forbidden safety claims, and authority prohibitions.
 - `scripts/api-arm-contract-check.js`: contract, vocabulary, authority-boundary, documentation, and adapter-drift verification.
 - `scripts/api-arm-implementation-check.js`: desktop submission, receipt, idempotency, rejection, Core-isolation, stale-save, and backup/restore verification.
 - `scripts/api-arm-submit.js`: provider-neutral metadata connector.
@@ -655,25 +655,25 @@ Passed syntax checks:
 
 ## 20. Approved Discovery-First Next Stage
 
-Status: Stage 2 storage foundation implemented and verified; Stage 3 Security gate started with fail-closed exact-checksum quarantine read authorization.
+Status: Discovery rebuild without bundled antivirus is complete through the non-live verification gate. The user owns malware checking outside Project State.
 
 ### Governing flow
 
-`Add → Quarantine → Security → Read/Extract → Discovery → Questions → Routing → Intake → Human Approval → Core`
+`Add → External Security Acknowledgment → Stage → Read/Extract → Discovery → Questions → Routing → Intake → Human Approval → Core`
 
 ### Required foundation objects
 
 - Global content-addressed File Asset and immutable File Version.
 - Discovery Case that may exist without a project.
 - Provider-neutral Interaction for questions, answers, corrections, machine suggestions, and routing confirmations.
-- Immutable Security Receipt linked to the exact File Version checksum.
+- Human external-security acknowledgment linked to the case and exact File Version; it is not a scan verdict.
 - Append-only Discovery Event history.
 
 ### Required end-user behavior
 
-- First-run Security Arm setup occurs immediately after owner/storage setup and before file content access.
-- Files and folders enter quarantine before any preview, extraction, indexing, AI analysis, Discovery interpretation, or Intake promotion.
-- Only a current clean Security Receipt permits content access.
+- Project State states clearly that it does not scan files for malware and does not claim they are safe.
+- A human must acknowledge external security responsibility before selected files are copied into managed staging.
+- Current staged bytes must match the immutable File Version size and SHA-256 before content access.
 - Deterministic parsing runs before optional AI assistance.
 - AI suggestions retain provider, evidence, confidence, privacy, and non-authority labels.
 - Project State asks adaptive questions and accepts `Not sure` or unassigned material.
@@ -684,25 +684,29 @@ Status: Stage 2 storage foundation implemented and verified; Stage 3 Security ga
 ### API and authority direction
 
 - Target-known API Arm v0.1 remains compatible and continues to require a project.
-- Every file submission path gains the mandatory Security gate.
+- Every file submission path preserves the external-security acknowledgment and exact-byte boundary.
 - Discovery receives a separate provider-neutral contract rather than weakening Intake.
-- External arms may stage or analyze inputs but cannot mark Security clean, confirm user answers, confirm routing, approve Intake, create Core projects directly, or rewrite history.
-- Aether initially uses a Windows Defender Security Arm adapter, but Project State remains provider-neutral.
+- External arms may analyze inputs but cannot create the human acknowledgment, confirm user answers, confirm routing, approve Intake, create Core projects directly, or rewrite history.
+- No Windows Defender or other antivirus provider is bundled.
 
 ### Implementation sequence
 
 1. Contracts and checkpoint.
 2. Storage schema, managed quarantine/discovery folders, migrations, integrity, and recovery.
-3. Security setup, health checks, receipts, and enforcement.
+3. External-security responsibility acknowledgment, trusted staging, and exact-byte enforcement.
 4. Deterministic extraction, chunking, duplicates, and file versions.
 5. Discovery Cases, grouping, adaptive questions, privacy, and routing UX.
 6. Discovery-to-Intake promotion and full lineage.
 7. Optional AI Analysis Arms.
 8. Real mixed-file pilot, backup/restore validation, blocker fixes, and contract freeze.
 
-### Session continuation
+### Rebuild completion and continuation
 
-- Stage 1 is complete and verified.
-- Stage 2 is complete and verified: 11 managed folders, 28 required SQLite tables, 8 Discovery storage methods, exact-byte deduplication, project-optional cases, exact-checksum receipt lineage, append-only triggers, legacy-save isolation, backup/restore, reset, and additive migration all pass.
-- Stage 3 has begun: registered quarantine reads now require an eligible clean receipt for the exact current bytes, and changed bytes fail closed. Machine-local provider configuration, provider-neutral health/scan adapters, quarantine staging orchestration, and first-run setup are next. Discovery extraction remains disabled.
-- The exact continuation and completion gate are recorded in `DISCOVERY_IMPLEMENTATION_HANDOFF.md`.
+- Stages 1 through 6 are implemented: contracts, storage, trusted staging, exact-byte enforcement, extraction, Discovery questions/routing, and Intake promotion.
+- The 30-table Discovery storage/extraction schema and trusted staging path have been reconstructed.
+- Project State records external-security responsibility but performs no malware scan and makes no clean/safe claim.
+- All 30 non-live regression checks passed on 2026-06-19, including the seven focused Discovery gates and the pre-existing storage, workflow, desktop, backup/restore, API Arm, transport, File Arm, release-contract, and checkpoint gates.
+- Syntax checks passed for `app.js`, the Electron main/preload files, and the desktop bridge.
+- No installer was built or run, no foreground server was started, and the user's live storage was not used by these checks.
+- The next step is a harmless-file live Discovery pass in a dedicated temporary storage root, followed by source backup and Git commit before isolated packaging work.
+- The exact live handoff is recorded in `DISCOVERY_IMPLEMENTATION_HANDOFF.md` and `REAL_TIME_TEST_PLAN.md`.

@@ -44,9 +44,9 @@ function main() {
   const indexText = fs.readFileSync(path.join(__dirname, "..", "index.html"), "utf8");
   assert(indexText.includes("connect-src 'none'"), "Web runtime must block all outbound network connections.");
   assert(indexText.includes("object-src 'none'") && indexText.includes("frame-src 'none'"), "Web runtime must block external objects and frames.");
-  assert(appText.includes("if (browserDevRuntime()) {\n    renderBrowserDevModeGate();\n    return;\n  }"), "Startup render path does not gate browser/dev mode.");
+  assert(/if \(browserDevRuntime\(\)\) \{\s+renderBrowserDevModeGate\(\);\s+return;\s+\}/.test(appText), "Startup render path does not gate browser/dev mode.");
   assert(appText.includes("if (!seriousStorageWorkAllowed() && !options.allowInBrowserDev)"), "saveStore does not block serious storage work without the desktop bridge.");
-  assert(appText.includes("if (seriousStorageWorkAllowed()) {\n      if (loaded.source === \"legacy-json\") await ProjectStateStorage.preserveLegacyRaw(loaded.raw);"), "loadStore still appears to allow silent browser migration writes.");
+  assert(/if \(seriousStorageWorkAllowed\(\)\) \{\s+if \(loaded\.source === "legacy-json"\) await ProjectStateStorage\.preserveLegacyRaw\(loaded\.raw\);/.test(appText), "loadStore still appears to allow silent browser migration writes.");
 
   const requiredDocPieces = [
     "Project State is now app-first",

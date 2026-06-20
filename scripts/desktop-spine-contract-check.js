@@ -40,7 +40,9 @@ const REQUIRED_TABLES = [
   "discovery_case_files",
   "discovery_interactions",
   "security_receipts",
-  "discovery_events"
+  "discovery_events",
+  "discovery_extractions",
+  "discovery_chunks"
 ];
 const REQUIRED_SAFETY_PHRASES = [
   "Human approval is required",
@@ -53,7 +55,7 @@ const REQUIRED_SAFETY_PHRASES = [
 ];
 const REQUIRED_BRIDGE_METHODS = {
   storage: ["loadStore", "saveStore", "saveMeta", "preserveRecoveryRecord", "verifyIntegrity", "importBrowserExport", "createBackupPackage", "restoreBackupPackage", "reset"],
-  discoveryStorage: ["initialize", "registerFileVersion", "createCase", "attachFileVersion", "appendInteraction", "appendSecurityReceipt", "appendEvent", "readFoundationState"],
+  discoveryStorage: ["initialize", "registerFileVersion", "createCase", "attachFileVersion", "appendInteraction", "appendSecurityReceipt", "appendEvent", "readFoundationState", "stageTrustedFile", "extractFileVersion", "readExtractionText", "analyzeCase", "recordAnswer", "confirmRouting", "getCase", "promoteToIntake"],
   securityArms: ["authorizeContentAccess"],
   files: ["metadata", "localPath", "readAsDataUrl", "readAsText", "readAsArrayBuffer", "extractText", "inflateRaw"],
   downloads: ["saveTextFile"]
@@ -120,7 +122,7 @@ function validateDocs(contract, bridgeDoc, spineDoc, appSource, schemaSource, br
     "ProposedProject",
     "ApprovalRecord",
     "DiscoveryCase",
-    "SecurityReceipt",
+    "external-security responsibility acknowledgment",
     "quarantine/",
     "fixtures/desktop-spine-v0.1-contract.json"
   ];

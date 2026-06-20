@@ -59,6 +59,8 @@ Use SQLite for structured records:
 - `discovery_interactions`
 - `security_receipts`
 - `discovery_events`
+- `discovery_extractions`
+- `discovery_chunks`
 
 Managed Folders
 
@@ -67,7 +69,7 @@ Use folders for large evidence and source material:
 - `sources/`: original imported files, copied source documents, chat exports, notes, and evidence files.
 - `extracts/`: long extract text, chunk text, parsed chat segments, OCR/transcription output later.
 - `attachments/`: screenshots, images, and attached media.
-- `quarantine/`: immutable incoming File Versions awaiting or carrying exact-checksum Security receipts. Files here are not eligible for preview, extraction, indexing, AI transmission, or routing until Security permits it.
+- `quarantine/`: managed staging copies of files the user has already chosen to trust. Project State performs no malware scan. Staging requires an external-security responsibility acknowledgment, and later reads require the bytes to keep matching the registered size and SHA-256.
 - `discovery/`: Discovery metadata artifacts and future deterministic derivatives kept outside approved Core sources.
 - `backups/`: user-controlled backup packages.
 - `recovery/`: failed loads, failed migrations, corrupt raw data exports.
@@ -99,12 +101,12 @@ Discovery storage is additive and project-independent:
 ```text
 FileAsset
   -> FileVersion
-  -> SecurityReceipt
+  -> External-security responsibility acknowledgment
   -> DiscoveryCase membership
   -> Interaction and DiscoveryEvent history
 ```
 
-A DiscoveryCase does not require a project. File Versions, Security Receipts, Discovery Interactions, and Discovery Events are append-only. A SecurityReceipt is linked by database constraint to the exact File Asset, File Version, and SHA-256 it reports on. These storage records do not grant an outside arm human confirmation, Intake approval, or Core authority.
+A DiscoveryCase does not require a project. File Versions, Discovery Interactions, and Discovery Events are append-only. The acknowledgment is recorded on the exact staged File Version and checksum; it means only that the user accepts responsibility for checking the source externally. It is not a clean-file verdict. Exact-byte verification blocks extraction or promotion if the staged copy changes. These records do not grant an outside arm human confirmation, Intake approval, or Core authority. The legacy `security_receipts` table remains only for schema compatibility and optional future provider-neutral receipts; no security provider ships with Project State.
 
 Intake Airlock Rule
 

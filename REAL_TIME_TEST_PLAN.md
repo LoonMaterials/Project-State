@@ -2,7 +2,7 @@
 
 ## Status
 
-The non-live implementation gates are complete. The next work requires launching the desktop UI, opening a real loopback listener, installing and uninstalling a Windows application, and observing the resulting behavior in real time.
+The non-live API and storage gates are complete. Discovery now needs a harmless-file live pass before any packaging or installer work. Installer testing remains deferred until the source is backed up and packaging is isolated from the development folder.
 
 The current installer is an unsigned local test candidate. It is not ready for public distribution until code signing is configured and verified.
 
@@ -16,6 +16,8 @@ Before starting:
 4. Keep the local API Arm Transport disabled except during its test cases.
 5. Treat the connector token as a secret. Do not paste it into chat, screenshots, logs, command arguments, or committed files.
 6. Do not test public-network binding; v0.1 is loopback-only.
+7. Use only harmless files the user already trusts and has checked externally. Project State does not scan files for malware.
+8. Never choose the development source folder as an installation target.
 
 ## Candidate Artifacts
 
@@ -25,7 +27,22 @@ Before starting:
 
 Verify the installer SHA-256 against the release manifest before running it.
 
-## Test 1: Unpacked First Launch
+## Test 1: Discovery Add, Review, and Confirm
+
+1. Launch the desktop app against a new temporary `PROJECT_STATE_STORAGE_ROOT`.
+2. Choose a harmless TXT or Markdown file that has already been checked externally.
+3. Confirm no project selection is required before the file is read.
+4. Confirm the UI clearly states that Project State does not scan files for malware.
+5. Confirm staging cannot continue until external-security responsibility is acknowledged.
+6. Add the file and verify the user's original still exists unchanged.
+7. Confirm Discovery shows extracted text, a suggested project name, possible existing-project matches when applicable, and questions with a `Not sure` choice.
+8. Confirm a route to an existing project or proposed new project.
+9. Confirm a pending Intake proposal is created and Core remains unchanged.
+10. Repeat the same file and confirm exact bytes are reused rather than duplicated.
+
+Pass condition: the discovery-first flow works without a bundled scanner, preserves the original, keeps project choice out of initial selection, and stops at Intake.
+
+## Test 2: Unpacked First Launch
 
 1. Launch the unpacked executable with `PROJECT_STATE_STORAGE_ROOT` set to a new temporary folder.
 2. Confirm exactly one application window opens.
@@ -37,7 +54,7 @@ Verify the installer SHA-256 against the release manifest before running it.
 
 Pass condition: the packaged app launches on the real desktop, uses the external storage root, and survives restart.
 
-## Test 2: Local Transport Lifecycle
+## Test 3: Local Transport Lifecycle
 
 1. Open Settings as the Owner.
 2. Confirm Local API Arm Transport initially shows Stopped.
@@ -51,7 +68,7 @@ Pass condition: the packaged app launches on the real desktop, uses the external
 
 Pass condition: all lifecycle controls work, token display is one-time, and the service never binds beyond loopback.
 
-## Test 3: Generic Metadata Connector
+## Test 4: Generic Metadata Connector
 
 1. Re-enable the transport and capture a fresh token.
 2. Export or inspect the test project JSON to obtain its stable Project ID.
@@ -68,7 +85,7 @@ Pass condition: all lifecycle controls work, token display is one-time, and the 
 
 Pass condition: real connector traffic reaches Intake, retries deduplicate, and Core remains human-governed.
 
-## Test 4: Generic File Connector
+## Test 5: Generic File Connector
 
 1. Copy `fixtures/file-arm-example-metadata.json` to a temporary, untracked location.
 2. Replace placeholders and use a harmless TXT, Markdown, PDF, DOCX, CSV, JSON, or supported image fixture.
@@ -82,7 +99,7 @@ Pass condition: real connector traffic reaches Intake, retries deduplicate, and 
 
 Pass condition: file bytes, metadata, checksum, Intake approval, managed storage, integrity, backup, and restore work in the real desktop session.
 
-## Test 5: Installer, Upgrade, and Uninstall Preservation
+## Test 6: Installer, Upgrade, and Uninstall Preservation
 
 1. Record the current test storage database checksum and project count.
 2. Run the unsigned installer only after accepting that it is a local test candidate.
@@ -96,7 +113,7 @@ Pass condition: file bytes, metadata, checksum, Intake approval, managed storage
 
 Pass condition: install, repair/upgrade, and uninstall affect application files without silently deleting user data.
 
-## Test 6: Failure Cases
+## Test 7: Failure Cases
 
 Verify visible, bounded failures for:
 

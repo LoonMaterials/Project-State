@@ -3309,6 +3309,7 @@ let armTransportStatus = {
   tokenConfigured: false,
   lastError: ""
 };
+let discoveryWorkspace = { loaded: false, loading: false, cases: [], error: "" };
 let saveState = {
   status: "saved",
   message: ""
@@ -3333,6 +3334,7 @@ function createDesktopPlatformAdapter(bridge) {
   const files = bridge.files || {};
   const downloads = bridge.downloads || {};
   const armTransport = bridge.armTransport || {};
+  const discoveryStorage = bridge.discoveryStorage || {};
   const dialogs = bridge.dialogs || {};
   return {
     id: "desktop",
@@ -3473,6 +3475,18 @@ function createDesktopPlatformAdapter(bridge) {
       async revoke(payload) {
         return armTransport.revoke(payload);
       }
+    },
+    discovery: {
+      available: typeof discoveryStorage.stageTrustedFile === "function" && typeof discoveryStorage.getCase === "function",
+      stageTrustedFile: (payload) => discoveryStorage.stageTrustedFile(payload),
+      extractFileVersion: (payload) => discoveryStorage.extractFileVersion(payload),
+      readExtractionText: (payload) => discoveryStorage.readExtractionText(payload),
+      analyzeCase: (payload) => discoveryStorage.analyzeCase(payload),
+      recordAnswer: (payload) => discoveryStorage.recordAnswer(payload),
+      confirmRouting: (payload) => discoveryStorage.confirmRouting(payload),
+      promoteToIntake: (payload) => discoveryStorage.promoteToIntake(payload),
+      getCase: (payload) => discoveryStorage.getCase(payload),
+      readFoundationState: (payload) => discoveryStorage.readFoundationState(payload)
     }
   };
 }
@@ -3537,7 +3551,8 @@ function createBrowserPlatformAdapter() {
       async status() {
         return null;
       }
-    }
+    },
+    discovery: { available: false }
   };
 }
 
@@ -7589,9 +7604,18 @@ function renderFilesLibrary() {
         <p class="view-subtitle">${escapeHtml(t("filesLibrarySubtitle"))}</p>
       </div>
       <div class="button-row">
-        <button class="btn" data-action="import-files">${escapeHtml(t("importFiles"))}</button>
-        <button class="btn secondary" data-action="import-folder">${escapeHtml(t("importFolder"))}</button>
+        <button class="btn" data-action="import-files">Add files</button>
+        <button class="btn secondary" data-action="import-folder">Add folder</button>
       </div>
+    </section>
+    <section class="panel strong">
+      <div class="panel-head"><h2 class="panel-title">External security responsibility</h2></div>
+      <p>Project State does not scan files for malware. Only add files you trust and have already checked using your own security tools.</p>
+      <p class="item-meta">Project State copies selected files, records exact checksums, and blocks reads if staged bytes change.</p>
+    </section>
+    <section class="panel">
+      <div class="panel-head"><h2 class="panel-title">Discovery cases</h2></div>
+      ${discoveryWorkspace.cases.length ? `<div class="list">${discoveryWorkspace.cases.map(renderDiscoveryCaseSummary).join("")}</div>` : emptyText("No Discovery cases yet.")}
     </section>
     <p class="notice">${escapeHtml(t("originalFilePreserved"))} ${escapeHtml(t("recursiveFolderImport"))}</p>
     <section class="two-col-layout">
@@ -7605,6 +7629,26 @@ function renderFilesLibrary() {
       </article>
     </section>
   `);
+}
+
+function renderDiscoveryCaseSummary(discoveryCase) {
+  const routing = discoveryCase.confirmedRouting || {};
+  return `<article class="item"><p class="item-title">${escapeDisplay(discoveryCase.suggestedName || discoveryCase.title || "Discovery case", DISPLAY_META_LIMIT)}</p><p class="item-meta">${escapeHtml(discoveryCase.status || "created")} · ${escapeHtml(discoveryCase.stage || "stage")}${routing.destination ? ` · ${escapeHtml(routing.destination.replaceAll("_", " "))}` : ""}</p></article>`;
+}
+
+async function refreshDiscoveryWorkspace() {
+  if (!platformAdapter.discovery?.available || discoveryWorkspace.loading) return;
+  discoveryWorkspace.loading = true;
+  try {
+    const state = await platformAdapter.discovery.readFoundationState({});
+    discoveryWorkspace.cases = state.discoveryCases || [];
+    discoveryWorkspace.error = "";
+  } catch (error) {
+    discoveryWorkspace.error = error.message || "Discovery could not be loaded.";
+  } finally {
+    discoveryWorkspace.loaded = true;
+    discoveryWorkspace.loading = false;
+  }
 }
 
 function renderPendingManagedFile(intake) {
@@ -7663,15 +7707,11 @@ async function beginFileImport(kind = "files") {
 
 function openFileImportReviewModal(selection) {
   showModal({
-    title: t("fileImportReview"),
-    submitText: t("importToIntake"),
+    title: "Add to Discovery",
+    submitText: "Read and review",
     body: `
-      <p class="notice">${escapeHtml(t("fileImportReviewNotice"))}</p>
-      <p class="notice">${escapeHtml(t("originalFilePreserved"))}</p>
-      <div class="field">
-        <label for="projectId">${escapeHtml(t("project"))}</label>
-        <select id="projectId" name="projectId" required>${projectOptions()}</select>
-      </div>
+      <p class="notice">Project State does not scan files for malware. Only add files you trust and have already checked using your own security tools.</p>
+      <p class="notice">You do not need to choose a project yet. Original files remain untouched.</p>
       <div class="field">
         <label>${escapeHtml(t("selectedFiles"))} (${selection.candidates.length})</label>
         <div class="list import-file-list">
@@ -7683,6 +7723,8 @@ function openFileImportReviewModal(selection) {
           `).join("")}
         </div>
       </div>
+      <div class="field"><label for="privacyClass">Privacy</label><select id="privacyClass" name="privacyClass"><option value="local_only">Keep local only</option><option value="personal">Personal</option><option value="confidential">Confidential</option><option value="restricted">Restricted</option><option value="provider_allowed">Configured provider allowed later</option></select></div>
+      ${confirmationField("externalSecurityAcknowledged", "I understand Project State does not scan files. I trust these files and accept responsibility for checking them with my own security tools.")}
       ${selection.skipped?.length ? `<p class="notice">${escapeHtml(t("unsupportedFilesSkipped"))}: ${selection.skipped.length}</p>` : ""}
       ${auditFields({ reasonLabel: t("reason") })}
     `,
@@ -7691,45 +7733,94 @@ function openFileImportReviewModal(selection) {
       const candidates = selection.candidates.filter((file) => selectedPaths.includes(file.localPath));
       if (!candidates.length) return false;
       const actor = getOrCreateActor(data.actorName, "Human");
-      const stagingInput = candidates.map((file) => ({ ...file, intakeId: uid("intake") }));
-      const result = await platformAdapter.files.stageManagedFiles({ files: stagingInput });
-      for (const staged of result.staged || []) {
-        createIntakeItem({
-          id: staged.intakeId,
-          armType: "file",
-          title: staged.fileName,
-          projectId: data.projectId,
-          createdBy: actor.id,
-          sourceLabel: staged.originalPath,
-          proposedObjectType: "Source",
-          proposedChange: {
-            text: staged.fileName,
-            summary: String(data.reason || "").trim()
-          },
-          evidence: {
-            managedFile: {
-              fileName: staged.fileName,
-              contentType: staged.contentType,
-              size: staged.size,
-              sha256: staged.sha256,
-              managedPath: staged.managedPath
-            },
-            originalFile: {
-              localPath: staged.originalPath,
-              lastModified: staged.lastModified
-            }
-          },
-          save: false
-        });
+      let discoveryCaseId = "";
+      const stagedFiles = [];
+      for (const candidate of candidates) {
+        const staged = await platformAdapter.discovery.stageTrustedFile({ path: candidate.localPath, discoveryCaseId: discoveryCaseId || undefined, actorId: actor.id, privacyClass: data.privacyClass || "local_only", externalSecurityAcknowledged: data.externalSecurityAcknowledged === "on", reason: String(data.reason || "").trim() });
+        discoveryCaseId = staged.discoveryCaseId;
+        stagedFiles.push({ ...staged, originalName: candidate.name });
       }
-      if (!result.staged?.length) {
+      if (!stagedFiles.length) {
         window.alert(t("fileImportFailed"));
         return false;
       }
-      saveStore({ allowWithoutCoreApproval: true, reason: "managed-file-intake" });
-      activeRootView = "files";
+      const extractions = [];
+      for (const staged of stagedFiles) {
+        const result = await platformAdapter.discovery.extractFileVersion({ discoveryCaseId, fileVersionId: staged.fileVersionId, actorId: "project_state_deterministic" });
+        let text = "";
+        if (result.extraction?.textPath) {
+          const readResult = await platformAdapter.discovery.readExtractionText({ extractionId: result.extraction.id });
+          text = readResult.text || "";
+        }
+        extractions.push({
+          fileVersionId: staged.fileVersionId,
+          originalName: staged.originalName,
+          deduplicated: staged.deduplicated === true,
+          status: result.extraction?.status || "failed",
+          text,
+          textBytes: result.extraction?.textBytes || 0,
+          chunkCount: result.extraction?.chunkCount || 0,
+          error: result.extraction?.error || null
+        });
+      }
+      const analysis = await platformAdapter.discovery.analyzeCase({ discoveryCaseId, actorId: "project_state_deterministic" });
+      queuePostModalAction(() => openDiscoveryReviewModal({ discoveryCaseId, analysis, extractions, actor, reason: String(data.reason || "").trim() }));
+      return true;
+    }
+  });
+}
+
+function openDiscoveryReviewModal({ discoveryCaseId, analysis, extractions = [], actor, reason }) {
+  const bestName = analysis.suggestedProjectNames?.[0]?.name || "";
+  showModal({
+    title: "Review Discovery",
+    submitText: "Confirm",
+    body: `
+      <p class="notice"><strong>Read complete.</strong> Project State copied the selected file into managed staging, verified its exact bytes, and completed the supported local extraction shown below.</p>
+      <div class="field">
+        <label>File reading result</label>
+        <div class="list">
+          ${extractions.map((extraction) => {
+            const previewLimit = 6000;
+            const preview = String(extraction.text || "").slice(0, previewLimit);
+            const statusText = extraction.status === "complete"
+              ? `Read complete · ${formatBytes(extraction.textBytes)} extracted · ${extraction.chunkCount} ${extraction.chunkCount === 1 ? "chunk" : "chunks"}`
+              : extraction.status === "partial"
+                ? "Partially read"
+                : extraction.status === "metadata_only"
+                  ? "Metadata recorded; this file type has no local text extraction"
+                  : extraction.status === "unsupported"
+                    ? "This file type is stored but local text extraction is not supported"
+                    : `Read failed${extraction.error?.message ? `: ${extraction.error.message}` : ""}`;
+            return `
+              <article class="item">
+                <p class="item-title">${escapeDisplay(extraction.originalName || "Selected file", DISPLAY_META_LIMIT)}</p>
+                <p class="item-meta">${escapeHtml(statusText)}</p>
+                ${extraction.deduplicated ? `<p class="notice">This exact file was already stored. Project State reused its immutable bytes instead of creating another copy.</p>` : ""}
+                ${preview ? `<label>Extracted text preview</label><textarea rows="12" readonly>${escapeHtml(preview)}</textarea>${extraction.text.length > previewLimit ? `<p class="item-meta">Preview shows the first ${previewLimit.toLocaleString()} characters. The full extraction remains stored in Discovery.</p>` : ""}` : ""}
+              </article>
+            `;
+          }).join("")}
+        </div>
+      </div>
+      <p class="notice">Project State found a possible name and routing. These are suggestions, not decisions.</p>
+      <div class="field"><label>Suggested project name</label><input name="proposedProjectName" value="${escapeHtml(bestName)}"></div>
+      ${analysis.projectCandidates?.length ? `<div class="field"><label>Possible existing projects</label><div class="list">${analysis.projectCandidates.map((item) => `<p>${escapeDisplay(item.name, DISPLAY_META_LIMIT)} · ${Math.round(item.confidence * 100)}%</p>`).join("")}</div></div>` : ""}
+      ${(analysis.questions || []).map((question) => `<div class="field"><label for="answer_${escapeHtml(question.id)}">${escapeHtml(question.text)}</label><input id="answer_${escapeHtml(question.id)}" name="answer_${escapeHtml(question.id)}" placeholder="Not sure"></div>`).join("")}
+      <div class="field"><label for="destination">Where should this go?</label><select id="destination" name="destination" required><option value="existing_project">Existing project</option><option value="proposed_new_project">Propose a new project</option><option value="general_reference">General reference</option><option value="orphaned_idea">Orphaned idea</option><option value="unassigned">Leave unassigned</option><option value="rejected">Reject</option></select></div>
+      <div class="field"><label for="projectId">Existing project, if selected</label><select id="projectId" name="projectId"><option value="">None</option>${projectOptions()}</select></div>
+      <p class="notice">Confirming creates Intake proposals only. Core still requires separate human approval.</p>
+    `,
+    async onSubmit(data) {
+      for (const question of analysis.questions || []) await platformAdapter.discovery.recordAnswer({ discoveryCaseId, actorId: actor.id, questionId: question.id, answer: data[`answer_${question.id}`] || "Not sure" });
+      if (data.destination === "existing_project" && !data.projectId) { window.alert("Choose an existing project or select a different destination."); return false; }
+      const routing = await platformAdapter.discovery.confirmRouting({ discoveryCaseId, actorId: actor.id, destination: data.destination, projectId: data.projectId || null, proposedProjectName: data.proposedProjectName || bestName });
+      if (!["unassigned", "rejected"].includes(routing.routing.destination)) await platformAdapter.discovery.promoteToIntake({ discoveryCaseId, actorId: actor.id, reason: reason || "Confirmed Discovery routing." });
+      store = await loadStore() || store;
+      await refreshDiscoveryWorkspace();
+      activeRootView = routing.routing.destination === "unassigned" ? "files" : "intake";
       activeProjectId = null;
-      setSaveStatus("saved", t("fileImportComplete"));
+      setSaveStatus("saved", "Discovery confirmed.");
       return true;
     }
   });
@@ -13479,6 +13570,7 @@ app.addEventListener("click", (event) => {
     activeRootView = "files";
     activeProjectId = null;
     render();
+    refreshDiscoveryWorkspace().then(() => { if (activeRootView === "files") render(); });
   }
   if (action === "show-archived-projects") {
     activeRootView = "archived";
@@ -13803,6 +13895,7 @@ async function initializeApp() {
   render();
   store = await loadStore() || emptyStore();
   await refreshArmTransportStatus();
+  if (platformAdapter.discovery?.available) await refreshDiscoveryWorkspace();
   storageReady = true;
   render();
 }

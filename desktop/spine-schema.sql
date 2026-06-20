@@ -271,6 +271,35 @@ CREATE TABLE IF NOT EXISTS discovery_events (
   FOREIGN KEY(discovery_case_id) REFERENCES discovery_cases(id) ON UPDATE RESTRICT ON DELETE RESTRICT
 );
 
+CREATE TABLE IF NOT EXISTS discovery_extractions (
+  id TEXT PRIMARY KEY,
+  discovery_case_id TEXT NOT NULL,
+  file_asset_id TEXT NOT NULL,
+  file_version_id TEXT NOT NULL,
+  source_sha256 TEXT NOT NULL CHECK(length(source_sha256) = 64),
+  status TEXT NOT NULL CHECK(status IN ('complete', 'partial', 'metadata_only', 'unsupported', 'failed')),
+  extractor_id TEXT NOT NULL,
+  text_path TEXT,
+  text_sha256 TEXT,
+  text_bytes INTEGER NOT NULL DEFAULT 0 CHECK(text_bytes >= 0),
+  created_at TEXT NOT NULL,
+  record_json TEXT NOT NULL,
+  FOREIGN KEY(discovery_case_id) REFERENCES discovery_cases(id) ON UPDATE RESTRICT ON DELETE RESTRICT,
+  FOREIGN KEY(file_version_id, file_asset_id, source_sha256) REFERENCES file_versions(id, file_asset_id, sha256) ON UPDATE RESTRICT ON DELETE RESTRICT
+);
+
+CREATE TABLE IF NOT EXISTS discovery_chunks (
+  id TEXT PRIMARY KEY,
+  discovery_extraction_id TEXT NOT NULL,
+  chunk_index INTEGER NOT NULL CHECK(chunk_index >= 0),
+  text_path TEXT NOT NULL CHECK(text_path LIKE 'discovery/%'),
+  text_sha256 TEXT NOT NULL CHECK(length(text_sha256) = 64),
+  text_bytes INTEGER NOT NULL CHECK(text_bytes >= 0),
+  record_json TEXT NOT NULL,
+  UNIQUE(discovery_extraction_id, chunk_index),
+  FOREIGN KEY(discovery_extraction_id) REFERENCES discovery_extractions(id) ON UPDATE RESTRICT ON DELETE RESTRICT
+);
+
 CREATE TRIGGER IF NOT EXISTS file_assets_sha256_immutable
 BEFORE UPDATE OF sha256 ON file_assets
 BEGIN
@@ -324,6 +353,15 @@ BEFORE DELETE ON discovery_events
 BEGIN
   SELECT RAISE(ABORT, 'discovery events are append-only');
 END;
+
+CREATE TRIGGER IF NOT EXISTS discovery_extractions_append_only_update
+BEFORE UPDATE ON discovery_extractions BEGIN SELECT RAISE(ABORT, 'discovery extractions are append-only'); END;
+CREATE TRIGGER IF NOT EXISTS discovery_extractions_append_only_delete
+BEFORE DELETE ON discovery_extractions BEGIN SELECT RAISE(ABORT, 'discovery extractions are append-only'); END;
+CREATE TRIGGER IF NOT EXISTS discovery_chunks_append_only_update
+BEFORE UPDATE ON discovery_chunks BEGIN SELECT RAISE(ABORT, 'discovery chunks are append-only'); END;
+CREATE TRIGGER IF NOT EXISTS discovery_chunks_append_only_delete
+BEFORE DELETE ON discovery_chunks BEGIN SELECT RAISE(ABORT, 'discovery chunks are append-only'); END;
 
 INSERT OR IGNORE INTO meta (key, value_json, updated_at)
 VALUES ('discovery_schema', '{"version":"0.1","migration":"additive"}', '2026-06-19T00:00:00.000Z');

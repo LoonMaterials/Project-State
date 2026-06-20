@@ -52,7 +52,10 @@ async function main() {
       'activeRootView === "files"',
       'data-action="import-files"',
       'data-action="import-folder"',
-      'proposedObjectType: "Source"',
+      "platformAdapter.discovery.stageTrustedFile",
+      "platformAdapter.discovery.analyzeCase",
+      "platformAdapter.discovery.promoteToIntake",
+      "You do not need to choose a project yet",
       "originalFilePreserved"
     ]) assert(app.includes(required), `File library UI missing: ${required}`);
 

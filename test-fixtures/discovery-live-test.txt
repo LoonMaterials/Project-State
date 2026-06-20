@@ -1,0 +1,8 @@
+Project State Discovery Live Test
+
+This harmless fixture tests the Discovery-first workflow.
+
+Goal: confirm that Project State can stage a trusted file, preserve the original, extract its text, suggest a project name, ask the user questions, and create a pending Intake proposal without changing Core.
+
+Suggested project context: Discovery Rebuild Validation
+Owner response may be Not sure.

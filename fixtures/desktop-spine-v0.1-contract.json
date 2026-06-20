@@ -19,7 +19,7 @@
     },
     {
       "name": "quarantine",
-      "purpose": "Immutable selected file versions awaiting or carrying exact-checksum Security receipts; content access remains blocked until eligible."
+      "purpose": "Managed exact-byte copies of user-trusted selected files; content access requires external-security acknowledgment and matching registered bytes."
     },
     {
       "name": "discovery",
@@ -157,11 +157,19 @@
     },
     {
       "name": "security_receipts",
-      "purpose": "Append-only provider results bound by foreign key to an exact File Version asset and checksum."
+      "purpose": "Legacy-compatible append-only storage reserved for optional future provider-neutral results; no provider ships with Project State."
     },
     {
       "name": "discovery_events",
       "purpose": "Append-only Discovery lineage and processing history."
+    },
+    {
+      "name": "discovery_extractions",
+      "purpose": "Append-only deterministic extraction attempts with explicit states and exact File Version lineage."
+    },
+    {
+      "name": "discovery_chunks",
+      "purpose": "Stable checksummed text chunks stored under discovery managed files."
     }
   ],
   "largeContentRules": [
@@ -169,7 +177,7 @@
     "Original source files live in sources/.",
     "Long extract text and chunks live in extracts/.",
     "Images and screenshots live in attachments/.",
-    "Untrusted incoming File Versions live in quarantine/ until an eligible exact-checksum Security Receipt exists.",
+    "User-trusted incoming File Versions live in quarantine/ after explicit external-security acknowledgment; Project State performs no malware scan.",
     "Discovery artifacts remain separate from approved Core source material.",
     "SQLite records store IDs, metadata, checksums, and managed paths instead of embedded large content."
   ],
@@ -183,7 +191,9 @@
     "If load, migration, or integrity checks fail, preserve raw data and enter recovery mode instead of returning a blank store.",
     "Backup location must remain separate from primary storage unless a future server deployment explicitly changes that rule.",
     "Discovery Cases do not require a project.",
-    "File Versions, Security Receipts, Discovery Interactions, and Discovery Events are append-only.",
+    "File Versions, optional legacy Security Receipts, Discovery Interactions, and Discovery Events are append-only.",
+    "Every staged content read requires current bytes to match the registered File Version size and SHA-256.",
+    "External-security acknowledgment is not a clean or safe verdict.",
     "No Discovery storage record grants external arms human approval or Core authority."
   ],
   "minimumBridgeMethods": {
@@ -218,7 +228,15 @@
       "appendInteraction",
       "appendSecurityReceipt",
       "appendEvent",
-      "readFoundationState"
+      "readFoundationState",
+      "stageTrustedFile",
+      "extractFileVersion",
+      "readExtractionText",
+      "analyzeCase",
+      "recordAnswer",
+      "confirmRouting",
+      "getCase",
+      "promoteToIntake"
     ],
     "securityArms": [
       "authorizeContentAccess"

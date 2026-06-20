@@ -45,7 +45,9 @@ const REQUIRED_TABLES = [
   "discovery_case_files",
   "discovery_interactions",
   "security_receipts",
-  "discovery_events"
+  "discovery_events",
+  "discovery_extractions",
+  "discovery_chunks"
 ];
 
 function createProjectStateDesktopBridge(options = {}) {
@@ -122,6 +124,30 @@ function createProjectStateDesktopBridge(options = {}) {
       },
       async readFoundationState(payload = {}) {
         return readDiscoveryFoundationState({ storageRoot, dbPath, payload });
+      },
+      async stageTrustedFile(payload = {}) {
+        return stageTrustedDiscoveryFile({ storageRoot, dbPath, payload });
+      },
+      async extractFileVersion(payload = {}) {
+        return extractDiscoveryFileVersion({ storageRoot, dbPath, payload });
+      },
+      async readExtractionText(payload = {}) {
+        return readDiscoveryExtractionText({ storageRoot, dbPath, payload });
+      },
+      async analyzeCase(payload = {}) {
+        return analyzeDiscoveryCase({ storageRoot, dbPath, payload });
+      },
+      async recordAnswer(payload = {}) {
+        return recordDiscoveryAnswer({ storageRoot, dbPath, payload });
+      },
+      async confirmRouting(payload = {}) {
+        return confirmDiscoveryRouting({ storageRoot, dbPath, payload });
+      },
+      async getCase(payload = {}) {
+        return getDiscoveryCase({ storageRoot, dbPath, payload });
+      },
+      async promoteToIntake(payload = {}) {
+        return promoteDiscoveryToIntake({ storageRoot, dbPath, payload });
       }
     },
     securityArms: {
@@ -676,7 +702,11 @@ async function registerDiscoveryFileVersion({ storageRoot, dbPath, payload = {} 
       originalName,
       managedPath,
       createdAt,
-      securityState: "pending"
+      securityState: payload.externalSecurityAcknowledged ? "external_responsibility_acknowledged" : "unacknowledged",
+      externalSecurityAcknowledged: payload.externalSecurityAcknowledged === true,
+      externalSecurityAcknowledgedBy: payload.externalSecurityAcknowledgedBy || "",
+      externalSecurityAcknowledgedAt: payload.externalSecurityAcknowledgedAt || "",
+      externalSecurityReason: String(payload.externalSecurityReason || "")
     };
     insertStrict(db, "file_versions", {
       id: version.id,
@@ -879,7 +909,9 @@ async function readDiscoveryFoundationState({ storageRoot, dbPath, payload = {} 
       caseFiles: whereCase("discovery_case_files"),
       interactions: whereCase("discovery_interactions"),
       securityReceipts: readRecordJson(db, "security_receipts"),
-      events: whereCase("discovery_events")
+      events: whereCase("discovery_events"),
+      extractions: whereCase("discovery_extractions"),
+      chunks: readDiscoveryChunks(db, caseId)
     };
   } finally {
     db.close();
@@ -894,7 +926,9 @@ function discoveryTableCounts(db) {
     caseFiles: countRows(db, "discovery_case_files"),
     interactions: countRows(db, "discovery_interactions"),
     securityReceipts: countRows(db, "security_receipts"),
-    events: countRows(db, "discovery_events")
+    events: countRows(db, "discovery_events"),
+    extractions: countRows(db, "discovery_extractions"),
+    chunks: countRows(db, "discovery_chunks")
   };
 }
 
@@ -942,6 +976,286 @@ function parseRecordRow(row) {
   return JSON.parse(row.record_json);
 }
 
+function readDiscoveryChunks(db, caseId = "") {
+  if (!caseId) return readRecordJson(db, "discovery_chunks");
+  return db.prepare(`SELECT chunk.record_json FROM discovery_chunks AS chunk JOIN discovery_extractions AS extraction ON extraction.id = chunk.discovery_extraction_id WHERE extraction.discovery_case_id = ? ORDER BY chunk.chunk_index`).all(caseId).map(parseRecordRow);
+}
+
+async function stageTrustedDiscoveryFile({ storageRoot, dbPath, payload = {} }) {
+  await ensureSpine(storageRoot);
+  if (payload.externalSecurityAcknowledged !== true) throw securityGateError("EXTERNAL_SECURITY_ACKNOWLEDGMENT_REQUIRED", "Confirm that security checking is handled outside Project State before adding files.");
+  const actorId = requiredDiscoveryId(payload.actorId, "Staging actor ID");
+  const reason = requiredDiscoveryText(payload.reason, "External security acknowledgment reason");
+  const sourcePath = path.resolve(requiredDiscoveryText(payload.path || payload.localPath, "Selected file path"));
+  if (!fs.existsSync(sourcePath) || !fs.statSync(sourcePath).isFile()) throw new Error("Selected file does not exist or is not a file.");
+  const stat = fs.statSync(sourcePath);
+  if (stat.size > MAX_IMPORT_FILE_BYTES) throw new Error("Selected file exceeds the configured import size limit.");
+  const extension = path.extname(sourcePath).toLowerCase();
+  if (!IMPORT_FILE_EXTENSIONS.has(extension)) throw new Error("Selected file type is not supported for Discovery.");
+  const timestamp = requiredDiscoveryTimestamp(payload.timestamp || nowIso(), "Staging timestamp");
+  const discoveryCaseId = payload.discoveryCaseId || makeId("discovery_case");
+  const assetId = makeId("file_asset");
+  const versionId = makeId("file_version");
+  const stagedPath = path.join(storageRoot, "quarantine", assetId, versionId, safeFileName(path.basename(sourcePath)));
+  await fsp.mkdir(path.dirname(stagedPath), { recursive: true });
+  await fsp.copyFile(sourcePath, stagedPath, fs.constants.COPYFILE_EXCL);
+  const stagedStat = fs.statSync(stagedPath);
+  const sha256 = await checksumFile(stagedPath);
+  const managedPath = relativeManagedPath(storageRoot, stagedPath);
+
+  let caseCreated = false;
+  const lookupDb = openDatabase(dbPath);
+  try { caseCreated = !lookupDb.prepare("SELECT 1 AS found FROM discovery_cases WHERE id = ?").get(discoveryCaseId); }
+  finally { lookupDb.close(); }
+  if (caseCreated) await createDiscoveryCase({ storageRoot, dbPath, payload: { id: discoveryCaseId, createdBy: actorId, createdAt: timestamp, stage: "quarantine", status: "created", title: payload.caseTitle || path.basename(sourcePath) } });
+  const registration = await registerDiscoveryFileVersion({ storageRoot, dbPath, payload: { fileAssetId: assetId, fileVersionId: versionId, sha256, byteSize: stagedStat.size, originalName: path.basename(sourcePath), managedPath, createdAt: timestamp, privacyClass: payload.privacyClass || "local_only", externalSecurityAcknowledged: true, externalSecurityAcknowledgedBy: actorId, externalSecurityAcknowledgedAt: timestamp, externalSecurityReason: reason } });
+  const actualAsset = registration.fileAsset;
+  const actualVersion = registration.fileVersion;
+  if (registration.deduplicated && actualVersion.managedPath !== managedPath) await fsp.rm(path.dirname(stagedPath), { recursive: true, force: true });
+  const membershipDb = openDatabase(dbPath);
+  let membershipExists = false;
+  try { membershipExists = Boolean(membershipDb.prepare("SELECT 1 AS found FROM discovery_case_files WHERE discovery_case_id = ? AND file_version_id = ?").get(discoveryCaseId, actualVersion.id)); }
+  finally { membershipDb.close(); }
+  if (!membershipExists) await attachDiscoveryFileVersion({ storageRoot, dbPath, payload: { id: makeId("discovery_file"), discoveryCaseId, fileAssetId: actualAsset.id, fileVersionId: actualVersion.id, addedAt: timestamp, groupingRationale: "User-selected trusted file staged for Discovery." } });
+  await appendDiscoveryEvent({ storageRoot, dbPath, payload: { id: makeId("discovery_event"), discoveryCaseId, eventType: "external_security_responsibility_acknowledged", actorId, actorType: "human", occurredAt: timestamp, fileVersionId: actualVersion.id, reason } });
+  return { ok: true, discoveryCaseId, caseCreated, fileAssetId: actualAsset.id, fileVersionId: actualVersion.id, sha256: actualVersion.sha256, deduplicated: registration.deduplicated, securityMode: "external_user_responsibility" };
+}
+
+async function extractDiscoveryFileVersion({ storageRoot, dbPath, payload = {} }) {
+  await ensureSpine(storageRoot);
+  const discoveryCaseId = requiredDiscoveryId(payload.discoveryCaseId, "Discovery Case ID");
+  const fileVersionId = requiredDiscoveryId(payload.fileVersionId, "File Version ID");
+  const actorId = requiredDiscoveryId(payload.actorId, "Extraction actor ID");
+  const createdAt = requiredDiscoveryTimestamp(payload.createdAt || nowIso(), "Extraction createdAt");
+  const db = openDatabase(dbPath);
+  let version;
+  try {
+    if (!db.prepare("SELECT 1 AS found FROM discovery_case_files WHERE discovery_case_id = ? AND file_version_id = ?").get(discoveryCaseId, fileVersionId)) throw new Error("File Version is not attached to the Discovery Case.");
+    version = dbRecord(db, "file_versions", fileVersionId);
+    if (!version) throw new Error("File Version was not found.");
+  } finally { db.close(); }
+  await authorizeDiscoveryContentAccess({ storageRoot, dbPath, reference: { managedPath: version.managedPath } });
+  const extension = path.extname(version.originalName || "").toLowerCase();
+  const extractionId = payload.id || makeId("discovery_extraction");
+  let status = "unsupported";
+  let text = "";
+  let error = null;
+  try {
+    if ([".txt", ".md", ".csv", ".json", ".pdf", ".docx"].includes(extension)) {
+      text = cleanExtractedText(await extractText(resolveManagedPath(storageRoot, version.managedPath)) || "");
+      status = text ? "complete" : "partial";
+    } else if ([".png", ".jpg", ".jpeg", ".webp", ".gif"].includes(extension)) status = "metadata_only";
+  } catch (caught) {
+    status = "failed";
+    error = { name: caught.name || "Error", message: caught.message || "Extraction failed." };
+  }
+  let textPath = "";
+  let textSha256 = "";
+  let textBytes = 0;
+  const chunks = [];
+  if (text) {
+    const extractionRoot = path.join(storageRoot, "discovery", discoveryCaseId, fileVersionId, extractionId);
+    const fullTextPath = path.join(extractionRoot, "full-text.txt");
+    await fsp.mkdir(extractionRoot, { recursive: true });
+    await fsp.writeFile(fullTextPath, text, "utf8");
+    textPath = relativeManagedPath(storageRoot, fullTextPath);
+    textSha256 = checksumText(text);
+    textBytes = Buffer.byteLength(text, "utf8");
+    const pieces = chunkDeterministicText(text, Number(payload.chunkCharacters) || 4000);
+    for (let index = 0; index < pieces.length; index += 1) {
+      const chunkText = pieces[index];
+      const chunkId = `${extractionId}_chunk_${String(index).padStart(4, "0")}`;
+      const chunkPath = path.join(extractionRoot, "chunks", `${String(index).padStart(4, "0")}.txt`);
+      await fsp.mkdir(path.dirname(chunkPath), { recursive: true });
+      await fsp.writeFile(chunkPath, chunkText, "utf8");
+      chunks.push({ id: chunkId, discoveryExtractionId: extractionId, chunkIndex: index, textPath: relativeManagedPath(storageRoot, chunkPath), textSha256: checksumText(chunkText), textBytes: Buffer.byteLength(chunkText, "utf8") });
+    }
+  }
+  const record = { id: extractionId, discoveryCaseId, fileAssetId: version.fileAssetId, fileVersionId, sourceSha256: version.sha256, status, extractorId: "project_state_deterministic_v0.1", textPath, textSha256, textBytes, chunkCount: chunks.length, createdAt, error };
+  const writeDb = openDatabase(dbPath);
+  try {
+    writeDb.exec("BEGIN IMMEDIATE TRANSACTION");
+    insertStrict(writeDb, "discovery_extractions", { id: extractionId, discovery_case_id: discoveryCaseId, file_asset_id: version.fileAssetId, file_version_id: fileVersionId, source_sha256: version.sha256, status, extractor_id: record.extractorId, text_path: textPath || null, text_sha256: textSha256 || null, text_bytes: textBytes, created_at: createdAt, record_json: JSON.stringify(record) });
+    for (const chunk of chunks) insertStrict(writeDb, "discovery_chunks", { id: chunk.id, discovery_extraction_id: extractionId, chunk_index: chunk.chunkIndex, text_path: chunk.textPath, text_sha256: chunk.textSha256, text_bytes: chunk.textBytes, record_json: JSON.stringify(chunk) });
+    writeDb.exec("COMMIT");
+  } catch (caught) { try { writeDb.exec("ROLLBACK"); } catch {} throw caught; }
+  finally { writeDb.close(); }
+  await appendDiscoveryEvent({ storageRoot, dbPath, payload: { id: makeId("discovery_event"), discoveryCaseId, eventType: "deterministic_extraction_completed", actorId, actorType: "tool", occurredAt: createdAt, fileVersionId, extractionId, status, chunkCount: chunks.length } });
+  return { ok: status !== "failed", extraction: record, chunks };
+}
+
+async function readDiscoveryExtractionText({ storageRoot, dbPath, payload = {} }) {
+  const extractionId = requiredDiscoveryId(payload.extractionId || payload.id, "Discovery Extraction ID");
+  const db = openDatabase(dbPath);
+  let extraction;
+  let version;
+  try { extraction = dbRecord(db, "discovery_extractions", extractionId); if (!extraction) throw new Error("Discovery Extraction was not found."); version = dbRecord(db, "file_versions", extraction.fileVersionId); }
+  finally { db.close(); }
+  await authorizeDiscoveryContentAccess({ storageRoot, dbPath, reference: { managedPath: version.managedPath } });
+  if (!extraction.textPath) return { ok: true, status: extraction.status, text: "" };
+  const text = await fsp.readFile(resolveManagedPath(storageRoot, extraction.textPath), "utf8");
+  if (Buffer.byteLength(text, "utf8") !== extraction.textBytes || checksumText(text) !== extraction.textSha256) throw new Error("Discovery Extraction derivative integrity failed.");
+  return { ok: true, status: extraction.status, text };
+}
+
+function chunkDeterministicText(text, targetCharacters) {
+  const limit = Math.max(500, Math.min(16000, Number(targetCharacters) || 4000));
+  const chunks = [];
+  let remaining = String(text || "");
+  while (remaining.length > limit) {
+    let splitAt = remaining.lastIndexOf("\n", limit);
+    if (splitAt < Math.floor(limit * 0.5)) splitAt = remaining.lastIndexOf(" ", limit);
+    if (splitAt < Math.floor(limit * 0.5)) splitAt = limit;
+    chunks.push(remaining.slice(0, splitAt).trim());
+    remaining = remaining.slice(splitAt).trimStart();
+  }
+  if (remaining.trim()) chunks.push(remaining.trim());
+  return chunks;
+}
+
+const DISCOVERY_DESTINATIONS = new Set(["existing_project", "additional_project_link", "proposed_new_project", "general_reference", "orphaned_idea", "unassigned", "rejected"]);
+
+async function analyzeDiscoveryCase({ storageRoot, dbPath, payload = {} }) {
+  await ensureSpine(storageRoot);
+  const discoveryCaseId = requiredDiscoveryId(payload.discoveryCaseId, "Discovery Case ID");
+  const actorId = requiredDiscoveryId(payload.actorId || "project_state_deterministic", "Discovery analysis actor ID");
+  const createdAt = requiredDiscoveryTimestamp(payload.createdAt || nowIso(), "Discovery analysis createdAt");
+  const db = openDatabase(dbPath);
+  let versions;
+  let projects;
+  try {
+    if (!dbRecord(db, "discovery_cases", discoveryCaseId)) throw new Error("Discovery Case was not found.");
+    versions = db.prepare(`SELECT version.record_json FROM file_versions AS version JOIN discovery_case_files AS membership ON membership.file_version_id = version.id WHERE membership.discovery_case_id = ? ORDER BY membership.rowid`).all(discoveryCaseId).map(parseRecordRow);
+    projects = readRecordJson(db, "projects");
+  } finally { db.close(); }
+  if (!versions.length) throw new Error("Discovery Case has no File Versions to analyze.");
+  const baseNames = versions.map((version) => path.basename(version.originalName || "", path.extname(version.originalName || ""))).filter(Boolean);
+  const suggestedName = suggestDiscoveryName(baseNames) || "Unassigned material";
+  const suggestionTokens = tokenSet(suggestedName);
+  const projectCandidates = projects.map((project) => {
+    const projectTokens = tokenSet(project.name || "");
+    const overlap = [...suggestionTokens].filter((token) => projectTokens.has(token));
+    return { projectId: project.id, name: project.name || "", confidence: suggestionTokens.size ? Number((overlap.length / suggestionTokens.size).toFixed(2)) : 0, evidence: overlap };
+  }).filter((candidate) => candidate.confidence > 0).sort((a, b) => b.confidence - a.confidence || a.name.localeCompare(b.name)).slice(0, 5);
+  const questions = [];
+  if (projectCandidates.length) questions.push({ id: "routing_existing_project", text: `Does this belong to ${projectCandidates[0].name}?`, affects: "routing", allowNotSure: true });
+  else questions.push({ id: "routing_new_or_unassigned", text: "Should this become a new project, general reference, an orphaned idea, or remain unassigned?", affects: "routing", allowNotSure: true });
+  if (versions.length > 1) questions.push({ id: "grouping_confirmation", text: "Do these files belong together as one Discovery case?", affects: "grouping", allowNotSure: true });
+  questions.push({ id: "privacy_confirmation", text: "Should this material remain local-only, or may a configured provider receive selected content later?", affects: "privacy", allowNotSure: true });
+  const suggestion = { suggestedProjectNames: [{ name: suggestedName, confidence: baseNames.length === 1 ? 0.65 : 0.55, evidence: baseNames }], projectCandidates, questions, deterministic: true, provider: "project_state_local_rules_v0.1" };
+  await appendDiscoveryInteraction({ storageRoot, dbPath, payload: { id: makeId("interaction"), discoveryCaseId, actorId, actorType: "tool", interactionType: "machine_suggestion", createdAt, content: suggestion, evidence: versions.map((version) => ({ fileVersionId: version.id, sha256: version.sha256 })) } });
+  for (const question of questions) await appendDiscoveryInteraction({ storageRoot, dbPath, payload: { id: makeId("interaction"), discoveryCaseId, actorId, actorType: "tool", interactionType: "system_question", createdAt, content: question } });
+  await updateDiscoveryCaseRecord({ dbPath, discoveryCaseId, changes: { stage: "questions", status: "questioning", updatedAt: createdAt, suggestedName } });
+  await appendDiscoveryEvent({ storageRoot, dbPath, payload: { id: makeId("discovery_event"), discoveryCaseId, eventType: "deterministic_discovery_completed", actorId, actorType: "tool", occurredAt: createdAt, suggestedName, projectCandidateCount: projectCandidates.length, questionCount: questions.length } });
+  return { ok: true, discoveryCaseId, ...suggestion };
+}
+
+async function recordDiscoveryAnswer({ storageRoot, dbPath, payload = {} }) {
+  const discoveryCaseId = requiredDiscoveryId(payload.discoveryCaseId, "Discovery Case ID");
+  const actorId = requiredDiscoveryId(payload.actorId, "Answering actor ID");
+  const createdAt = requiredDiscoveryTimestamp(payload.createdAt || nowIso(), "Discovery answer createdAt");
+  const questionId = requiredDiscoveryId(payload.questionId, "Discovery question ID");
+  const answer = payload.answer === null || payload.answer === undefined || String(payload.answer).trim() === "" ? "Not sure" : payload.answer;
+  const interaction = await appendDiscoveryInteraction({ storageRoot, dbPath, payload: { id: payload.id || makeId("interaction"), discoveryCaseId, actorId, actorType: "human", interactionType: payload.correction ? "user_correction" : "user_answer", createdAt, questionId, content: answer, supersedesInteractionId: payload.supersedesInteractionId || null } });
+  await appendDiscoveryEvent({ storageRoot, dbPath, payload: { id: makeId("discovery_event"), discoveryCaseId, eventType: payload.correction ? "answer_corrected" : "answer_recorded", actorId, actorType: "human", occurredAt: createdAt, interactionId: interaction.interaction.id, questionId } });
+  return interaction;
+}
+
+async function confirmDiscoveryRouting({ storageRoot, dbPath, payload = {} }) {
+  const discoveryCaseId = requiredDiscoveryId(payload.discoveryCaseId, "Discovery Case ID");
+  const actorId = requiredDiscoveryId(payload.actorId, "Routing actor ID");
+  const confirmedAt = requiredDiscoveryTimestamp(payload.confirmedAt || nowIso(), "Routing confirmedAt");
+  const destination = String(payload.destination || "");
+  if (!DISCOVERY_DESTINATIONS.has(destination)) throw new Error("Discovery routing destination is not supported.");
+  const projectId = payload.projectId ? requiredDiscoveryId(payload.projectId, "Routing project ID") : null;
+  if (destination === "existing_project" && !projectId) throw new Error("Existing-project routing requires a project ID.");
+  const additionalProjectIds = Array.isArray(payload.additionalProjectIds) ? [...new Set(payload.additionalProjectIds.map((id) => requiredDiscoveryId(id, "Additional project ID")))] : [];
+  const db = openDatabase(dbPath);
+  try {
+    if (!dbRecord(db, "discovery_cases", discoveryCaseId)) throw new Error("Discovery Case was not found.");
+    for (const id of [projectId, ...additionalProjectIds].filter(Boolean)) if (!db.prepare("SELECT 1 AS found FROM projects WHERE id = ?").get(id)) throw new Error(`Routing project was not found: ${id}`);
+  } finally { db.close(); }
+  const routing = { destination, projectId, additionalProjectIds, proposedProjectName: String(payload.proposedProjectName || "").trim(), confirmedBy: actorId, confirmedAt };
+  if (destination === "proposed_new_project" && !routing.proposedProjectName) throw new Error("New-project routing requires a proposed project name.");
+  const interaction = await appendDiscoveryInteraction({ storageRoot, dbPath, payload: { id: payload.id || makeId("interaction"), discoveryCaseId, actorId, actorType: "human", interactionType: "routing_confirmation", createdAt: confirmedAt, content: routing } });
+  await updateDiscoveryCaseRecord({ dbPath, discoveryCaseId, changes: { stage: "routing", status: "ready_for_intake", updatedAt: confirmedAt, confirmedProjectId: projectId, confirmedRouting: routing, routingInteractionId: interaction.interaction.id } });
+  await appendDiscoveryEvent({ storageRoot, dbPath, payload: { id: makeId("discovery_event"), discoveryCaseId, eventType: "routing_confirmed", actorId, actorType: "human", occurredAt: confirmedAt, destination, projectId, interactionId: interaction.interaction.id } });
+  return { ok: true, discoveryCaseId, routing, interactionId: interaction.interaction.id };
+}
+
+async function getDiscoveryCase({ storageRoot, dbPath, payload = {} }) {
+  const discoveryCaseId = requiredDiscoveryId(payload.discoveryCaseId || payload.id, "Discovery Case ID");
+  const state = await readDiscoveryFoundationState({ storageRoot, dbPath, payload: { discoveryCaseId } });
+  if (!state.discoveryCases.length) throw new Error("Discovery Case was not found.");
+  const memberVersionIds = new Set(state.caseFiles.map((item) => item.fileVersionId));
+  return { ok: true, discoveryCase: state.discoveryCases[0], fileAssets: state.fileAssets.filter((asset) => state.fileVersions.some((version) => memberVersionIds.has(version.id) && version.fileAssetId === asset.id)), fileVersions: state.fileVersions.filter((version) => memberVersionIds.has(version.id)), memberships: state.caseFiles, extractions: state.extractions, chunks: state.chunks, interactions: state.interactions, events: state.events };
+}
+
+async function updateDiscoveryCaseRecord({ dbPath, discoveryCaseId, changes = {} }) {
+  const db = openDatabase(dbPath);
+  try {
+    const current = dbRecord(db, "discovery_cases", discoveryCaseId);
+    if (!current) throw new Error("Discovery Case was not found.");
+    const next = { ...current, ...cloneJson(changes) };
+    if (!DISCOVERY_STAGES.has(next.stage) || !DISCOVERY_CASE_STATUSES.has(next.status)) throw new Error("Discovery Case state is not supported.");
+    db.prepare("UPDATE discovery_cases SET updated_at = ?, stage = ?, status = ?, confirmed_project_id = ?, record_json = ? WHERE id = ?").run(next.updatedAt || nowIso(), next.stage, next.status, next.confirmedProjectId || null, JSON.stringify(next), discoveryCaseId);
+    return next;
+  } finally { db.close(); }
+}
+
+function suggestDiscoveryName(baseNames) {
+  if (!baseNames.length) return "";
+  if (baseNames.length === 1) return titleFromTokens(baseNames[0]);
+  const tokenLists = baseNames.map((name) => [...tokenSet(name)]);
+  const common = tokenLists[0].filter((token) => tokenLists.every((list) => list.includes(token)));
+  return titleFromTokens(common.length ? common.join(" ") : baseNames[0]);
+}
+
+function tokenSet(value) {
+  return new Set(String(value || "").toLowerCase().replace(/[_-]+/g, " ").replace(/[^a-z0-9\s]/g, " ").split(/\s+/).filter((token) => token.length > 1 && !["the", "and", "for", "with", "from", "file", "document"].includes(token)));
+}
+
+function titleFromTokens(value) {
+  return String(value || "").replace(/[_-]+/g, " ").replace(/\s+/g, " ").trim().replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+async function promoteDiscoveryToIntake({ storageRoot, dbPath, payload = {} }) {
+  const discoveryCaseId = requiredDiscoveryId(payload.discoveryCaseId, "Discovery Case ID");
+  const actorId = requiredDiscoveryId(payload.actorId, "Promoting actor ID");
+  const promotedAt = requiredDiscoveryTimestamp(payload.promotedAt || nowIso(), "Discovery promotion timestamp");
+  const reason = requiredDiscoveryText(payload.reason, "Discovery promotion reason");
+  const caseView = await getDiscoveryCase({ storageRoot, dbPath, payload: { discoveryCaseId } });
+  const discoveryCase = caseView.discoveryCase;
+  if (discoveryCase.status === "promoted" && discoveryCase.promotedIntakeBatchId) return { ok: true, deduplicated: true, discoveryCaseId, intakeBatchId: discoveryCase.promotedIntakeBatchId, intakeItemIds: discoveryCase.promotedIntakeItemIds || [] };
+  if (discoveryCase.status !== "ready_for_intake" || !discoveryCase.confirmedRouting || !discoveryCase.routingInteractionId) throw new Error("Discovery Case is not ready for Intake promotion.");
+  const routing = discoveryCase.confirmedRouting;
+  if (["unassigned", "rejected"].includes(routing.destination)) throw new Error(`Discovery destination ${routing.destination} cannot be promoted to Intake.`);
+  for (const version of caseView.fileVersions) await authorizeDiscoveryContentAccess({ storageRoot, dbPath, reference: { managedPath: version.managedPath } });
+  const intakeBatchId = payload.intakeBatchId || makeId("intake_batch");
+  const intakeItems = [];
+  const targetProjectIds = [...new Set([routing.projectId, ...(routing.additionalProjectIds || [])].filter(Boolean))];
+  for (const version of caseView.fileVersions) for (const projectId of (targetProjectIds.length ? targetProjectIds : [null])) intakeItems.push({ id: makeId("intake_item"), intakeBatchId, projectId: projectId || "", status: "pending", armType: "discovery", proposedObjectType: "Source", discoveryCaseId, fileAssetId: version.fileAssetId, fileVersionId: version.id, sourceSha256: version.sha256, originalName: version.originalName, destination: routing.destination, routingInteractionId: discoveryCase.routingInteractionId, proposedBy: actorId, proposedAt: promotedAt, reason });
+  const batch = { id: intakeBatchId, status: "pending", createdAt: promotedAt, createdBy: actorId, reason, origin: "discovery", discoveryCaseId, routingInteractionId: discoveryCase.routingInteractionId, destination: routing.destination, itemIds: intakeItems.map((item) => item.id) };
+  const db = openDatabase(dbPath);
+  try {
+    db.exec("BEGIN IMMEDIATE TRANSACTION");
+    insertStrict(db, "intake_batches", { id: batch.id, status: batch.status, created_at: batch.createdAt, record_json: JSON.stringify(batch) });
+    for (const item of intakeItems) insertStrict(db, "intake_items", { id: item.id, project_id: item.projectId, status: item.status, arm_type: item.armType, proposed_object_type: item.proposedObjectType, record_json: JSON.stringify(item) });
+    if (routing.destination === "proposed_new_project") {
+      const proposedProjectId = makeId("proposed_project");
+      const proposed = { id: proposedProjectId, intakeBatchId, name: routing.proposedProjectName, status: "pending", discoveryCaseId, proposedBy: actorId, proposedAt: promotedAt, sourceIntakeItemIds: intakeItems.map((item) => item.id) };
+      insertStrict(db, "proposed_projects", { id: proposed.id, intake_batch_id: intakeBatchId, status: proposed.status, record_json: JSON.stringify(proposed) });
+      batch.proposedProjectId = proposedProjectId;
+      db.prepare("UPDATE intake_batches SET record_json = ? WHERE id = ?").run(JSON.stringify(batch), intakeBatchId);
+    }
+    db.exec("COMMIT");
+  } catch (error) { try { db.exec("ROLLBACK"); } catch {} throw error; }
+  finally { db.close(); }
+  await updateDiscoveryCaseRecord({ dbPath, discoveryCaseId, changes: { stage: "intake", status: "promoted", updatedAt: promotedAt, promotedIntakeBatchId: intakeBatchId, promotedIntakeItemIds: intakeItems.map((item) => item.id) } });
+  await appendDiscoveryEvent({ storageRoot, dbPath, payload: { id: makeId("discovery_event"), discoveryCaseId, eventType: "promoted_to_intake", actorId, actorType: "human", occurredAt: promotedAt, intakeBatchId, intakeItemIds: intakeItems.map((item) => item.id), reason } });
+  return { ok: true, deduplicated: false, discoveryCaseId, intakeBatchId, intakeItemIds: intakeItems.map((item) => item.id), destination: routing.destination, coreChanged: false };
+}
+
 async function authorizeDiscoveryContentAccess({ storageRoot, dbPath, reference = {} }) {
   await ensureSpine(storageRoot);
   const suppliedPath = reference?.managedPath
@@ -958,7 +1272,7 @@ async function authorizeDiscoveryContentAccess({ storageRoot, dbPath, reference 
   const managedPath = relativeManagedPath(storageRoot, resolvedPath);
   const db = openDatabase(dbPath);
   try {
-    const versionRow = db.prepare("SELECT id, file_asset_id, sha256, byte_size FROM file_versions WHERE managed_path = ?").get(managedPath);
+    const versionRow = db.prepare("SELECT id, file_asset_id, sha256, byte_size, record_json FROM file_versions WHERE managed_path = ?").get(managedPath);
     if (!versionRow) throw securityGateError("FILE_VERSION_MISMATCH", "Quarantined content is not registered as a File Version.");
     if (!fs.existsSync(resolvedPath) || !fs.statSync(resolvedPath).isFile()) {
       throw securityGateError("FILE_VERSION_MISMATCH", "Registered quarantined content is missing.");
@@ -966,6 +1280,10 @@ async function authorizeDiscoveryContentAccess({ storageRoot, dbPath, reference 
     const stat = fs.statSync(resolvedPath);
     if (stat.size !== versionRow.byte_size || await checksumFile(resolvedPath) !== versionRow.sha256) {
       throw securityGateError("FILE_VERSION_MISMATCH", "Quarantined content no longer matches its immutable File Version.");
+    }
+    const version = JSON.parse(versionRow.record_json);
+    if (version.externalSecurityAcknowledged === true && version.externalSecurityAcknowledgedBy && version.externalSecurityAcknowledgedAt) {
+      return { ok: true, governed: true, fileAssetId: versionRow.file_asset_id, fileVersionId: versionRow.id, sha256: versionRow.sha256, securityMode: "external_user_responsibility", acknowledgedBy: version.externalSecurityAcknowledgedBy, acknowledgedAt: version.externalSecurityAcknowledgedAt };
     }
     const receipt = db.prepare(`
       SELECT id, sha256, verdict, eligible, provider_id, completed_at
@@ -1959,6 +2277,8 @@ async function verifyIntegrity({ storageRoot, dbPath, preserveOnFailure = true }
       extracts: 0,
       attachments: 0,
       quarantine: 0,
+      discoveryExtractions: 0,
+      discoveryChunks: 0,
       manifests: 0
     },
     errors: []
@@ -2028,6 +2348,8 @@ async function verifyIntegrity({ storageRoot, dbPath, preserveOnFailure = true }
       checksumColumn: "sha256",
       label: "quarantine"
     });
+    verifyManagedTextRows(report, db, storageRoot, { table: "discovery_extractions", idColumn: "id", pathColumn: "text_path", checksumColumn: "text_sha256", bytesColumn: "text_bytes", label: "discoveryExtractions" });
+    verifyManagedTextRows(report, db, storageRoot, { table: "discovery_chunks", idColumn: "id", pathColumn: "text_path", checksumColumn: "text_sha256", bytesColumn: "text_bytes", label: "discoveryChunks" });
 
     for (const issue of db.prepare("PRAGMA foreign_key_check").all()) {
       report.errors.push(`SQLite foreign key violation: ${issue.table} row ${issue.rowid}.`);

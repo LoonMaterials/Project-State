@@ -14,29 +14,29 @@ function includesAll(values, required) {
 function main() {
   assert.equal(contract.contractType, "Discovery");
   assert.equal(contract.contractVersion, "0.1");
-  assert.equal(contract.implementationStatus, "storage_foundation_implemented");
+  assert.equal(contract.implementationStatus, "rebuild_in_progress_external_security_boundary");
 
-  const requiredSequence = ["add", "quarantine", "security", "extract", "discovery", "questions", "routing", "intake", "human_approval", "core"];
+  const requiredSequence = ["add", "external_security_acknowledgment", "stage", "extract", "discovery", "questions", "routing", "intake", "human_approval", "core"];
   assert.deepEqual(contract.governingSequence, requiredSequence, "Discovery governing sequence drifted.");
 
   const missingOperations = includesAll(contract.operations, ["createCase", "attachFileAssets", "recordAnswers", "confirmRouting", "promoteToIntake"]);
   assert.deepEqual(missingOperations, [], "Discovery contract is missing operations.");
 
-  const missingObjects = includesAll(contract.requiredFoundationObjects, ["FileAsset", "FileVersion", "DiscoveryCase", "Interaction", "SecurityReceipt", "DiscoveryEvent"]);
+  const missingObjects = includesAll(contract.requiredFoundationObjects, ["FileAsset", "FileVersion", "DiscoveryCase", "Interaction", "ExternalSecurityAcknowledgment", "DiscoveryEvent"]);
   assert.deepEqual(missingObjects, [], "Discovery foundation objects drifted.");
 
   const missingDestinations = includesAll(contract.destinations, ["existing_project", "additional_project_link", "proposed_new_project", "general_reference", "orphaned_idea", "unassigned", "rejected"]);
   assert.deepEqual(missingDestinations, [], "Discovery destination model drifted.");
 
   for (const text of [
-    "Security decides whether bytes may be accessed.",
+    "Project State does not scan files or claim they are safe.",
     "Discovery does not require a project.",
     "Human approval is required before Core changes.",
     "One File Asset may link to multiple projects"
   ]) assert(design.includes(text) || contract.invariants.some((item) => item.includes(text)), `Missing Discovery invariant: ${text}`);
 
   assert(inventory.includes("## 20. Approved Discovery-First Next Stage"));
-  assert(inventory.includes("Stage 2 storage foundation implemented and verified; Stage 3 Security gate started"));
+  assert(inventory.includes("Discovery rebuild without bundled antivirus"));
 
   console.log("Discovery Contract Check");
   console.log(JSON.stringify({ version: contract.contractVersion, stages: contract.governingSequence.length, operations: contract.operations.length, objects: contract.requiredFoundationObjects.length, destinations: contract.destinations.length, invariants: contract.invariants.length }, null, 2));

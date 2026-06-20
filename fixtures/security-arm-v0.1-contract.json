@@ -1,52 +1,40 @@
 {
   "app": "Project State",
-  "contractType": "SecurityArm",
+  "contractType": "ExternalSecurityBoundary",
   "contractVersion": "0.1",
-  "implementationStatus": "foundation_contract",
-  "requiredAtFirstRun": true,
-  "failClosed": true,
-  "operations": [
-    "describeCapabilities",
-    "healthCheck",
-    "scanStagedFile",
-    "getScanReceipt",
-    "rescanStagedFile",
-    "revokeProvider"
+  "implementationStatus": "external_responsibility_no_bundled_scanner",
+  "bundledMalwareScanning": false,
+  "bundledProviders": [],
+  "windowsDefenderIntegration": false,
+  "requiredAcknowledgment": {
+    "actorId": true,
+    "timestamp": true,
+    "reason": true,
+    "fileVersionId": true,
+    "discoveryCaseId": true
+  },
+  "enforcedControls": [
+    "copy_original_without_moving",
+    "sha256_exact_identity",
+    "byte_size_exact_identity",
+    "registered_managed_path",
+    "block_changed_or_missing_staged_bytes",
+    "append_only_acknowledgment_event"
   ],
-  "verdicts": [
+  "forbiddenClaims": [
+    "malware_free",
     "clean",
-    "threat_detected",
-    "suspicious",
-    "unknown",
-    "error"
-  ],
-  "contentEligibleVerdicts": [
-    "clean"
+    "safe",
+    "threat_free",
+    "antivirus_healthy"
   ],
   "stableErrors": [
-    "SECURITY_ARM_NOT_CONFIGURED",
-    "SECURITY_ARM_UNAVAILABLE",
-    "SECURITY_HEALTH_CHECK_FAILED",
-    "SCAN_FAILED",
-    "THREAT_DETECTED",
-    "VERDICT_SUSPICIOUS",
-    "VERDICT_UNKNOWN",
-    "SECURITY_RECEIPT_STALE",
+    "EXTERNAL_SECURITY_ACKNOWLEDGMENT_REQUIRED",
     "FILE_VERSION_MISMATCH",
-    "SCAN_SCOPE_REJECTED"
+    "STAGED_FILE_MISSING",
+    "STAGING_SCOPE_REJECTED"
   ],
-  "receiptRequiredFields": [
-    "receiptId",
-    "scanJobId",
-    "fileAssetId",
-    "fileVersionId",
-    "sha256",
-    "verdict",
-    "eligible",
-    "providerId",
-    "startedAt",
-    "completedAt"
-  ],
+  "optionalFutureSecurityReceiptStorage": true,
   "forbiddenAuthority": [
     "selectProject",
     "createProject",
@@ -57,7 +45,5 @@
     "deleteOriginalFile",
     "scanArbitraryPath",
     "rewriteReceiptHistory"
-  ],
-  "aetherInitialProviderProfile": "windows_defender",
-  "providerSpecificCommands": "TBD_PENDING_OFFICIAL_PROVIDER_DOCUMENTATION"
+  ]
 }

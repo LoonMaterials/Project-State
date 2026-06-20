@@ -4,7 +4,7 @@ Checkpoint date: 2026-06-19
 
 Checkpoint label: `final-pre-discovery-v0.1`
 
-This checkpoint preserves the last Project State implementation before the Discovery-first, Security Arm, global File Asset, and provider-neutral Interaction architecture begins.
+This checkpoint preserves the last Project State implementation before the Discovery-first, global File Asset, external-security boundary, and provider-neutral Interaction architecture begins.
 
 ## Included behavior
 
@@ -20,12 +20,12 @@ This checkpoint preserves the last Project State implementation before the Disco
 ## Explicitly not included
 
 - Discovery Cases before project selection.
-- Mandatory Security Arm scanning before content access.
+- External-security acknowledgment and exact-byte enforcement before content access.
 - Global content-addressed File Assets independent of projects.
 - Provider-neutral Interaction records and adaptive user questions.
 - Existing-project matching or suggested project names.
 - Discovery-to-Intake promotion.
-- Windows Defender integration.
+- Discovery extraction, questions, routing, and Intake promotion.
 
 ## Preserved artifacts
 

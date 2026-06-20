@@ -14,7 +14,7 @@
     "check:arm-transport": "node scripts/local-arm-transport-contract-check.js && node scripts/local-arm-transport-implementation-check.js",
     "check:file-arm": "node scripts/file-arm-contract-check.js && node scripts/file-arm-implementation-check.js",
     "check:checkpoint": "node scripts/pre-discovery-checkpoint-check.js",
-    "check:discovery-foundation": "node scripts/discovery-contract-check.js && node scripts/security-arm-contract-check.js && node scripts/discovery-storage-foundation-check.js",
+    "check:discovery-foundation": "node scripts/discovery-contract-check.js && node scripts/security-arm-contract-check.js && node scripts/discovery-storage-foundation-check.js && node scripts/external-security-boundary-check.js && node scripts/discovery-extraction-check.js && node scripts/discovery-case-flow-check.js && node scripts/discovery-ui-flow-check.js",
     "arm:submit": "node scripts/api-arm-submit.js",
     "arm:submit-file": "node scripts/api-arm-submit-file.js",
     "check:release": "node scripts/release-contract-check.js && node scripts/run-electron-runtime-smoke.js",
