@@ -3297,6 +3297,9 @@ let activeHistoryEventType = "all";
 let activeChangesSinceDate = defaultChangesSinceDate();
 let activeObjectDetail = null;
 let postModalAction = null;
+let pendingFlowReturnContext = null;
+const flowDrafts = new Map();
+let auditWorkSession = { actorName: "", reason: "", updatedAt: "" };
 let searchQuery = "";
 let armTransportStatus = {
   available: false,
@@ -3314,6 +3317,7 @@ let saveState = {
   status: "saved",
   message: ""
 };
+let saveQueue = Promise.resolve();
 
 const app = document.querySelector("#app");
 
@@ -5224,26 +5228,32 @@ function saveStore(options = {}) {
   if (!seriousStorageWorkAllowed() && !options.allowInBrowserDev) {
     setSaveStatus("unsaved", t("browserDevNoSilentStorage"));
     console.error("Project State blocked a serious storage write because the desktop bridge is missing.");
-    return;
+    return Promise.resolve(false);
   }
   const hasApprovedCoreWrite = pendingApprovedCoreWrites > 0;
   if (!options.allowWithoutCoreApproval && !hasApprovedCoreWrite) {
     setSaveStatus("unsaved", t("saveBlockedApproval"));
     console.error("Project State blocked a save because no approved core change was recorded first.");
-    return;
+    return Promise.resolve(false);
   }
   const approvedWriteCount = pendingApprovedCoreWrites;
   pendingApprovedCoreWrites = 0;
-  ProjectStateStorage.save(store)
+  const storeSnapshot = cloneRecord(store);
+  saveQueue = saveQueue
+    .catch(() => {})
+    .then(() => ProjectStateStorage.save(storeSnapshot))
     .then(() => {
       setSaveStatus("saved", tFormat("savedAt", { time: formatDate(nowIso()) }));
       renderStorageWarning();
+      return true;
     })
     .catch((error) => {
       pendingApprovedCoreWrites += approvedWriteCount;
       setSaveStatus("unsaved", tFormat("saveStorageFailed", { message: error?.message || t("storageFailed") }));
       console.error("Project State could not save through the storage spine.", error);
+      return false;
     });
+  return saveQueue;
 }
 
 function storageSizeInfo(raw = storageSnapshotText || platformAdapter.storage.getLegacyItem(STORAGE_KEY) || "") {
@@ -6146,6 +6156,7 @@ function buildWorkInboxItems() {
     meta: item.meta || "",
     projectId: item.projectId || "",
     action: item.action || "open-project",
+    correctiveAction: item.correctiveAction || "",
     actionLabel: item.actionLabel || t("openItem"),
     sortAt: item.sortAt || nowIso()
   });
@@ -6171,6 +6182,7 @@ function buildWorkInboxItems() {
     if (project.archived) continue;
     const incompleteFlags = projectCompletenessFlags(project).filter((flag) => !flag.passed && !["sourceFilesClear", "healthNotBlocked"].includes(flag.key));
     if (incompleteFlags.length) {
+      const correction = projectCorrectionForFlag(incompleteFlags[0].key);
       push({
         id: `project-completeness-${project.id}`,
         level: "warning",
@@ -6179,7 +6191,9 @@ function buildWorkInboxItems() {
         body: incompleteFlags.map((flag) => flag.label).join(", "),
         meta: `${t("lastUpdated")}: ${formatDate(project.updatedAt)}`,
         projectId: project.id,
-        actionLabel: t("goToProject"),
+        action: "correct-project-warning",
+        correctiveAction: correction.action,
+        actionLabel: correction.label,
         sortAt: project.updatedAt
       });
     }
@@ -6425,7 +6439,7 @@ function renderInboxItem(item) {
       ${item.body ? `<p class="item-body">${escapeDisplay(item.body, DISPLAY_META_LIMIT)}</p>` : ""}
       ${item.meta ? `<p class="item-meta">${escapeDisplay(item.meta, DISPLAY_META_LIMIT)}</p>` : ""}
       <div class="item-actions">
-        <button class="btn secondary compact" data-action="${escapeHtml(item.action)}" ${item.projectId ? `data-project-id="${escapeHtml(item.projectId)}"` : ""}>${escapeHtml(item.actionLabel)}</button>
+        <button class="btn secondary compact" data-action="${escapeHtml(item.action)}" ${item.projectId ? `data-project-id="${escapeHtml(item.projectId)}"` : ""} ${item.correctiveAction ? `data-corrective-action="${escapeHtml(item.correctiveAction)}"` : ""}>${escapeHtml(item.actionLabel)}</button>
       </div>
     </div>
   `;
@@ -6472,9 +6486,51 @@ function shell(inner) {
       </div>
     </header>
     <div data-storage-warning-slot>${runtimeWarningHtml()}${storageWarningHtml()}</div>
-    <main class="main">${inner}</main>
+    <main class="main">${workflowBreadcrumbHtml()}${inner}</main>
   `;
   applyRoleAwareControls();
+}
+
+function projectCorrectionForFlag(flagKey = "") {
+  if (["hasCurrentStatus", "hasCurrentSummary", "healthNotBlocked"].includes(flagKey)) return { action: "edit-status", label: "Complete current state" };
+  if (flagKey === "hasNextAction") return { action: "add-action", label: "Add next action" };
+  if (flagKey === "hasRecentDecision") return { action: "add-decision", label: "Record decision" };
+  if (["hasSourceReference", "sourceFilesClear"].includes(flagKey)) return { action: flagKey === "sourceFilesClear" ? "verify-all-source-files" : "add-source", label: flagKey === "sourceFilesClear" ? "Verify source files" : "Add source" };
+  return { action: "edit-status", label: "Open and correct" };
+}
+
+function projectNextStep(project) {
+  const flags = projectCompletenessFlags(project);
+  const missing = new Set(flags.filter((flag) => !flag.passed).map((flag) => flag.key));
+  if (missing.has("hasCurrentStatus") || missing.has("hasCurrentSummary")) return { action: "edit-status", label: "Complete current state", detail: "Record the current status and summary." };
+  if (missing.has("hasNextAction")) return { action: "add-action", label: "Add next action", detail: "Give the project one concrete next step." };
+  if (missing.has("hasRecentDecision")) return { action: "add-decision", label: "Record a decision", detail: "Capture the latest governing decision." };
+  if (missing.has("hasSourceReference")) return { action: "add-source", label: "Add supporting source", detail: "Connect evidence to the project." };
+  if (missing.has("sourceFilesClear")) return { action: "verify-all-source-files", label: "Verify source files", detail: "Resolve missing or changed source evidence." };
+  if (missing.has("healthNotBlocked")) return { action: "edit-status", label: "Review blocked status", detail: "Update the health flag or record what remains blocked." };
+  return { action: "show-history", label: "Review recent history", detail: "The project is complete enough for continued work." };
+}
+
+function intakeNextStep(item, airlockFlags = intakeAirlockChecks(item)) {
+  if (item.status === "approved" && item.projectId && getProject(item.projectId)) return { action: "open-project", label: "Open approved project", projectId: item.projectId };
+  if (item.status !== "pending" || item.archived) return null;
+  if (item.queueState === "ready" && allRequiredFlagsPass(airlockFlags)) return { action: "approve-intake", label: "Approve to Core", intakeId: item.id };
+  return { action: "review-intake-queue", label: item.queueState === "blocked" ? "Resolve blocked proposal" : "Complete proposal review", intakeId: item.id };
+}
+
+function workflowBreadcrumbHtml() {
+  const parts = [];
+  if (activeProjectId) {
+    const project = getProject(activeProjectId);
+    parts.push(t("projects"), project?.name || t("missingProject"));
+    const viewLabels = { dashboard: t("dashboard"), handoff: t("handoffMode"), map: t("projectMap"), changes_since: t("whatChangedSince"), history: t("changeHistory") };
+    parts.push(viewLabels[activeView] || t("dashboard"));
+    if (activeObjectDetail) parts.push(objectLabel(activeObjectDetail.objectType, getProjectObject(project, activeObjectDetail.objectType, activeObjectDetail.objectId) || {}));
+  } else {
+    const rootLabels = { projects: t("projects"), inbox: t("needsAttention"), "work-orders": t("aiWorkOrders"), files: t("filesLibrary"), intake: t("intake"), archived: t("archivedProjects"), settings: t("settings") };
+    parts.push(rootLabels[activeRootView] || t("projects"));
+  }
+  return `<nav class="workflow-breadcrumb" aria-label="Current location">${parts.map((part, index) => `<span>${escapeDisplay(part, DISPLAY_META_LIMIT)}</span>${index < parts.length - 1 ? `<span aria-hidden="true">›</span>` : ""}`).join("")}</nav>`;
 }
 
 function renderRecoveryScreen() {
@@ -7651,7 +7707,7 @@ function renderFilesLibrary() {
 
 function renderDiscoveryCaseSummary(discoveryCase) {
   const routing = discoveryCase.confirmedRouting || {};
-  return `<article class="item"><p class="item-title">${escapeDisplay(discoveryCase.suggestedName || discoveryCase.title || "Discovery case", DISPLAY_META_LIMIT)}</p><p class="item-meta">${escapeHtml(discoveryCase.status || "created")} · ${escapeHtml(discoveryCase.stage || "stage")}${routing.destination ? ` · ${escapeHtml(routing.destination.replaceAll("_", " "))}` : ""}</p></article>`;
+  return `<article class="item"><p class="item-title">${escapeDisplay(discoveryCase.suggestedName || discoveryCase.title || "Discovery case", DISPLAY_META_LIMIT)}</p><p class="item-meta">${escapeHtml(discoveryCase.status || "created")} · ${escapeHtml(discoveryCase.stage || "stage")}${routing.destination ? ` · ${escapeHtml(routing.destination.replaceAll("_", " "))}` : ""}</p><details class="technical-details"><summary>Details and provenance</summary><p class="item-meta">Discovery Case: ${escapeDisplay(discoveryCase.id, DISPLAY_META_LIMIT)}</p>${discoveryCase.routingInteractionId ? `<p class="item-meta">Routing record: ${escapeDisplay(discoveryCase.routingInteractionId, DISPLAY_META_LIMIT)}</p>` : ""}${discoveryCase.promotedIntakeBatchId ? `<p class="item-meta">Intake batch: ${escapeDisplay(discoveryCase.promotedIntakeBatchId, DISPLAY_META_LIMIT)}</p>` : ""}</details></article>`;
 }
 
 async function refreshDiscoveryWorkspace() {
@@ -7902,9 +7958,11 @@ function renderIntakeItem(item) {
   const isPending = item.status === "pending" && !item.archived;
   const airlockFlags = intakeAirlockChecks(item);
   const airlockReady = allRequiredFlagsPass(airlockFlags);
+  const nextStep = intakeNextStep(item, airlockFlags);
   return `
     <div class="item">
       <p class="item-title">${escapeDisplay(item.title, DISPLAY_META_LIMIT)}</p>
+      ${renderGovernedStateStrip(item)}
       <div class="review-flags">
         <span class="pill ${escapeHtml(intakeQueueStateClass(item.queueState))}">${escapeHtml(intakeQueueStateLabel(item.queueState))}</span>
         <span class="pill">${escapeHtml(intakeStatusLabel(item))}</span>
@@ -7922,6 +7980,15 @@ function renderIntakeItem(item) {
       ${item.queueReviewedAt ? `<p class="item-meta">${escapeHtml(t("reviewedBy"))} ${escapeHtml(actorDisplay(item.queueReviewedBy))} · ${escapeHtml(formatDate(item.queueReviewedAt))}</p>` : ""}
       ${item.review ? `<p class="item-meta">${escapeHtml(t("reviewedBy"))} ${escapeHtml(actorDisplay(item.review.actorId, item.review.actorName))} · ${escapeHtml(formatDate(item.review.reviewedAt))}</p>` : ""}
       ${item.approval ? `<p class="item-meta">${escapeHtml(t("approvedBy"))} ${escapeHtml(actorDisplay(item.approval.approvedBy))} · ${escapeHtml(formatDate(item.approval.approvedAt))}</p>` : ""}
+      ${nextStep ? `<div class="next-step-inline"><span><strong>Next step:</strong> ${escapeHtml(nextStep.label)}</span><button class="btn compact" data-action="${escapeHtml(nextStep.action)}" ${nextStep.intakeId ? `data-intake-id="${escapeHtml(nextStep.intakeId)}"` : ""} ${nextStep.projectId ? `data-project-id="${escapeHtml(nextStep.projectId)}"` : ""}>${escapeHtml(nextStep.label)}</button></div>` : ""}
+      <details class="technical-details">
+        <summary>Details and provenance</summary>
+        <p class="item-meta">Intake ID: ${escapeDisplay(item.id, DISPLAY_META_LIMIT)}</p>
+        ${item.discoveryCaseId ? `<p class="item-meta">Discovery Case: ${escapeDisplay(item.discoveryCaseId, DISPLAY_META_LIMIT)}</p>` : ""}
+        ${item.evidence?.managedFile?.sha256 ? `<p class="item-meta">SHA-256: ${escapeDisplay(item.evidence.managedFile.sha256, DISPLAY_META_LIMIT)}</p>` : ""}
+        ${item.evidence?.managedFile?.managedPath ? `<p class="item-meta">Managed path: ${escapeDisplay(item.evidence.managedFile.managedPath, DISPLAY_META_LIMIT)}</p>` : ""}
+        ${item.routingInteractionId ? `<p class="item-meta">Routing record: ${escapeDisplay(item.routingInteractionId, DISPLAY_META_LIMIT)}</p>` : ""}
+      </details>
       <div class="item-actions">
         ${isPending ? `<button class="btn secondary compact" data-action="review-intake-queue" data-intake-id="${item.id}">Edit proposal</button>` : ""}
         ${isPending ? `<button class="btn secondary compact" data-action="approve-intake" data-intake-id="${item.id}" ${airlockReady ? "" : "disabled"} title="${airlockReady ? "" : escapeHtml(t("airlockIncompleteNotice"))}">${escapeHtml(t("approve"))}</button>` : ""}
@@ -8116,8 +8183,17 @@ function renderProject(project) {
   const eventTypes = historyEventTypes(objectFilteredChanges);
   const historyTitle = activeHistoryFilter ? `${activeHistoryFilter.objectType} ${t("viewHistory")}` : t("changeHistory");
   const completenessFlags = projectCompletenessFlags(project);
+  const nextStep = projectNextStep(project);
 
   const dashboard = `
+    <article class="panel strong next-step-panel">
+      <div>
+        <p class="meta-label">Next step</p>
+        <h2 class="panel-title">${escapeHtml(nextStep.label)}</h2>
+        <p class="item-meta">${escapeHtml(nextStep.detail)}</p>
+      </div>
+      <button class="btn" data-action="${escapeHtml(nextStep.action)}">${escapeHtml(nextStep.label)}</button>
+    </article>
     <section class="meta-grid">
       <div class="meta-card">
         <p class="meta-label">${escapeHtml(t("lastUpdated"))}</p>
@@ -10051,8 +10127,17 @@ function renderOverviewList(items, renderer, emptyMessage) {
   `;
 }
 
-function showModal({ title, body, submitText, onSubmit }) {
-  if (document.querySelector(".modal-backdrop")) return;
+function showModal({ title, body, submitText, onSubmit, draftKey = "", flowStep = 0 }) {
+  const existingModal = document.querySelector(".modal-backdrop");
+  if (existingModal) {
+    existingModal.querySelector("[data-close-modal]")?.click();
+    if (existingModal.isConnected) return;
+  }
+  const returnContext = pendingFlowReturnContext ? { ...pendingFlowReturnContext } : null;
+  pendingFlowReturnContext = null;
+  const resolvedDraftKey = draftKey || flowDraftKey(title);
+  const resolvedFlowStep = flowStep || inferFlowStep(title, submitText);
+  const requiresFinalReview = resolvedFlowStep < 4 && !["close", "cancel"].includes(String(submitText || "").trim().toLowerCase());
   const modal = document.createElement("div");
   modal.className = "modal-backdrop";
   modal.innerHTML = `
@@ -10061,28 +10146,79 @@ function showModal({ title, body, submitText, onSubmit }) {
         <h2 class="modal-title" id="modal-title">${escapeHtml(title)}</h2>
         <button class="icon-btn" type="button" data-close-modal aria-label="${escapeHtml(t("close"))}">×</button>
       </div>
+      ${renderFlowGuide(resolvedFlowStep)}
+      <p class="modal-draft-status" data-draft-status aria-live="polite"></p>
       <form class="form">
         ${body}
       </form>
+      <section class="modal-final-review" data-final-review hidden></section>
       <div class="form-footer">
         <button class="btn secondary" type="button" data-close-modal>${escapeHtml(t("cancel"))}</button>
-        <button class="btn" type="submit" form="modal-form">${escapeHtml(submitText)}</button>
+        <button class="btn secondary" type="button" data-review-back hidden>Back</button>
+        <button class="btn" type="submit" form="modal-form">${escapeHtml(requiresFinalReview ? "Review" : submitText)}</button>
+      </div>
+      <div class="modal-draft-guard" data-draft-guard hidden>
+        <p><strong>Keep this unfinished work?</strong></p>
+        <p class="item-meta">Drafts are non-authoritative and remain available only during this Project State session.</p>
+        <div class="button-row">
+          <button class="btn secondary" type="button" data-draft-stay>Stay here</button>
+          <button class="btn secondary" type="button" data-draft-discard>Discard</button>
+          <button class="btn" type="button" data-draft-save>Save draft</button>
+        </div>
       </div>
     </section>
   `;
 
   const form = modal.querySelector(".form");
   const submitButton = modal.querySelector('button[type="submit"]');
+  const draftStatus = modal.querySelector("[data-draft-status]");
+  const draftGuard = modal.querySelector("[data-draft-guard]");
+  const finalReview = modal.querySelector("[data-final-review]");
+  const reviewBack = modal.querySelector("[data-review-back]");
   let submitting = false;
+  let reviewing = false;
+  let draftTimer = null;
   form.id = "modal-form";
   applyInputLimits(form);
   wireLocalFilePickers(form);
+  wireFlowControls(form);
+  const initialFormValues = readFlowFormValues(form);
+  const savedDraft = flowDrafts.get(resolvedDraftKey);
+  if (savedDraft?.values) {
+    restoreFlowDraft(form, savedDraft.values);
+    if (draftStatus) draftStatus.innerHTML = `Session draft restored · ${escapeHtml(formatDate(savedDraft.savedAt))} <button class="text-button" type="button" data-discard-restored-draft>Discard saved draft</button>`;
+  }
+  let cleanSnapshot = flowFormSnapshot(form);
+  const saveDraft = () => {
+    const values = readFlowFormValues(form);
+    const savedAt = nowIso();
+    flowDrafts.set(resolvedDraftKey, { values, savedAt, savedBy: currentActor()?.id || "" });
+    if (draftStatus) draftStatus.textContent = `Draft saved for this session · ${formatDate(savedAt)}`;
+  };
+  form.addEventListener("input", () => {
+    clearTimeout(draftTimer);
+    draftTimer = setTimeout(saveDraft, 650);
+  });
+  form.addEventListener("change", () => {
+    clearTimeout(draftTimer);
+    draftTimer = setTimeout(saveDraft, 250);
+  });
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
     if (submitting) return;
     const formData = new FormData(form);
     const data = enforceInputLimitsOnData(Object.fromEntries(formData.entries()));
     if (!validateAuditFields(form, data)) return;
+    if (requiresFinalReview && !reviewing) {
+      reviewing = true;
+      form.hidden = true;
+      finalReview.hidden = false;
+      finalReview.innerHTML = renderFinalReviewSummary(form, data, title, submitText);
+      reviewBack.hidden = false;
+      submitButton.textContent = submitText;
+      setFlowGuideStep(modal, 4);
+      return;
+    }
     submitting = true;
     if (submitButton) submitButton.disabled = true;
     try {
@@ -10092,7 +10228,14 @@ function showModal({ title, body, submitText, onSubmit }) {
         if (submitButton) submitButton.disabled = false;
         return;
       }
+      flowDrafts.delete(resolvedDraftKey);
+      if (data.actorName || data.reason) auditWorkSession = {
+        actorName: String(data.actorName || auditWorkSession.actorName || "").trim(),
+        reason: String(data.reason || auditWorkSession.reason || "").trim(),
+        updatedAt: nowIso()
+      };
       modal.remove();
+      if (!postModalAction && returnContext?.projectId && activeProjectId === returnContext.projectId && getProject(returnContext.projectId)) activeObjectDetail = returnContext;
       render();
       const nextAction = postModalAction;
       postModalAction = null;
@@ -10104,15 +10247,151 @@ function showModal({ title, body, submitText, onSubmit }) {
     }
   });
 
+  const closeModal = ({ discard = false, keepDraft = false } = {}) => {
+    clearTimeout(draftTimer);
+    const changed = flowFormSnapshot(form) !== cleanSnapshot;
+    if (changed && !discard && !keepDraft) {
+      saveDraft();
+      draftGuard.hidden = false;
+      return;
+    }
+    if (discard) flowDrafts.delete(resolvedDraftKey);
+    if (keepDraft && changed) saveDraft();
+    modal.remove();
+    if (returnContext?.projectId && activeProjectId === returnContext.projectId && getProject(returnContext.projectId)) activeObjectDetail = returnContext;
+    render();
+  };
+
   modal.addEventListener("click", (event) => {
     if (submitting) return;
+    if (event.target.closest("[data-discard-restored-draft]")) {
+      flowDrafts.delete(resolvedDraftKey);
+      restoreFlowDraft(form, initialFormValues);
+      cleanSnapshot = flowFormSnapshot(form);
+      if (draftStatus) draftStatus.textContent = "Saved draft discarded.";
+      return;
+    }
+    if (event.target.closest("[data-review-back]")) {
+      reviewing = false;
+      form.hidden = false;
+      finalReview.hidden = true;
+      reviewBack.hidden = true;
+      submitButton.textContent = "Review";
+      setFlowGuideStep(modal, resolvedFlowStep);
+      form.querySelector("input, textarea, select")?.focus();
+      return;
+    }
+    if (event.target.closest("[data-draft-stay]")) {
+      draftGuard.hidden = true;
+      return;
+    }
+    if (event.target.closest("[data-draft-discard]")) {
+      closeModal({ discard: true });
+      return;
+    }
+    if (event.target.closest("[data-draft-save]")) {
+      closeModal({ keepDraft: true });
+      return;
+    }
     if (event.target === modal || event.target.closest("[data-close-modal]")) {
-      modal.remove();
+      closeModal();
     }
   });
 
   document.body.appendChild(modal);
   modal.querySelector("input, textarea, select")?.focus();
+}
+
+function renderGovernedStateStrip(item = {}) {
+  const active = item.status === "approved" ? "approved" : item.queueState === "ready" ? "ready" : item.queueState === "new" ? "draft" : "review";
+  const steps = [
+    ["draft", "Draft"],
+    ["review", "Needs review"],
+    ["ready", "Ready"],
+    ["approved", "Approved / Core"]
+  ];
+  const activeIndex = steps.findIndex(([key]) => key === active);
+  return `<ol class="governed-state-strip" aria-label="Proposal state">${steps.map(([key, label], index) => `<li class="${index === activeIndex ? "active" : index < activeIndex ? "complete" : ""}">${escapeHtml(label)}</li>`).join("")}</ol>`;
+}
+
+function flowDraftKey(title = "") {
+  const context = activeObjectDetail ? `${activeObjectDetail.objectType}:${activeObjectDetail.objectId}` : activeProjectId || activeRootView;
+  return `${context}:${String(title).toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
+}
+
+function readFlowFormValues(form) {
+  const values = {};
+  for (const field of form.querySelectorAll("input[name], textarea[name], select[name]")) {
+    if (field.type === "file") continue;
+    if (field.type === "checkbox") values[field.name] = field.checked ? field.value || "on" : "";
+    else if (field.type === "radio") {
+      if (field.checked) values[field.name] = field.value;
+      else if (!(field.name in values)) values[field.name] = "";
+    }
+    else values[field.name] = field.value;
+  }
+  return values;
+}
+
+function restoreFlowDraft(form, values = {}) {
+  for (const field of form.querySelectorAll("input[name], textarea[name], select[name]")) {
+    if (!(field.name in values) || field.type === "file") continue;
+    if (field.type === "checkbox") field.checked = Boolean(values[field.name]);
+    else if (field.type === "radio") field.checked = String(values[field.name]) === String(field.value);
+    else field.value = values[field.name];
+  }
+}
+
+function flowFormSnapshot(form) {
+  return JSON.stringify(readFlowFormValues(form));
+}
+
+function inferFlowStep(title = "", submitText = "") {
+  const titleText = String(title || "").toLowerCase();
+  const combined = `${title} ${submitText}`.toLowerCase();
+  if (/\b(add|create|attach|assign|import|read)\b/.test(titleText)) return 2;
+  if (/\b(edit|review|verify|resolve)\b/.test(titleText)) return 3;
+  if (/\b(approve|confirm|reject|delete|archive|restore|reset)\b/.test(titleText)) return 4;
+  if (/approve|confirm|delete|archive|restore|reset/.test(combined)) return 4;
+  return 3;
+}
+
+function renderFlowGuide(activeStep = 3) {
+  const steps = ["Choose", "Describe", "Review", "Confirm"];
+  return `<ol class="modal-flow-guide" aria-label="Guided action steps">${steps.map((step, index) => `<li class="${index + 1 === activeStep ? "active" : index + 1 < activeStep ? "complete" : ""}"><span>${index + 1}</span>${step}</li>`).join("")}</ol>`;
+}
+
+function setFlowGuideStep(modal, activeStep) {
+  const steps = [...modal.querySelectorAll(".modal-flow-guide li")];
+  steps.forEach((step, index) => {
+    step.classList.toggle("active", index + 1 === activeStep);
+    step.classList.toggle("complete", index + 1 < activeStep);
+  });
+}
+
+function renderFinalReviewSummary(form, data, title, submitText) {
+  const rows = [];
+  const seen = new Set();
+  for (const field of form.querySelectorAll("input[name], textarea[name], select[name]")) {
+    if (!field.name || seen.has(field.name) || ["reasonPreset"].includes(field.name) || field.type === "file" || field.type === "hidden") continue;
+    seen.add(field.name);
+    let value = data[field.name];
+    if (field.type === "checkbox") value = field.checked ? "Confirmed" : "Not confirmed";
+    if (field.tagName === "SELECT") value = field.selectedOptions?.[0]?.textContent || value;
+    if (!String(value || "").trim()) continue;
+    const explicitLabel = field.id ? form.querySelector(`label[for="${CSS.escape(field.id)}"]`) : null;
+    const label = field.name === "actorName" ? "Who" : field.name === "reason" ? "Why" : explicitLabel?.textContent?.trim() || field.closest(".field")?.querySelector("label")?.textContent?.trim() || field.name;
+    rows.push({ label, value: limitText(String(value), field.name === "reason" ? DISPLAY_META_LIMIT : 500) });
+  }
+  return `
+    <p class="meta-label">Final review</p>
+    <h3>${escapeHtml(title)}</h3>
+    <p class="notice"><strong>What will happen:</strong> ${escapeHtml(submitText)}. Review the target, actor, reason, and proposed values before continuing.</p>
+    <div class="review-summary-list">
+      ${rows.map((row) => `<div><p class="meta-label">${escapeHtml(row.label)}</p><p>${escapeDisplay(row.value, 500)}</p></div>`).join("")}
+    </div>
+    <p class="item-meta">Technical provenance and immutable history remain attached after confirmation.</p>
+  `;
 }
 
 function queuePostModalAction(callback) {
@@ -10199,18 +10478,79 @@ function wireLocalFilePickers(form) {
   }
 }
 
+function wireFlowControls(form) {
+  const reasonPreset = form?.querySelector('[name="reasonPreset"]');
+  const reasonField = form?.querySelector('[name="reason"]');
+  if (reasonPreset && reasonField) {
+    reasonPreset.addEventListener("change", () => {
+      if (reasonPreset.value === "custom") {
+        reasonField.focus();
+        return;
+      }
+      if (reasonPreset.value) reasonField.value = reasonPreset.value;
+      reasonField.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+  }
+}
+
 function auditFields({ actorLabel = t("approvedBy"), reasonLabel = t("reason") } = {}) {
-  const defaultActorName = currentActor()?.name || "";
+  const defaultActorName = auditWorkSession.actorName || currentActor()?.name || "";
+  const defaultReason = auditWorkSession.reason || "";
   return `
     <div class="field">
       <label for="actorName">${escapeHtml(actorLabel)}</label>
-      <input id="actorName" name="actorName" value="${escapeHtml(defaultActorName)}" autocomplete="name" required>
+      <select id="actorName" name="actorName" required>
+        ${activeActorOptions(defaultActorName)}
+      </select>
+      <p class="field-help">Known active human identity. Every confirmed change still records this actor separately.</p>
     </div>
     <div class="field">
       <label for="reason">${escapeHtml(reasonLabel)}</label>
-      <textarea id="reason" name="reason" required></textarea>
+      <select name="reasonPreset" aria-label="Common audit reason">
+        <option value="">Choose a common reason or write a custom reason</option>
+        ${auditReasonOptions(defaultReason)}
+        <option value="custom">Other / custom</option>
+      </select>
+      <textarea id="reason" name="reason" required>${escapeHtml(defaultReason)}</textarea>
+      ${auditWorkSession.updatedAt ? `<p class="field-help">Inherited from this work session · ${escapeHtml(formatDate(auditWorkSession.updatedAt))}. Edit it whenever the reason changes.</p>` : `<p class="field-help">Required for immutable history. This may be reused during the current work session.</p>`}
     </div>
   `;
+}
+
+function activeActorOptions(selectedName = "") {
+  const activeActors = (store.actors || []).filter((actor) => normalizeActorStatus(actor.status) === "active" && normalizeActorRole(actor.role, actor.type) !== "ai_tool");
+  return activeActors.map((actor) => `<option value="${escapeHtml(actor.name)}" ${nameKey(actor.name) === nameKey(selectedName) ? "selected" : ""}>${escapeHtml(actorDisplay(actor.id))}</option>`).join("");
+}
+
+function auditReasonOptions(selectedReason = "") {
+  const reasons = [
+    "Updated current project state",
+    "Added supporting evidence",
+    "Recorded a project decision",
+    "Tracked follow-up work",
+    "Corrected existing information",
+    "Reviewed and approved a proposal",
+    "Completed routine project maintenance"
+  ];
+  return reasons.map((reason) => `<option value="${escapeHtml(reason)}" ${reason === selectedReason ? "selected" : ""}>${escapeHtml(reason)}</option>`).join("");
+}
+
+function actorSuggestionDatalist(id = "actor-suggestions") {
+  return `<datalist id="${escapeHtml(id)}">${(store.actors || []).filter((actor) => normalizeActorStatus(actor.status) === "active").map((actor) => `<option value="${escapeHtml(actor.name)}"></option>`).join("")}</datalist>`;
+}
+
+function projectSuggestionDatalist(id = "project-suggestions") {
+  return `<datalist id="${escapeHtml(id)}">${(store.projects || []).filter((project) => !project.archived).map((project) => `<option value="${escapeHtml(project.name)}"></option>`).join("")}</datalist>`;
+}
+
+function sourceTypeDatalist(id = "source-type-suggestions") {
+  const values = ["Document", "File", "Note", "Conversation", "Email", "Web reference", "Dataset", "Image", "Meeting record", "Other"];
+  return `<datalist id="${escapeHtml(id)}">${values.map((value) => `<option value="${escapeHtml(value)}"></option>`).join("")}</datalist>`;
+}
+
+function relationshipTypeDatalist(id = "relationship-type-suggestions") {
+  const values = ["depends on", "supports", "blocks", "relates to", "supersedes", "replaces", "shares evidence with", "derived from", "Other"];
+  return `<datalist id="${escapeHtml(id)}">${values.map((value) => `<option value="${escapeHtml(value)}"></option>`).join("")}</datalist>`;
 }
 
 function confirmationField(name, label) {
@@ -10590,7 +10930,8 @@ function openCreateIntakeModal() {
       <div class="two-col">
         <div class="field">
           <label for="target">${escapeHtml(t("relationshipTargetOwner"))}</label>
-          <input id="target" name="target">
+          <input id="target" name="target" list="project-suggestions">
+          ${projectSuggestionDatalist()}
         </div>
         <div class="field">
           <label for="dueDate">${escapeHtml(t("dueDate"))}</label>
@@ -11729,7 +12070,8 @@ function openEditSourceModal(project, source) {
       <div class="two-col">
         <div class="field">
           <label for="sourceType">${escapeHtml(t("type"))}</label>
-          <input id="sourceType" name="sourceType" value="${escapeHtml(source.sourceType || "")}">
+          <input id="sourceType" name="sourceType" list="source-type-suggestions" value="${escapeHtml(source.sourceType || "")}">
+          ${sourceTypeDatalist()}
         </div>
         <div class="field">
           <label for="trustLevel">${escapeHtml(t("sourceTrustLevel"))}</label>
@@ -11895,11 +12237,13 @@ function openEditRelationshipModal(project, relationship) {
     body: `
       <div class="field">
         <label for="target">${escapeHtml(t("relatedProjectOrEntity"))}</label>
-        <input id="target" name="target" value="${escapeHtml(relationship.target)}" required>
+        <input id="target" name="target" list="project-suggestions" value="${escapeHtml(relationship.target)}" required>
+        ${projectSuggestionDatalist()}
       </div>
       <div class="field">
         <label for="relationshipType">${escapeHtml(t("relationshipType"))}</label>
-        <input id="relationshipType" name="relationshipType" value="${escapeHtml(relationship.relationshipType || "")}">
+        <input id="relationshipType" name="relationshipType" list="relationship-type-suggestions" value="${escapeHtml(relationship.relationshipType || "")}">
+        ${relationshipTypeDatalist()}
       </div>
       <div class="field">
         <label for="notes">${escapeHtml(t("notes"))}</label>
@@ -12250,7 +12594,8 @@ function openEditActionModal(project, action) {
       <div class="two-col">
         <div class="field">
           <label for="owner">${escapeHtml(t("ownerField"))}</label>
-          <input id="owner" name="owner" value="${escapeHtml(action.owner || "")}">
+          <input id="owner" name="owner" list="actor-suggestions" value="${escapeHtml(action.owner || "")}">
+          ${actorSuggestionDatalist()}
         </div>
         <div class="field">
           <label for="dueDate">${escapeHtml(t("dueDate"))}</label>
@@ -13020,7 +13365,8 @@ function openSourceModal() {
       <div class="two-col">
         <div class="field">
           <label for="sourceType">${escapeHtml(t("type"))}</label>
-          <input id="sourceType" name="sourceType">
+          <input id="sourceType" name="sourceType" list="source-type-suggestions">
+          ${sourceTypeDatalist()}
         </div>
         <div class="field">
           <label for="trustLevel">${escapeHtml(t("sourceTrustLevel"))}</label>
@@ -13277,11 +13623,13 @@ function openRelationshipModal() {
     body: `
       <div class="field">
         <label for="target">${escapeHtml(t("relatedProjectOrEntity"))}</label>
-        <input id="target" name="target" required>
+        <input id="target" name="target" list="project-suggestions" required>
+        ${projectSuggestionDatalist()}
       </div>
       <div class="field">
         <label for="relationshipType">${escapeHtml(t("relationshipType"))}</label>
-          <input id="relationshipType" name="relationshipType" placeholder="${escapeHtml(t("relationshipPlaceholder"))}">
+          <input id="relationshipType" name="relationshipType" list="relationship-type-suggestions" placeholder="${escapeHtml(t("relationshipPlaceholder"))}">
+          ${relationshipTypeDatalist()}
       </div>
       <div class="field">
         <label for="notes">${escapeHtml(t("notes"))}</label>
@@ -13370,7 +13718,8 @@ function openActionModal() {
       <div class="two-col">
         <div class="field">
           <label for="owner">${escapeHtml(t("ownerField"))}</label>
-          <input id="owner" name="owner">
+          <input id="owner" name="owner" list="actor-suggestions">
+          ${actorSuggestionDatalist()}
         </div>
         <div class="field">
           <label for="dueDate">${escapeHtml(t("dueDate"))}</label>
@@ -13611,10 +13960,26 @@ function openArmTransportTokenModal(token) {
 }
 
 app.addEventListener("click", (event) => {
+  const openedSummary = event.target.closest("details.action-menu > summary");
+  if (!openedSummary) return;
+  const activeMenu = openedSummary.closest("details.action-menu");
+  for (const menu of app.querySelectorAll("details.action-menu[open]")) {
+    if (menu !== activeMenu) menu.open = false;
+  }
+});
+
+app.addEventListener("click", (event) => {
   const button = event.target.closest("[data-action]");
   if (!button) return;
 
   const action = button.dataset.action;
+  for (const menu of app.querySelectorAll("details.action-menu[open]")) menu.open = false;
+  if (button.closest(".object-detail-panel") && activeObjectDetail && action !== "close-object-detail") {
+    pendingFlowReturnContext = { ...activeObjectDetail };
+    activeObjectDetail = null;
+  } else if (activeProjectId && button.dataset.objectType && button.dataset.objectId && !["open-object-detail", "view-object-history"].includes(action)) {
+    pendingFlowReturnContext = { projectId: activeProjectId, objectType: button.dataset.objectType, objectId: button.dataset.objectId };
+  }
   if (action === "export-failed-data") {
     exportFailedData();
     return;
@@ -13633,6 +13998,24 @@ app.addEventListener("click", (event) => {
 
   if (!actionAllowedForCurrentActor(action)) {
     window.alert(t("permissionDenied"));
+    return;
+  }
+
+  if (action === "correct-project-warning") {
+    const projectId = button.dataset.projectId || "";
+    const correctiveAction = button.dataset.correctiveAction || "edit-status";
+    const project = getProject(projectId);
+    if (!project) {
+      window.alert(t("missingProject"));
+      return;
+    }
+    openProjectNow(projectId, "dashboard");
+    render();
+    if (!actionAllowedForCurrentActor(correctiveAction, project)) {
+      window.alert(t("permissionDenied"));
+      return;
+    }
+    setTimeout(() => runProjectCorrectiveAction(correctiveAction), 0);
     return;
   }
 
@@ -13878,6 +14261,18 @@ app.addEventListener("click", (event) => {
   if (action === "add-question") openQuestionModal();
   if (action === "add-action") openActionModal();
 });
+
+function runProjectCorrectiveAction(action = "") {
+  if (action === "edit-status") openEditStatusModal();
+  else if (action === "add-action") openActionModal();
+  else if (action === "add-decision") openDecisionModal();
+  else if (action === "add-source") openSourceModal();
+  else if (action === "verify-all-source-files") openVerifySourceFileModal();
+  else {
+    activeView = "dashboard";
+    render();
+  }
+}
 
 app.addEventListener("submit", (event) => {
   const form = event.target.closest("[data-first-run-setup]");

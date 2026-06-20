@@ -43,7 +43,7 @@ function uniqueMatches(text, regex) {
 function interactionWiringTest(appText) {
   const declaredActions = uniqueMatches(appText, /data-action="([a-z0-9-]+)"/g);
   const handledActions = uniqueMatches(appText, /action === "([a-z0-9-]+)"/g);
-  const allowedDynamicActions = new Set(["view-image", "open-search-result"]);
+  const allowedDynamicActions = new Set(["view-image", "open-search-result", "correct-project-warning"]);
   const missingHandlers = declaredActions.filter((action) => !handledActions.includes(action) && !allowedDynamicActions.has(action));
   const unusedHandlers = handledActions.filter((action) => !declaredActions.includes(action) && !allowedDynamicActions.has(action));
 

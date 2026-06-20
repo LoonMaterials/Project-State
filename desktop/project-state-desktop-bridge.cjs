@@ -616,6 +616,7 @@ async function ensureSpine(storageRoot) {
 function openDatabase(dbPath) {
   fs.mkdirSync(path.dirname(dbPath), { recursive: true });
   const db = new DatabaseSync(dbPath);
+  db.exec("PRAGMA busy_timeout = 5000;");
   db.exec(fs.readFileSync(SCHEMA_FILE, "utf8"));
   return db;
 }

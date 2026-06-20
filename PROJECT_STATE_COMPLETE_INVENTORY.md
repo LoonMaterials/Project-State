@@ -710,3 +710,52 @@ Status: Discovery rebuild without bundled antivirus is complete through the non-
 - No installer was built or run, no foreground server was started, and the user's live storage was not used by these checks.
 - The next step is a harmless-file live Discovery pass in a dedicated temporary storage root, followed by source backup and Git commit before isolated packaging work.
 - The exact live handoff is recorded in `DISCOVERY_IMPLEMENTATION_HANDOFF.md` and `REAL_TIME_TEST_PLAN.md`.
+
+## 21. Approved Internal Flow Experiment
+
+Status: implementation approved 2026-06-20 after the Discovery live flow reached file reading, editable Intake, human approval, project creation, normal project editing, persistence, and exact-file integrity.
+
+The governing specification is `INTERNAL_FLOW_EXPERIMENT.md`.
+
+The experiment must:
+
+- enforce one active transient surface at a time;
+- protect changed forms with session drafts and explicit close choices;
+- use `Choose → Describe → Review → Confirm` guidance;
+- replace repeated actor typing with known-actor selection;
+- provide controlled/searchable choices and custom fallback where vocabulary is not closed;
+- allow a work-session actor/reason to reduce repetition without omitting per-change audit fields;
+- return users to the object they changed;
+- make Draft, Needs review, Ready, and Approved/Core states explicit;
+- preserve every existing permission, Intake, approval, exact-byte, recovery, and immutable-history boundary.
+
+### Implemented and verified
+
+- One-active-menu and one-active-task behavior is implemented.
+- Guided `Choose → Describe → Review → Confirm` cues appear on governed modals.
+- Changed forms create recoverable session drafts with Save draft, Discard, Stay here, and restored-draft discard controls.
+- Audit actor entry is a known-active-human dropdown.
+- Common audit reasons and current-work-session inheritance reduce repetition while leaving the per-change reason editable and required.
+- Owners, project targets, source types, and relationship types provide searchable suggestions with custom entry retained.
+- Breadcrumbs, contextual return, and explicit Draft / Needs review / Ready / Approved-Core state strips are implemented.
+- Renderer saves are serialized and SQLite uses a bounded busy timeout so overlapping verification reads do not strand the UI.
+- All 31 non-live checks passed after the final changes.
+- Isolated live testing produced an approved Discovery project with one source, one decision, one next action, one added Fact, and seven complete immutable history events; managed-file and database integrity passed.
+
+### Flow hardening extension
+
+- Contextual Next step actions are required for project and Intake states.
+- Project-completeness and Intake warnings must provide direct corrective actions.
+- Technical IDs, checksums, managed paths, and detailed provenance remain available behind progressive disclosure.
+- Governed add/edit forms require a plain-language final review before their existing submit handler may write.
+- Approval, audit, Intake, history, and exact-file rules remain unchanged.
+
+### Flow hardening implementation and verification — 2026-06-20
+
+- Active project and Intake states now present one contextual **Next step** with a short explanation.
+- Project-completeness warnings provide direct correction actions; the live missing-next-action warning opened the Add Next Action form, not a dead-end dashboard.
+- Discovery and Intake technical identifiers, SHA-256 values, managed paths, routing records, and detailed provenance remain available through progressive disclosure.
+- Governed add/edit forms now show a plain-language final review of what will happen, proposed values, actor, and reason before their existing write handler runs.
+- Existing final approval and destructive confirmation boundaries are not duplicated or weakened.
+- The isolated live test persisted `Final review hardening fact` and `Complete flow hardening verification` with complete linked actor, timestamp, reason, changed-object, origin/how-changed, language, and field-detail history.
+- All 32 of 32 non-live checks passed after the hardening changes. No installer was built or run, and the live user storage was not used.
