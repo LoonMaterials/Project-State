@@ -80,7 +80,9 @@ Approval Queue
 
 The Intake Airlock includes an approval queue for outside inputs from files, notes, chat, email, AI, APIs, Codex, and other arms.
 
-The desktop **Files** screen is the human file-import path. It can select multiple files or recursively scan a selected folder, shows a review step, requires a destination project, preserves originals in place, and creates checksum-verified managed copies as pending Source proposals in Intake. Files do not become authoritative project Sources until individually reviewed and approved.
+The desktop **Files** screen is the human file-import path. It can select multiple files or recursively inspect a selected folder without requiring a project first. Project State preserves originals, records the user's external-security responsibility, stages checksum-verified exact copies, reads supported content, and opens Discovery review before creating pending Source proposals in Intake. Files do not become authoritative project Sources until individually reviewed and approved.
+
+A document can be treated as one item or reviewed as several editable ideas with independent routes. Several proposals from one document retain one immutable File Version and managed copy. Folder import shows deterministic relative-folder groups and lets the user use those groups, treat the folder as one case, or review every file separately. Resulting groups are reviewed sequentially; groups larger than 24 files continue as numbered parts rather than silently dropping files.
 
 Queue review is separate from approval:
 
@@ -164,6 +166,9 @@ Workflow Usability
 - Intake review advances to the next pending item. Batch triage can update queue state for several items, but approval remains strictly one item at a time.
 - Role-aware controls use the configured default actor and project roles. This is local policy enforcement, not account authentication.
 - Propose Correction creates an Intake Airlock proposal. Approved records remain unchanged until a permitted human approves the correction, and the applied correction records previous and new content in history.
+- Project and Intake screens present one contextual Next step; actionable warnings open the correcting form directly.
+- Technical IDs, checksums, managed paths, and detailed provenance remain available behind Details and provenance.
+- Governed add and edit forms show a plain-language final review before writing, while existing approval/confirmation actions are not given a redundant second review.
 
 Long-Term Vision
 

@@ -759,3 +759,45 @@ The experiment must:
 - Existing final approval and destructive confirmation boundaries are not duplicated or weakened.
 - The isolated live test persisted `Final review hardening fact` and `Complete flow hardening verification` with complete linked actor, timestamp, reason, changed-object, origin/how-changed, language, and field-detail history.
 - All 32 of 32 non-live checks passed after the hardening changes. No installer was built or run, and the live user storage was not used.
+
+## 22. Multi-Idea Document Flow
+
+Status: implementation started 2026-06-20 after flow hardening passed its complete verification and isolated live persistence test.
+
+The governing specification is `MULTI_IDEA_DOCUMENT_FLOW.md`.
+
+The implementation order is deliberate:
+
+1. Detect and review several meaningful units inside one document.
+2. Let the user correct, add, omit, or rename those units.
+3. Route each included unit independently through one human-confirmed route map.
+4. Create separate pending Intake proposals with shared exact-file provenance and individual approval.
+5. Reuse the verified unit model for whole-folder grouping and routing.
+
+This work must not duplicate source bytes, turn machine suggestions into facts, batch-approve proposals, or create a second path around Discovery and Intake.
+
+### Multi-idea implementation and verification
+
+- Deterministic local analysis now suggests document units from visible Markdown, numbered, and uppercase headings.
+- Discovery review explicitly offers one-item or several-idea review.
+- Suggested units are editable; additional user-authored units can be included before confirmation.
+- Every included unit has its own title, summary, destination, optional existing-project target, and exact-file evidence.
+- Human confirmation stores one complete multi-route interaction; promotable routes become separate pending Intake proposals.
+- Multiple proposals from one source reuse the same immutable File Version, SHA-256, and managed path rather than duplicating bytes.
+- The isolated live test produced two proposed-project Intake items from one document with no renderer errors or Core write.
+
+## 23. Folder Discovery Flow
+
+Status: v0.1 foundation implemented and verified 2026-06-20.
+
+The governing specification is `FOLDER_DISCOVERY_FLOW.md`.
+
+- Recursive folder selection shows each supported file, skipped count, relative path, and suggested first-folder group before staging.
+- The user chooses suggested folder groups, one combined case, or one case per file.
+- Groups larger than 24 files continue as numbered parts so no selected file is silently omitted.
+- Every resulting group is staged into a separate Discovery Case and reviewed sequentially.
+- Each group reuses document-unit review and independent routing; approval remains one Intake item at a time.
+- The isolated live test produced two sequential reviews, two Discovery Cases, two File Versions, and two pending Intake proposals from Alpha and Beta groups with zero renderer exceptions.
+- All 34 of 34 non-live regression checks and syntax checks passed after the combined document/folder implementation.
+
+The next folder improvements are usability extensions rather than authority changes: drag-and-drop movement between suggested groups, pause/resume for large processing queues, richer similarity evidence, and optional provider-neutral analysis suggestions.

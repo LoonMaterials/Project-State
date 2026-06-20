@@ -1114,7 +1114,7 @@ function chunkDeterministicText(text, targetCharacters) {
   return chunks;
 }
 
-const DISCOVERY_DESTINATIONS = new Set(["existing_project", "additional_project_link", "proposed_new_project", "general_reference", "orphaned_idea", "unassigned", "rejected"]);
+const DISCOVERY_DESTINATIONS = new Set(["existing_project", "additional_project_link", "proposed_new_project", "general_reference", "orphaned_idea", "unassigned", "rejected", "multiple_routes"]);
 
 async function analyzeDiscoveryCase({ storageRoot, dbPath, payload = {} }) {
   await ensureSpine(storageRoot);
@@ -1124,10 +1124,12 @@ async function analyzeDiscoveryCase({ storageRoot, dbPath, payload = {} }) {
   const db = openDatabase(dbPath);
   let versions;
   let projects;
+  let extractions;
   try {
     if (!dbRecord(db, "discovery_cases", discoveryCaseId)) throw new Error("Discovery Case was not found.");
     versions = db.prepare(`SELECT version.record_json FROM file_versions AS version JOIN discovery_case_files AS membership ON membership.file_version_id = version.id WHERE membership.discovery_case_id = ? ORDER BY membership.rowid`).all(discoveryCaseId).map(parseRecordRow);
     projects = readRecordJson(db, "projects");
+    extractions = db.prepare("SELECT record_json FROM discovery_extractions WHERE discovery_case_id = ? ORDER BY rowid").all(discoveryCaseId).map(parseRecordRow);
   } finally { db.close(); }
   if (!versions.length) throw new Error("Discovery Case has no File Versions to analyze.");
   const baseNames = versions.map((version) => path.basename(version.originalName || "", path.extname(version.originalName || ""))).filter(Boolean);
@@ -1143,7 +1145,17 @@ async function analyzeDiscoveryCase({ storageRoot, dbPath, payload = {} }) {
   else questions.push({ id: "routing_new_or_unassigned", text: "Should this become a new project, general reference, an orphaned idea, or remain unassigned?", affects: "routing", allowNotSure: true });
   if (versions.length > 1) questions.push({ id: "grouping_confirmation", text: "Do these files belong together as one Discovery case?", affects: "grouping", allowNotSure: true });
   questions.push({ id: "privacy_confirmation", text: "Should this material remain local-only, or may a configured provider receive selected content later?", affects: "privacy", allowNotSure: true });
-  const suggestion = { suggestedProjectNames: [{ name: suggestedName, confidence: baseNames.length === 1 ? 0.65 : 0.55, evidence: baseNames }], projectCandidates, questions, deterministic: true, provider: "project_state_local_rules_v0.1" };
+  const extractionTexts = [];
+  for (const extraction of extractions.filter((item) => item.textPath)) {
+    try {
+      const readResult = await readDiscoveryExtractionText({ storageRoot, dbPath, payload: { extractionId: extraction.id } });
+      extractionTexts.push({ extraction, text: readResult.text || "" });
+    } catch {
+      extractionTexts.push({ extraction, text: "" });
+    }
+  }
+  const documentUnits = detectDiscoveryDocumentUnits({ versions, extractionTexts });
+  const suggestion = { suggestedProjectNames: [{ name: suggestedName, confidence: baseNames.length === 1 ? 0.65 : 0.55, evidence: baseNames }], projectCandidates, questions, documentUnits, unitModeSuggestion: documentUnits.length > 1 ? "multiple_units" : "one_item", deterministic: true, provider: "project_state_local_rules_v0.1" };
   await appendDiscoveryInteraction({ storageRoot, dbPath, payload: { id: makeId("interaction"), discoveryCaseId, actorId, actorType: "tool", interactionType: "machine_suggestion", createdAt, content: suggestion, evidence: versions.map((version) => ({ fileVersionId: version.id, sha256: version.sha256 })) } });
   for (const question of questions) await appendDiscoveryInteraction({ storageRoot, dbPath, payload: { id: makeId("interaction"), discoveryCaseId, actorId, actorType: "tool", interactionType: "system_question", createdAt, content: question } });
   await updateDiscoveryCaseRecord({ dbPath, discoveryCaseId, changes: { stage: "questions", status: "questioning", updatedAt: createdAt, suggestedName } });
@@ -1166,21 +1178,37 @@ async function confirmDiscoveryRouting({ storageRoot, dbPath, payload = {} }) {
   const discoveryCaseId = requiredDiscoveryId(payload.discoveryCaseId, "Discovery Case ID");
   const actorId = requiredDiscoveryId(payload.actorId, "Routing actor ID");
   const confirmedAt = requiredDiscoveryTimestamp(payload.confirmedAt || nowIso(), "Routing confirmedAt");
-  const destination = String(payload.destination || "");
-  if (!DISCOVERY_DESTINATIONS.has(destination)) throw new Error("Discovery routing destination is not supported.");
-  const projectId = payload.projectId ? requiredDiscoveryId(payload.projectId, "Routing project ID") : null;
-  if (destination === "existing_project" && !projectId) throw new Error("Existing-project routing requires a project ID.");
-  const additionalProjectIds = Array.isArray(payload.additionalProjectIds) ? [...new Set(payload.additionalProjectIds.map((id) => requiredDiscoveryId(id, "Additional project ID")))] : [];
+  const routeInputs = Array.isArray(payload.routes) && payload.routes.length
+    ? payload.routes
+    : [{ id: "unit_1", title: payload.proposedProjectName || "Whole document", destination: payload.destination, projectId: payload.projectId, additionalProjectIds: payload.additionalProjectIds, proposedProjectName: payload.proposedProjectName, summary: payload.summary || "", fileVersionIds: payload.fileVersionIds, evidence: payload.evidence }];
+  if (routeInputs.length > 8) throw new Error("A Discovery routing confirmation may contain at most 8 document units.");
+  const routes = routeInputs.map((input, index) => {
+    const id = requiredDiscoveryId(input.id || `unit_${index + 1}`, "Document unit ID");
+    const destination = String(input.destination || "");
+    if (!DISCOVERY_DESTINATIONS.has(destination) || destination === "multiple_routes") throw new Error("Document unit routing destination is not supported.");
+    const projectId = input.projectId ? requiredDiscoveryId(input.projectId, "Routing project ID") : null;
+    if (destination === "existing_project" && !projectId) throw new Error("Existing-project routing requires a project ID.");
+    const additionalProjectIds = Array.isArray(input.additionalProjectIds) ? [...new Set(input.additionalProjectIds.map((value) => requiredDiscoveryId(value, "Additional project ID")))] : [];
+    const proposedProjectName = String(input.proposedProjectName || input.title || "").trim();
+    if (destination === "proposed_new_project" && !proposedProjectName) throw new Error("New-project routing requires a proposed project name.");
+    const title = String(input.title || proposedProjectName || `Document unit ${index + 1}`).trim();
+    if (!title) throw new Error("Every document unit requires a title.");
+    return { id, title, summary: String(input.summary || "").trim(), destination, projectId, additionalProjectIds, proposedProjectName, fileVersionIds: Array.isArray(input.fileVersionIds) ? [...new Set(input.fileVersionIds.map((value) => requiredDiscoveryId(value, "File Version ID")))] : [], evidence: Array.isArray(input.evidence) ? cloneJson(input.evidence) : [], confirmedBy: actorId, confirmedAt };
+  });
+  if (new Set(routes.map((route) => route.id)).size !== routes.length) throw new Error("Document unit IDs must be unique within a routing confirmation.");
   const db = openDatabase(dbPath);
   try {
     if (!dbRecord(db, "discovery_cases", discoveryCaseId)) throw new Error("Discovery Case was not found.");
-    for (const id of [projectId, ...additionalProjectIds].filter(Boolean)) if (!db.prepare("SELECT 1 AS found FROM projects WHERE id = ?").get(id)) throw new Error(`Routing project was not found: ${id}`);
+    for (const id of routes.flatMap((route) => [route.projectId, ...route.additionalProjectIds]).filter(Boolean)) if (!db.prepare("SELECT 1 AS found FROM projects WHERE id = ?").get(id)) throw new Error(`Routing project was not found: ${id}`);
+    const memberVersionIds = new Set(db.prepare("SELECT file_version_id AS id FROM discovery_case_files WHERE discovery_case_id = ?").all(discoveryCaseId).map((row) => row.id));
+    for (const fileVersionId of routes.flatMap((route) => route.fileVersionIds)) if (!memberVersionIds.has(fileVersionId)) throw new Error(`Document unit File Version is not attached to this Discovery Case: ${fileVersionId}`);
   } finally { db.close(); }
-  const routing = { destination, projectId, additionalProjectIds, proposedProjectName: String(payload.proposedProjectName || "").trim(), confirmedBy: actorId, confirmedAt };
-  if (destination === "proposed_new_project" && !routing.proposedProjectName) throw new Error("New-project routing requires a proposed project name.");
+  const routing = routes.length === 1
+    ? { ...routes[0], routes, confirmedBy: actorId, confirmedAt }
+    : { destination: "multiple_routes", routes, confirmedBy: actorId, confirmedAt };
   const interaction = await appendDiscoveryInteraction({ storageRoot, dbPath, payload: { id: payload.id || makeId("interaction"), discoveryCaseId, actorId, actorType: "human", interactionType: "routing_confirmation", createdAt: confirmedAt, content: routing } });
-  await updateDiscoveryCaseRecord({ dbPath, discoveryCaseId, changes: { stage: "routing", status: "ready_for_intake", updatedAt: confirmedAt, confirmedProjectId: projectId, confirmedRouting: routing, routingInteractionId: interaction.interaction.id } });
-  await appendDiscoveryEvent({ storageRoot, dbPath, payload: { id: makeId("discovery_event"), discoveryCaseId, eventType: "routing_confirmed", actorId, actorType: "human", occurredAt: confirmedAt, destination, projectId, interactionId: interaction.interaction.id } });
+  await updateDiscoveryCaseRecord({ dbPath, discoveryCaseId, changes: { stage: "routing", status: "ready_for_intake", updatedAt: confirmedAt, confirmedProjectId: routes.length === 1 ? routes[0].projectId : null, confirmedRouting: routing, routingInteractionId: interaction.interaction.id } });
+  await appendDiscoveryEvent({ storageRoot, dbPath, payload: { id: makeId("discovery_event"), discoveryCaseId, eventType: "routing_confirmed", actorId, actorType: "human", occurredAt: confirmedAt, destination: routing.destination, projectId: routes.length === 1 ? routes[0].projectId : null, routeCount: routes.length, routeIds: routes.map((route) => route.id), interactionId: interaction.interaction.id } });
   return { ok: true, discoveryCaseId, routing, interactionId: interaction.interaction.id };
 }
 
@@ -1212,6 +1240,37 @@ function suggestDiscoveryName(baseNames) {
   return titleFromTokens(common.length ? common.join(" ") : baseNames[0]);
 }
 
+function detectDiscoveryDocumentUnits({ versions = [], extractionTexts = [] } = {}) {
+  const units = [];
+  const versionById = new Map(versions.map((version) => [version.id, version]));
+  for (const { extraction, text } of extractionTexts) {
+    const version = versionById.get(extraction.fileVersionId) || {};
+    const fileName = version.originalName || "Discovery source";
+    const lines = String(text || "").replaceAll("\r\n", "\n").split("\n");
+    const headings = [];
+    for (let index = 0; index < lines.length; index += 1) {
+      const raw = lines[index].trim();
+      if (!raw || raw.length > 140) continue;
+      const markdown = raw.match(/^#{1,6}\s+(.{3,120})$/);
+      const numbered = raw.match(/^(?:\d{1,3}[.)]|[A-Z][.)])\s+(.{3,120})$/);
+      const upper = raw.length >= 4 && raw.length <= 80 && /[A-Z]/.test(raw) && raw === raw.toUpperCase() && !/[.!?]$/.test(raw);
+      const title = markdown?.[1] || numbered?.[1] || (upper ? raw : "");
+      if (title) headings.push({ lineIndex: index, title: title.trim() });
+    }
+    if (headings.length >= 2) {
+      for (let index = 0; index < Math.min(headings.length, 8); index += 1) {
+        const heading = headings[index];
+        const endLine = headings[index + 1]?.lineIndex ?? lines.length;
+        const summary = lines.slice(heading.lineIndex + 1, endLine).join(" ").replace(/\s+/g, " ").trim().slice(0, 600);
+        units.push({ id: `unit_${units.length + 1}`, title: heading.title, summary, fileVersionIds: [extraction.fileVersionId], evidence: [{ fileVersionId: extraction.fileVersionId, extractionId: extraction.id, fileName, heading: heading.title, line: heading.lineIndex + 1 }], suggested: true });
+      }
+    } else if (versions.length > 1) {
+      units.push({ id: `unit_${units.length + 1}`, title: path.basename(fileName, path.extname(fileName)) || fileName, summary: String(text || "").replace(/\s+/g, " ").trim().slice(0, 600), fileVersionIds: [extraction.fileVersionId], evidence: [{ fileVersionId: extraction.fileVersionId, extractionId: extraction.id, fileName }], suggested: true });
+    }
+  }
+  return units.slice(0, 8);
+}
+
 function tokenSet(value) {
   return new Set(String(value || "").toLowerCase().replace(/[_-]+/g, " ").replace(/[^a-z0-9\s]/g, " ").split(/\s+/).filter((token) => token.length > 1 && !["the", "and", "for", "with", "from", "file", "document"].includes(token)));
 }
@@ -1230,17 +1289,22 @@ async function promoteDiscoveryToIntake({ storageRoot, dbPath, payload = {} }) {
   if (discoveryCase.status === "promoted" && discoveryCase.promotedIntakeBatchId) return { ok: true, deduplicated: true, discoveryCaseId, intakeBatchId: discoveryCase.promotedIntakeBatchId, intakeItemIds: discoveryCase.promotedIntakeItemIds || [] };
   if (discoveryCase.status !== "ready_for_intake" || !discoveryCase.confirmedRouting || !discoveryCase.routingInteractionId) throw new Error("Discovery Case is not ready for Intake promotion.");
   const routing = discoveryCase.confirmedRouting;
-  if (["unassigned", "rejected"].includes(routing.destination)) throw new Error(`Discovery destination ${routing.destination} cannot be promoted to Intake.`);
+  const routes = Array.isArray(routing.routes) && routing.routes.length ? routing.routes : [routing];
+  const promotableRoutes = routes.filter((route) => !["unassigned", "rejected"].includes(route.destination));
+  if (!promotableRoutes.length) throw new Error("Discovery routing contains no document units eligible for Intake promotion.");
   for (const version of caseView.fileVersions) await authorizeDiscoveryContentAccess({ storageRoot, dbPath, reference: { managedPath: version.managedPath } });
   const intakeBatchId = payload.intakeBatchId || makeId("intake_batch");
   const intakeItems = [];
-  const targetProjectIds = [...new Set([routing.projectId, ...(routing.additionalProjectIds || [])].filter(Boolean))];
-  for (const version of caseView.fileVersions) {
-    const extraction = (caseView.extractions || []).find((item) => item.fileVersionId === version.id && item.textPath) || null;
-    let extractedText = "";
-    if (extraction) extractedText = (await readDiscoveryExtractionText({ storageRoot, dbPath, payload: { extractionId: extraction.id } })).text || "";
-    const sourceTitle = path.basename(version.originalName || "Discovery source", path.extname(version.originalName || "")) || version.originalName || "Discovery source";
-    for (const projectId of (targetProjectIds.length ? targetProjectIds : [null])) intakeItems.push({
+  for (const route of promotableRoutes) {
+    const routeVersionIds = new Set(Array.isArray(route.fileVersionIds) && route.fileVersionIds.length ? route.fileVersionIds : caseView.fileVersions.map((version) => version.id));
+    const routeVersions = caseView.fileVersions.filter((version) => routeVersionIds.has(version.id));
+    const targetProjectIds = [...new Set([route.projectId, ...(route.additionalProjectIds || [])].filter(Boolean))];
+    for (const version of routeVersions) {
+      const extraction = (caseView.extractions || []).find((item) => item.fileVersionId === version.id && item.textPath) || null;
+      let extractedText = "";
+      if (extraction) extractedText = (await readDiscoveryExtractionText({ storageRoot, dbPath, payload: { extractionId: extraction.id } })).text || "";
+      const sourceTitle = path.basename(version.originalName || "Discovery source", path.extname(version.originalName || "")) || version.originalName || "Discovery source";
+      for (const projectId of (targetProjectIds.length ? targetProjectIds : [null])) intakeItems.push({
       id: makeId("intake_item"),
       intakeBatchId,
       projectId: projectId || "",
@@ -1248,15 +1312,15 @@ async function promoteDiscoveryToIntake({ storageRoot, dbPath, payload = {} }) {
       reviewState: "needs_review",
       queueState: "new",
       queueNotes: "",
-      title: `Add source: ${version.originalName || sourceTitle}`,
+      title: routes.length > 1 ? `Add source unit: ${route.title}` : `Add source: ${version.originalName || sourceTitle}`,
       createdAt: promotedAt,
       createdBy: actorId,
       sourceLabel: `Discovery: ${version.originalName || sourceTitle}`,
       armType: "discovery",
       proposedObjectType: "Source",
       proposedChange: {
-        text: sourceTitle,
-        summary: extractedText.slice(0, 2000),
+        text: routes.length > 1 ? route.title : sourceTitle,
+        summary: String(route.summary || extractedText).slice(0, 2000),
         extractionStatus: extraction?.status || "metadata_only"
       },
       evidence: {
@@ -1265,6 +1329,7 @@ async function promoteDiscoveryToIntake({ storageRoot, dbPath, payload = {} }) {
         fileVersionId: version.id,
         sourceSha256: version.sha256,
         extractionId: extraction?.id || "",
+        discoveryUnit: { id: route.id || "unit_1", title: route.title || sourceTitle, summary: route.summary || "", evidence: cloneJson(route.evidence || []) },
         managedFile: {
           fileName: version.originalName || sourceTitle,
           managedPath: version.managedPath,
@@ -1278,8 +1343,10 @@ async function promoteDiscoveryToIntake({ storageRoot, dbPath, payload = {} }) {
       fileVersionId: version.id,
       sourceSha256: version.sha256,
       originalName: version.originalName,
-      destination: routing.destination,
-      proposedProjectName: routing.proposedProjectName || "",
+      destination: route.destination,
+      proposedProjectName: route.proposedProjectName || "",
+      discoveryUnitId: route.id || "unit_1",
+      discoveryUnitTitle: route.title || sourceTitle,
       routingInteractionId: discoveryCase.routingInteractionId,
       proposedBy: actorId,
       proposedAt: promotedAt,
@@ -1289,6 +1356,7 @@ async function promoteDiscoveryToIntake({ storageRoot, dbPath, payload = {} }) {
       comments: [],
       archived: false
     });
+    }
   }
   const batch = { id: intakeBatchId, status: "pending", createdAt: promotedAt, createdBy: actorId, reason, origin: "discovery", discoveryCaseId, routingInteractionId: discoveryCase.routingInteractionId, destination: routing.destination, itemIds: intakeItems.map((item) => item.id) };
   const db = openDatabase(dbPath);
@@ -1296,11 +1364,16 @@ async function promoteDiscoveryToIntake({ storageRoot, dbPath, payload = {} }) {
     db.exec("BEGIN IMMEDIATE TRANSACTION");
     insertStrict(db, "intake_batches", { id: batch.id, status: batch.status, created_at: batch.createdAt, record_json: JSON.stringify(batch) });
     for (const item of intakeItems) insertStrict(db, "intake_items", { id: item.id, project_id: item.projectId, status: item.status, arm_type: item.armType, proposed_object_type: item.proposedObjectType, record_json: JSON.stringify(item) });
-    if (routing.destination === "proposed_new_project") {
+    const proposedProjectIds = [];
+    for (const route of promotableRoutes.filter((item) => item.destination === "proposed_new_project")) {
       const proposedProjectId = makeId("proposed_project");
-      const proposed = { id: proposedProjectId, intakeBatchId, name: routing.proposedProjectName, status: "pending", discoveryCaseId, proposedBy: actorId, proposedAt: promotedAt, sourceIntakeItemIds: intakeItems.map((item) => item.id) };
+      const proposed = { id: proposedProjectId, intakeBatchId, name: route.proposedProjectName, status: "pending", discoveryCaseId, discoveryUnitId: route.id || "unit_1", proposedBy: actorId, proposedAt: promotedAt, sourceIntakeItemIds: intakeItems.filter((item) => item.discoveryUnitId === (route.id || "unit_1")).map((item) => item.id) };
       insertStrict(db, "proposed_projects", { id: proposed.id, intake_batch_id: intakeBatchId, status: proposed.status, record_json: JSON.stringify(proposed) });
-      batch.proposedProjectId = proposedProjectId;
+      proposedProjectIds.push(proposedProjectId);
+    }
+    if (proposedProjectIds.length) {
+      batch.proposedProjectIds = proposedProjectIds;
+      if (proposedProjectIds.length === 1) batch.proposedProjectId = proposedProjectIds[0];
       db.prepare("UPDATE intake_batches SET record_json = ? WHERE id = ?").run(JSON.stringify(batch), intakeBatchId);
     }
     db.exec("COMMIT");

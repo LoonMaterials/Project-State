@@ -7776,10 +7776,40 @@ async function beginFileImport(kind = "files") {
     window.alert(t("fileImportFailed"));
     return;
   }
+  selection.importKind = kind;
+  selection.rootPath = kind === "folder" ? paths[0] : "";
   openFileImportReviewModal(selection);
 }
 
+function folderRelativeGroup(localPath = "", rootPath = "") {
+  const normalizedPath = String(localPath).replaceAll("\\", "/");
+  const normalizedRoot = String(rootPath).replaceAll("\\", "/").replace(/\/$/, "");
+  const relative = normalizedPath.toLowerCase().startsWith(`${normalizedRoot.toLowerCase()}/`) ? normalizedPath.slice(normalizedRoot.length + 1) : normalizedPath.split("/").pop();
+  const parts = String(relative || "").split("/").filter(Boolean);
+  return parts.length > 1 ? parts[0] : "Folder root";
+}
+
+function partitionDiscoveryCandidates(candidates = [], mode = "folder_groups", rootPath = "") {
+  const grouped = new Map();
+  for (const candidate of candidates) {
+    const label = mode === "one_case" ? "Selected folder" : mode === "each_file" ? candidate.name || "Selected file" : folderRelativeGroup(candidate.localPath, rootPath);
+    if (!grouped.has(label)) grouped.set(label, []);
+    grouped.get(label).push(candidate);
+  }
+  const groups = [];
+  for (const [label, files] of grouped.entries()) {
+    for (let index = 0; index < files.length; index += 24) {
+      const chunk = files.slice(index, index + 24);
+      const part = files.length > 24 ? ` · part ${Math.floor(index / 24) + 1}` : "";
+      groups.push({ label: `${label}${part}`, candidates: chunk });
+    }
+  }
+  return groups;
+}
+
 function openFileImportReviewModal(selection) {
+  const isFolderImport = selection.importKind === "folder";
+  const suggestedFolderGroups = isFolderImport ? partitionDiscoveryCandidates(selection.candidates, "folder_groups", selection.rootPath) : [];
   showModal({
     title: "Add to Discovery",
     submitText: "Read and review",
@@ -7792,11 +7822,12 @@ function openFileImportReviewModal(selection) {
           ${selection.candidates.map((file) => `
             <label class="check-field">
               <input type="checkbox" data-import-path="${escapeHtml(file.localPath)}" checked>
-              <span><strong>${escapeDisplay(file.name, DISPLAY_META_LIMIT)}</strong><br>${escapeDisplay(file.localPath, DISPLAY_META_LIMIT)} · ${escapeHtml(formatBytes(file.size))}</span>
+              <span><strong>${escapeDisplay(file.name, DISPLAY_META_LIMIT)}</strong><br>${escapeDisplay(file.localPath, DISPLAY_META_LIMIT)} · ${escapeHtml(formatBytes(file.size))}${isFolderImport ? `<br>Suggested group: ${escapeDisplay(folderRelativeGroup(file.localPath, selection.rootPath), DISPLAY_META_LIMIT)}` : ""}</span>
             </label>
           `).join("")}
         </div>
       </div>
+      ${isFolderImport ? `<div class="field"><label for="folderGroupingMode">How should this folder be reviewed?</label><select id="folderGroupingMode" name="folderGroupingMode"><option value="folder_groups">Use suggested folder groups (${suggestedFolderGroups.length})</option><option value="one_case">Treat the selected folder as one case</option><option value="each_file">Review every file separately</option></select><p class="item-meta">Groups larger than 24 files continue as numbered parts so no selected file is silently omitted.</p></div>` : ""}
       <div class="field"><label for="privacyClass">Privacy</label><select id="privacyClass" name="privacyClass"><option value="local_only">Keep local only</option><option value="personal">Personal</option><option value="confidential">Confidential</option><option value="restricted">Restricted</option><option value="provider_allowed">Configured provider allowed later</option></select></div>
       ${confirmationField("externalSecurityAcknowledged", "I understand Project State does not scan files. I trust these files and accept responsibility for checking them with my own security tools.")}
       ${selection.skipped?.length ? `<p class="notice">${escapeHtml(t("unsupportedFilesSkipped"))}: ${selection.skipped.length}</p>` : ""}
@@ -7807,50 +7838,80 @@ function openFileImportReviewModal(selection) {
       const candidates = selection.candidates.filter((file) => selectedPaths.includes(file.localPath));
       if (!candidates.length) return false;
       const actor = getOrCreateActor(data.actorName, "Human");
-      let discoveryCaseId = "";
-      const stagedFiles = [];
-      for (const candidate of candidates) {
-        const staged = await platformAdapter.discovery.stageTrustedFile({ path: candidate.localPath, discoveryCaseId: discoveryCaseId || undefined, actorId: actor.id, privacyClass: data.privacyClass || "local_only", externalSecurityAcknowledged: data.externalSecurityAcknowledged === "on", reason: String(data.reason || "").trim() });
-        discoveryCaseId = staged.discoveryCaseId;
-        stagedFiles.push({ ...staged, originalName: candidate.name });
-      }
-      if (!stagedFiles.length) {
-        window.alert(t("fileImportFailed"));
-        return false;
-      }
-      const extractions = [];
-      for (const staged of stagedFiles) {
-        const result = await platformAdapter.discovery.extractFileVersion({ discoveryCaseId, fileVersionId: staged.fileVersionId, actorId: "project_state_deterministic" });
-        let text = "";
-        if (result.extraction?.textPath) {
-          const readResult = await platformAdapter.discovery.readExtractionText({ extractionId: result.extraction.id });
-          text = readResult.text || "";
+      const groupingMode = isFolderImport ? data.folderGroupingMode || "folder_groups" : "one_case";
+      const candidateGroups = partitionDiscoveryCandidates(candidates, groupingMode, selection.rootPath);
+      const discoveryReviews = [];
+      for (const candidateGroup of candidateGroups) {
+        let discoveryCaseId = "";
+        const stagedFiles = [];
+        for (const candidate of candidateGroup.candidates) {
+          const staged = await platformAdapter.discovery.stageTrustedFile({ path: candidate.localPath, discoveryCaseId: discoveryCaseId || undefined, caseTitle: candidateGroup.label, actorId: actor.id, privacyClass: data.privacyClass || "local_only", externalSecurityAcknowledged: data.externalSecurityAcknowledged === "on", reason: String(data.reason || "").trim() });
+          discoveryCaseId = staged.discoveryCaseId;
+          stagedFiles.push({ ...staged, originalName: candidate.name });
         }
-        extractions.push({
-          fileVersionId: staged.fileVersionId,
-          originalName: staged.originalName,
-          deduplicated: staged.deduplicated === true,
-          status: result.extraction?.status || "failed",
-          text,
-          textBytes: result.extraction?.textBytes || 0,
-          chunkCount: result.extraction?.chunkCount || 0,
-          error: result.extraction?.error || null
-        });
+        const extractions = [];
+        for (const staged of stagedFiles) {
+          const result = await platformAdapter.discovery.extractFileVersion({ discoveryCaseId, fileVersionId: staged.fileVersionId, actorId: "project_state_deterministic" });
+          let text = "";
+          if (result.extraction?.textPath) {
+            const readResult = await platformAdapter.discovery.readExtractionText({ extractionId: result.extraction.id });
+            text = readResult.text || "";
+          }
+          extractions.push({ fileVersionId: staged.fileVersionId, originalName: staged.originalName, deduplicated: staged.deduplicated === true, status: result.extraction?.status || "failed", text, textBytes: result.extraction?.textBytes || 0, chunkCount: result.extraction?.chunkCount || 0, error: result.extraction?.error || null });
+        }
+        const analysis = await platformAdapter.discovery.analyzeCase({ discoveryCaseId, actorId: "project_state_deterministic" });
+        discoveryReviews.push({ discoveryCaseId, analysis, extractions, actor, reason: String(data.reason || "").trim(), groupLabel: candidateGroup.label });
       }
-      const analysis = await platformAdapter.discovery.analyzeCase({ discoveryCaseId, actorId: "project_state_deterministic" });
-      queuePostModalAction(() => openDiscoveryReviewModal({ discoveryCaseId, analysis, extractions, actor, reason: String(data.reason || "").trim() }));
+      if (!discoveryReviews.length) { window.alert(t("fileImportFailed")); return false; }
+      queuePostModalAction(() => openDiscoveryReviewSequence(discoveryReviews));
       return true;
     }
   });
 }
 
-function openDiscoveryReviewModal({ discoveryCaseId, analysis, extractions = [], actor, reason }) {
+function openDiscoveryReviewSequence(reviews = [], index = 0) {
+  const current = reviews[index];
+  if (!current) return;
+  openDiscoveryReviewModal({ ...current, sequencePosition: reviews.length > 1 ? { index: index + 1, total: reviews.length } : null, onConfirmed: () => openDiscoveryReviewSequence(reviews, index + 1) });
+}
+
+function discoveryDestinationOptions(selected = "proposed_new_project") {
+  return [
+    ["existing_project", "Existing project"],
+    ["proposed_new_project", "Propose a new project"],
+    ["general_reference", "General reference"],
+    ["orphaned_idea", "Orphaned idea"],
+    ["unassigned", "Leave unassigned"],
+    ["rejected", "Reject"]
+  ].map(([value, label]) => `<option value="${value}"${value === selected ? " selected" : ""}>${label}</option>`).join("");
+}
+
+function renderDiscoveryUnitEditor(unit, index, { included = false } = {}) {
+  const title = unit?.title || "";
+  const summary = unit?.summary || "";
+  return `
+    <article class="item discovery-unit-editor" data-discovery-unit-index="${index}">
+      <label class="check-field"><input type="checkbox" name="unit_include_${index}" ${included ? "checked" : ""}><span><strong>${included ? "Include this suggested unit" : "Add another idea"}</strong></span></label>
+      <div class="field"><label for="unit_title_${index}">Idea or section name</label><input id="unit_title_${index}" name="unit_title_${index}" value="${escapeHtml(title)}" placeholder="Name this idea"></div>
+      <div class="field"><label for="unit_summary_${index}">What this unit contains</label><textarea id="unit_summary_${index}" name="unit_summary_${index}" rows="3" placeholder="Optional plain-language summary">${escapeHtml(summary)}</textarea></div>
+      <div class="field"><label for="unit_destination_${index}">Where should this unit go?</label><select id="unit_destination_${index}" name="unit_destination_${index}">${discoveryDestinationOptions("proposed_new_project")}</select></div>
+      <div class="field"><label for="unit_project_${index}">Existing project, if selected</label><select id="unit_project_${index}" name="unit_project_${index}"><option value="">None</option>${projectOptions()}</select></div>
+    </article>
+  `;
+}
+
+function openDiscoveryReviewModal({ discoveryCaseId, analysis, extractions = [], actor, reason, groupLabel = "", sequencePosition = null, onConfirmed = null }) {
   const bestName = analysis.suggestedProjectNames?.[0]?.name || "";
+  const suggestedUnits = (analysis.documentUnits || []).slice(0, 8);
+  const slotCount = Math.min(8, Math.max(3, suggestedUnits.length + 2));
+  const unitSlots = Array.from({ length: slotCount }, (_, index) => suggestedUnits[index] || { id: `manual_unit_${index + 1}`, title: "", summary: "", fileVersionIds: [], evidence: [], suggested: false });
+  const suggestedMode = analysis.unitModeSuggestion === "multiple_units" ? "multiple_units" : "one_item";
   showModal({
-    title: "Review Discovery",
+    title: sequencePosition ? `Review Discovery (${sequencePosition.index} of ${sequencePosition.total})` : "Review Discovery",
     submitText: "Confirm",
     body: `
       <p class="notice"><strong>Read complete.</strong> Project State copied the selected file into managed staging, verified its exact bytes, and completed the supported local extraction shown below.</p>
+      ${groupLabel ? `<p class="notice"><strong>Suggested group:</strong> ${escapeDisplay(groupLabel, DISPLAY_META_LIMIT)}</p>` : ""}
       <div class="field">
         <label>File reading result</label>
         <div class="list">
@@ -7878,26 +7939,64 @@ function openDiscoveryReviewModal({ discoveryCaseId, analysis, extractions = [],
         </div>
       </div>
       <p class="notice">Project State found a possible name and routing. These are suggestions, not decisions.</p>
-      <div class="field"><label>Suggested project name</label><input name="proposedProjectName" value="${escapeHtml(bestName)}"></div>
+      <div class="field"><label for="unitReviewMode">How should this material be reviewed?</label><select id="unitReviewMode" name="unitReviewMode"><option value="one_item"${suggestedMode === "one_item" ? " selected" : ""}>Treat it as one item</option><option value="multiple_units"${suggestedMode === "multiple_units" ? " selected" : ""}>Review several ideas separately</option></select></div>
+      <div data-single-discovery-route>
+        <div class="field"><label>Suggested project name</label><input name="proposedProjectName" value="${escapeHtml(bestName)}"></div>
+      </div>
+      <div data-multiple-discovery-routes>
+        <p class="notice">Each included unit will receive its own route and pending Intake proposal. Suggested boundaries are editable and do not alter the original file.</p>
+        <div class="list">${unitSlots.map((unit, index) => renderDiscoveryUnitEditor(unit, index, { included: index < suggestedUnits.length })).join("")}</div>
+      </div>
       ${analysis.projectCandidates?.length ? `<div class="field"><label>Possible existing projects</label><div class="list">${analysis.projectCandidates.map((item) => `<p>${escapeDisplay(item.name, DISPLAY_META_LIMIT)} · ${Math.round(item.confidence * 100)}%</p>`).join("")}</div></div>` : ""}
       ${(analysis.questions || []).map((question) => `<div class="field"><label for="answer_${escapeHtml(question.id)}">${escapeHtml(question.text)}</label><input id="answer_${escapeHtml(question.id)}" name="answer_${escapeHtml(question.id)}" placeholder="Not sure"></div>`).join("")}
-      <div class="field"><label for="destination">Where should this go?</label><select id="destination" name="destination" required><option value="existing_project">Existing project</option><option value="proposed_new_project">Propose a new project</option><option value="general_reference">General reference</option><option value="orphaned_idea">Orphaned idea</option><option value="unassigned">Leave unassigned</option><option value="rejected">Reject</option></select></div>
-      <div class="field"><label for="projectId">Existing project, if selected</label><select id="projectId" name="projectId"><option value="">None</option>${projectOptions()}</select></div>
+      <div data-single-discovery-route>
+        <div class="field"><label for="destination">Where should this go?</label><select id="destination" name="destination" required>${discoveryDestinationOptions("proposed_new_project")}</select></div>
+        <div class="field"><label for="projectId">Existing project, if selected</label><select id="projectId" name="projectId"><option value="">None</option>${projectOptions()}</select></div>
+      </div>
       <p class="notice">Confirming creates Intake proposals only. Core still requires separate human approval.</p>
     `,
     async onSubmit(data) {
       for (const question of analysis.questions || []) await platformAdapter.discovery.recordAnswer({ discoveryCaseId, actorId: actor.id, questionId: question.id, answer: data[`answer_${question.id}`] || "Not sure" });
-      if (data.destination === "existing_project" && !data.projectId) { window.alert("Choose an existing project or select a different destination."); return false; }
-      const routing = await platformAdapter.discovery.confirmRouting({ discoveryCaseId, actorId: actor.id, destination: data.destination, projectId: data.projectId || null, proposedProjectName: data.proposedProjectName || bestName });
-      if (!["unassigned", "rejected"].includes(routing.routing.destination)) await platformAdapter.discovery.promoteToIntake({ discoveryCaseId, actorId: actor.id, reason: reason || "Confirmed Discovery routing." });
+      let routing;
+      if (data.unitReviewMode === "multiple_units") {
+        const routes = unitSlots.map((unit, index) => ({
+          id: unit.id || `manual_unit_${index + 1}`,
+          included: data[`unit_include_${index}`] === "on",
+          title: String(data[`unit_title_${index}`] || "").trim(),
+          summary: String(data[`unit_summary_${index}`] || "").trim(),
+          destination: data[`unit_destination_${index}`] || "unassigned",
+          projectId: data[`unit_project_${index}`] || null,
+          proposedProjectName: String(data[`unit_title_${index}`] || "").trim(),
+          fileVersionIds: unit.fileVersionIds || [],
+          evidence: unit.evidence || []
+        })).filter((route) => route.included && route.title);
+        if (!routes.length) { window.alert("Include and name at least one document unit, or review the material as one item."); return false; }
+        if (routes.some((route) => route.destination === "existing_project" && !route.projectId)) { window.alert("Choose an existing project for every unit routed to an existing project."); return false; }
+        routing = await platformAdapter.discovery.confirmRouting({ discoveryCaseId, actorId: actor.id, routes });
+      } else {
+        if (data.destination === "existing_project" && !data.projectId) { window.alert("Choose an existing project or select a different destination."); return false; }
+        routing = await platformAdapter.discovery.confirmRouting({ discoveryCaseId, actorId: actor.id, destination: data.destination, projectId: data.projectId || null, proposedProjectName: data.proposedProjectName || bestName });
+      }
+      const confirmedRoutes = routing.routing.routes?.length ? routing.routing.routes : [routing.routing];
+      if (confirmedRoutes.some((route) => !["unassigned", "rejected"].includes(route.destination))) await platformAdapter.discovery.promoteToIntake({ discoveryCaseId, actorId: actor.id, reason: reason || "Confirmed Discovery routing." });
       store = await loadStore() || store;
       await refreshDiscoveryWorkspace();
-      activeRootView = routing.routing.destination === "unassigned" ? "files" : "intake";
+      activeRootView = confirmedRoutes.every((route) => ["unassigned", "rejected"].includes(route.destination)) ? "files" : "intake";
       activeProjectId = null;
       setSaveStatus("saved", "Discovery confirmed.");
+      if (typeof onConfirmed === "function" && sequencePosition?.index < sequencePosition?.total) queuePostModalAction(onConfirmed);
       return true;
     }
   });
+  const reviewModal = document.querySelector(".modal");
+  const modeField = reviewModal?.querySelector("#unitReviewMode");
+  const syncDiscoveryUnitMode = () => {
+    const multiple = modeField?.value === "multiple_units";
+    reviewModal?.querySelectorAll("[data-single-discovery-route]").forEach((node) => { node.hidden = multiple; });
+    reviewModal?.querySelectorAll("[data-multiple-discovery-routes]").forEach((node) => { node.hidden = !multiple; });
+  };
+  modeField?.addEventListener("change", syncDiscoveryUnitMode);
+  syncDiscoveryUnitMode();
 }
 
 function renderIntakeQueue() {
@@ -10350,6 +10449,7 @@ function inferFlowStep(title = "", submitText = "") {
   const titleText = String(title || "").toLowerCase();
   const combined = `${title} ${submitText}`.toLowerCase();
   if (/\b(add|create|attach|assign|import|read)\b/.test(titleText)) return 2;
+  if (/\breview\b/.test(titleText) && /\b(confirm|approve|reject)\b/.test(String(submitText || "").toLowerCase())) return 4;
   if (/\b(edit|review|verify|resolve)\b/.test(titleText)) return 3;
   if (/\b(approve|confirm|reject|delete|archive|restore|reset)\b/.test(titleText)) return 4;
   if (/approve|confirm|delete|archive|restore|reset/.test(combined)) return 4;

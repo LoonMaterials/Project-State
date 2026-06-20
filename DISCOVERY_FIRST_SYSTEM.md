@@ -214,3 +214,15 @@ Scanning, extraction, indexing, and analysis must be resumable and idempotent. T
 ## Acceptance statement
 
 The system is Discovery-ready when user-trusted outside material can be staged with explicit external-security responsibility, read where supported, questioned, routed, promoted through Intake, and traced into Core without requiring AI, inventing facts, duplicating evidence, claiming malware safety, or bypassing human authority.
+
+## Multi-idea document continuation — 2026-06-20
+
+The next Discovery flow layer is governed by `MULTI_IDEA_DOCUMENT_FLOW.md`.
+
+- One file must not be assumed to equal one idea or one project.
+- Deterministic heading and file-boundary suggestions form an editable document map.
+- The user chooses one-item review or independently routed document units.
+- Each confirmed unit becomes a separate pending Intake proposal while retaining the same immutable source-file lineage.
+- Folder-scale grouping follows only after this unit flow passes its isolated live acceptance gate.
+
+Folder-scale continuation is governed by `FOLDER_DISCOVERY_FLOW.md`. The v0.1 foundation exposes deterministic relative-folder grouping, one-case and per-file correction choices, 24-file continuation parts with no silent omission, and sequential governed review of every resulting Discovery Case.
