@@ -1234,7 +1234,61 @@ async function promoteDiscoveryToIntake({ storageRoot, dbPath, payload = {} }) {
   const intakeBatchId = payload.intakeBatchId || makeId("intake_batch");
   const intakeItems = [];
   const targetProjectIds = [...new Set([routing.projectId, ...(routing.additionalProjectIds || [])].filter(Boolean))];
-  for (const version of caseView.fileVersions) for (const projectId of (targetProjectIds.length ? targetProjectIds : [null])) intakeItems.push({ id: makeId("intake_item"), intakeBatchId, projectId: projectId || "", status: "pending", armType: "discovery", proposedObjectType: "Source", discoveryCaseId, fileAssetId: version.fileAssetId, fileVersionId: version.id, sourceSha256: version.sha256, originalName: version.originalName, destination: routing.destination, routingInteractionId: discoveryCase.routingInteractionId, proposedBy: actorId, proposedAt: promotedAt, reason });
+  for (const version of caseView.fileVersions) {
+    const extraction = (caseView.extractions || []).find((item) => item.fileVersionId === version.id && item.textPath) || null;
+    let extractedText = "";
+    if (extraction) extractedText = (await readDiscoveryExtractionText({ storageRoot, dbPath, payload: { extractionId: extraction.id } })).text || "";
+    const sourceTitle = path.basename(version.originalName || "Discovery source", path.extname(version.originalName || "")) || version.originalName || "Discovery source";
+    for (const projectId of (targetProjectIds.length ? targetProjectIds : [null])) intakeItems.push({
+      id: makeId("intake_item"),
+      intakeBatchId,
+      projectId: projectId || "",
+      status: "pending",
+      reviewState: "needs_review",
+      queueState: "new",
+      queueNotes: "",
+      title: `Add source: ${version.originalName || sourceTitle}`,
+      createdAt: promotedAt,
+      createdBy: actorId,
+      sourceLabel: `Discovery: ${version.originalName || sourceTitle}`,
+      armType: "discovery",
+      proposedObjectType: "Source",
+      proposedChange: {
+        text: sourceTitle,
+        summary: extractedText.slice(0, 2000),
+        extractionStatus: extraction?.status || "metadata_only"
+      },
+      evidence: {
+        discoveryCaseId,
+        fileAssetId: version.fileAssetId,
+        fileVersionId: version.id,
+        sourceSha256: version.sha256,
+        extractionId: extraction?.id || "",
+        managedFile: {
+          fileName: version.originalName || sourceTitle,
+          managedPath: version.managedPath,
+          sha256: version.sha256,
+          size: version.byteSize || 0,
+          contentType: ""
+        }
+      },
+      discoveryCaseId,
+      fileAssetId: version.fileAssetId,
+      fileVersionId: version.id,
+      sourceSha256: version.sha256,
+      originalName: version.originalName,
+      destination: routing.destination,
+      proposedProjectName: routing.proposedProjectName || "",
+      routingInteractionId: discoveryCase.routingInteractionId,
+      proposedBy: actorId,
+      proposedAt: promotedAt,
+      reason,
+      approval: null,
+      assignments: [],
+      comments: [],
+      archived: false
+    });
+  }
   const batch = { id: intakeBatchId, status: "pending", createdAt: promotedAt, createdBy: actorId, reason, origin: "discovery", discoveryCaseId, routingInteractionId: discoveryCase.routingInteractionId, destination: routing.destination, itemIds: intakeItems.map((item) => item.id) };
   const db = openDatabase(dbPath);
   try {

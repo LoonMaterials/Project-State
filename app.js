@@ -5076,8 +5076,9 @@ function normalizeIntakeItem(item, context) {
   if (!INTAKE_STATUSES.includes(item.status)) migrationNeeded = true;
   const queueState = normalizeIntakeQueueState(item.queueState, context);
   return {
+    ...item,
     id,
-    armType: normalizeArmType(item.armType),
+    armType: item.armType === "discovery" ? "file" : normalizeArmType(item.armType),
     status,
     reviewState: normalizeReviewState(item.reviewState || (status === "pending" ? "needs_review" : status === "approved" ? "approved" : "rejected")),
     queueState,
@@ -5087,13 +5088,14 @@ function normalizeIntakeItem(item, context) {
     queueReviewReason: item.queueReviewReason || "",
     assignments: normalizeAssignments(item.assignments, context),
     comments: normalizeComments(item.comments, context),
-    title: item.title || t("untitledIntake"),
+    title: item.title || (item.armType === "discovery" && item.originalName ? `Add source: ${item.originalName}` : t("untitledIntake")),
     projectId: item.projectId || "",
     createdAt: item.createdAt || nowIso(),
     createdBy: item.createdBy || "",
-    sourceLabel: item.sourceLabel || "",
+    sourceLabel: item.sourceLabel || (item.armType === "discovery" && item.originalName ? `Discovery: ${item.originalName}` : ""),
     proposedObjectType: normalizeProposedObjectType(item.proposedObjectType),
-    proposedChange: item.proposedChange || {},
+    proposedChange: Object.keys(item.proposedChange || {}).length ? item.proposedChange : (item.armType === "discovery" ? { text: String(item.originalName || "Discovery source").replace(/\.[^.]+$/, ""), summary: "" } : {}),
+    proposedProjectName: item.proposedProjectName || (item.destination === "proposed_new_project" ? String(item.originalName || "").replace(/\.[^.]+$/, "") : ""),
     evidence: item.evidence || {},
     approval: item.approval || null,
     archived: Boolean(item.archived)
@@ -5896,8 +5898,9 @@ function projectCompletenessFlags(project) {
 
 function intakeAirlockChecks(intake) {
   const proposed = intake.proposedChange || {};
+  const validTarget = Boolean(getProject(intake.projectId)) || (intake.destination === "proposed_new_project" && Boolean(String(intake.proposedProjectName || "").trim()));
   return [
-    flagItem("targetProjectSelected", t("targetProjectSelected"), Boolean(getProject(intake.projectId)), true),
+    flagItem("targetProjectSelected", t("targetProjectSelected"), validTarget, true),
     flagItem("proposedTitleRecorded", t("proposedTitleRecorded"), String(intake.title || "").trim(), true),
     flagItem("proposedTextRecorded", t("proposedTextRecorded"), String(proposed.text || "").trim(), true),
     flagItem("proposedTypeSelected", t("proposedTypeSelected"), normalizeProposedObjectType(intake.proposedObjectType), true),
@@ -7483,6 +7486,21 @@ function countProjectImages(project) {
   return count;
 }
 
+function listFullProjectImages(project) {
+  const images = [];
+  for (const { objectType, object } of projectIntegrityObjects(project)) {
+    for (const image of object.imageLinks || []) {
+      images.push({
+        ...image,
+        projectId: image.projectId || project.id,
+        attachedToType: image.attachedToType || objectType,
+        attachedToId: image.attachedToId || object.id
+      });
+    }
+  }
+  return images;
+}
+
 function archivedProjectCount() {
   return store.projects.filter((project) => project.archived).length;
 }
@@ -7875,7 +7893,11 @@ function renderIntakeQueue() {
 }
 
 function renderIntakeItem(item) {
-  const projectName = item.projectId ? projectNameById(item.projectId) || t("missingProject") : t("noTargetProject");
+  const projectName = item.projectId
+    ? projectNameById(item.projectId) || t("missingProject")
+    : item.destination === "proposed_new_project" && item.proposedProjectName
+      ? `Proposed new project: ${item.proposedProjectName}`
+      : t("noTargetProject");
   const proposed = item.proposedChange || {};
   const isPending = item.status === "pending" && !item.archived;
   const airlockFlags = intakeAirlockChecks(item);
@@ -7901,7 +7923,7 @@ function renderIntakeItem(item) {
       ${item.review ? `<p class="item-meta">${escapeHtml(t("reviewedBy"))} ${escapeHtml(actorDisplay(item.review.actorId, item.review.actorName))} · ${escapeHtml(formatDate(item.review.reviewedAt))}</p>` : ""}
       ${item.approval ? `<p class="item-meta">${escapeHtml(t("approvedBy"))} ${escapeHtml(actorDisplay(item.approval.approvedBy))} · ${escapeHtml(formatDate(item.approval.approvedAt))}</p>` : ""}
       <div class="item-actions">
-        ${isPending ? `<button class="btn secondary compact" data-action="review-intake-queue" data-intake-id="${item.id}">${escapeHtml(t("reviewQueueItem"))}</button>` : ""}
+        ${isPending ? `<button class="btn secondary compact" data-action="review-intake-queue" data-intake-id="${item.id}">Edit proposal</button>` : ""}
         ${isPending ? `<button class="btn secondary compact" data-action="approve-intake" data-intake-id="${item.id}" ${airlockReady ? "" : "disabled"} title="${airlockReady ? "" : escapeHtml(t("airlockIncompleteNotice"))}">${escapeHtml(t("approve"))}</button>` : ""}
         ${isPending ? `<button class="btn secondary compact" data-action="reject-intake" data-intake-id="${item.id}">${escapeHtml(t("reject"))}</button>` : ""}
         ${!item.archived ? `<button class="btn secondary compact" data-action="archive-intake" data-intake-id="${item.id}">${escapeHtml(t("archive"))}</button>` : ""}
@@ -10700,6 +10722,10 @@ function openApproveIntakeModal(intakeId) {
       if (result) {
         const next = nextPendingIntake(intake.id, { readyOnly: true });
         if (next) queuePostModalAction(() => openApproveIntakeModal(next.id));
+        else if (intake.projectId && getProject(intake.projectId)) queuePostModalAction(() => {
+          openProjectNow(intake.projectId, "dashboard");
+          render();
+        });
       }
       return Boolean(result);
     }
@@ -10713,8 +10739,28 @@ function openReviewIntakeQueueModal(intakeId) {
     title: t("approvalQueueReview"),
     submitText: t("saveQueueReview"),
     body: `
-      <p class="notice">${escapeHtml(t("approvalQueueReviewNotice"))}</p>
+      <p class="notice">Edit anything Discovery proposed before approval. Nothing here changes Core until you approve it.</p>
       ${renderIntakeApprovalPreview(intake)}
+      <div class="field">
+        <label for="intakeTitle">Proposal title</label>
+        <input id="intakeTitle" name="intakeTitle" value="${escapeHtml(intake.title || "")}" required>
+      </div>
+      <div class="field">
+        <label for="proposedText">Proposed source title</label>
+        <textarea id="proposedText" name="proposedText" required>${escapeHtml(intake.proposedChange?.text || "")}</textarea>
+      </div>
+      <div class="field">
+        <label for="proposedSummary">Source summary or extracted context</label>
+        <textarea id="proposedSummary" name="proposedSummary" rows="8">${escapeHtml(intake.proposedChange?.summary || "")}</textarea>
+      </div>
+      <div class="field">
+        <label for="intakeProjectId">Existing target project</label>
+        <select id="intakeProjectId" name="intakeProjectId"><option value="">None</option>${projectOptions(intake.projectId || "")}</select>
+      </div>
+      <div class="field">
+        <label for="proposedProjectName">Proposed new project name</label>
+        <input id="proposedProjectName" name="proposedProjectName" value="${escapeHtml(intake.proposedProjectName || "")}">
+      </div>
       <div class="field">
         <label for="queueState">${escapeHtml(t("queueState"))}</label>
         <select id="queueState" name="queueState" required>
@@ -10729,6 +10775,16 @@ function openReviewIntakeQueueModal(intakeId) {
     `,
     onSubmit(data) {
       const actor = getOrCreateActor(data.actorName, "Human");
+      intake.title = String(data.intakeTitle || "").trim();
+      intake.proposedChange = {
+        ...(intake.proposedChange || {}),
+        text: String(data.proposedText || "").trim(),
+        summary: String(data.proposedSummary || "").trim()
+      };
+      intake.projectId = String(data.intakeProjectId || "").trim();
+      intake.proposedProjectName = String(data.proposedProjectName || "").trim();
+      if (intake.projectId) intake.destination = "existing_project";
+      else if (intake.proposedProjectName) intake.destination = "proposed_new_project";
       intake.queueState = normalizeIntakeQueueState(data.queueState);
       intake.queueNotes = String(data.queueNotes || "").trim();
       intake.queueReviewedAt = nowIso();
@@ -10892,8 +10948,7 @@ function intakeProposalDiffRows(intake) {
 }
 
 function applyApprovedIntakeToCore(intake, actor, reason, approval) {
-  const project = getProject(intake.projectId);
-  if (!project) return null;
+  let project = getProject(intake.projectId);
   const proposed = intake.proposedChange || {};
   const text = String(proposed.text || intake.title || "").trim();
   const summary = String(proposed.summary || "").trim();
@@ -10905,6 +10960,43 @@ function applyApprovedIntakeToCore(intake, actor, reason, approval) {
     intakeTitle: intake.title,
     intakeApprovedAt: approval.approvedAt
   };
+
+  if (!project && intake.destination === "proposed_new_project" && String(intake.proposedProjectName || "").trim()) {
+    project = {
+      id: uid("project"),
+      name: String(intake.proposedProjectName).trim(),
+      currentStatus: "New project created from approved Discovery intake",
+      currentSummary: summary,
+      healthFlag: "active",
+      archived: false,
+      deletionStatus: "",
+      createdAt: timestamp,
+      updatedAt: timestamp,
+      updatedBy: actor.id,
+      sourceLinks: [],
+      imageLinks: [],
+      decisions: [],
+      facts: [],
+      conflicts: [],
+      sources: [],
+      draftProjects: [],
+      relationships: [],
+      openQuestions: [],
+      nextActions: [],
+      changes: []
+    };
+    intake.projectId = project.id;
+    store.projects.unshift(project);
+    recordChange(project, actor, reason, "Project created from approved Discovery intake", {
+      ...baseDetails,
+      objectType: "Project",
+      objectId: project.id,
+      objectText: project.name,
+      fields: { status: project.currentStatus, summary: project.currentSummary, origin: "discovery" }
+    });
+  }
+
+  if (!project) return null;
 
   if (proposed.proposalKind === "correction") {
     const targetType = proposed.targetObjectType || "";
@@ -13634,9 +13726,13 @@ app.addEventListener("click", (event) => {
   if (action === "export-handoff") exportProjectHandoff();
   if (action === "context-pack") openContextPackModal();
   if (action === "open-project") {
-    openProjectNow(button.dataset.projectId);
-    render();
-    restoreWorkspacePosition();
+    const projectId = button.dataset.projectId || "";
+    if (!getProject(projectId)) window.alert(t("missingProject"));
+    else {
+      openProjectNow(projectId);
+      render();
+      restoreWorkspacePosition();
+    }
   }
   if (action === "continue-last-project") {
     openProjectNow(button.dataset.projectId);
