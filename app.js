@@ -3339,6 +3339,7 @@ function createDesktopPlatformAdapter(bridge) {
   const downloads = bridge.downloads || {};
   const armTransport = bridge.armTransport || {};
   const discoveryStorage = bridge.discoveryStorage || {};
+  const analysisArms = bridge.analysisArms || {};
   const dialogs = bridge.dialogs || {};
   return {
     id: "desktop",
@@ -3485,12 +3486,26 @@ function createDesktopPlatformAdapter(bridge) {
       stageTrustedFile: (payload) => discoveryStorage.stageTrustedFile(payload),
       extractFileVersion: (payload) => discoveryStorage.extractFileVersion(payload),
       readExtractionText: (payload) => discoveryStorage.readExtractionText(payload),
+      readChunkText: (payload) => discoveryStorage.readChunkText(payload),
       analyzeCase: (payload) => discoveryStorage.analyzeCase(payload),
       recordAnswer: (payload) => discoveryStorage.recordAnswer(payload),
       confirmRouting: (payload) => discoveryStorage.confirmRouting(payload),
       promoteToIntake: (payload) => discoveryStorage.promoteToIntake(payload),
       getCase: (payload) => discoveryStorage.getCase(payload),
       readFoundationState: (payload) => discoveryStorage.readFoundationState(payload)
+    },
+    analysis: {
+      available: typeof analysisArms.submitAnalysisBatch === "function" && typeof analysisArms.recordReviewDecision === "function",
+      describeCapabilities: () => analysisArms.describeCapabilities(),
+      createRun: (payload) => analysisArms.createRun(payload),
+      authorizeTransmission: (payload) => analysisArms.authorizeTransmission(payload),
+      submitAnalysisBatch: (envelope) => analysisArms.submitAnalysisBatch(envelope),
+      getAnalysisStatus: (requestId) => analysisArms.getAnalysisStatus(requestId),
+      getResultPage: (requestId, cursor) => analysisArms.getResultPage(requestId, cursor),
+      cancelAnalysis: (requestId) => analysisArms.cancelAnalysis(requestId),
+      getReceipt: (requestId) => analysisArms.getReceipt(requestId),
+      recordReviewDecision: (payload) => analysisArms.recordReviewDecision(payload),
+      readState: (payload) => analysisArms.readState(payload)
     }
   };
 }
@@ -3556,7 +3571,8 @@ function createBrowserPlatformAdapter() {
         return null;
       }
     },
-    discovery: { available: false }
+    discovery: { available: false },
+    analysis: { available: false }
   };
 }
 
@@ -7900,11 +7916,73 @@ function renderDiscoveryUnitEditor(unit, index, { included = false } = {}) {
   `;
 }
 
+function renderIdeaCandidateReview(candidates = [], actor = currentActor()) {
+  return `
+    <p class="notice"><strong>Local test analysis complete.</strong> These are non-authoritative Idea Candidates. Review their evidence before creating Confirmed Idea Units.</p>
+    <div class="list idea-candidate-review-list">
+      ${candidates.map((candidate, index) => `
+        <article class="item" data-idea-candidate-index="${index}">
+          <label class="check-field"><input type="checkbox" data-idea-candidate-select checked><span><strong>Review this candidate</strong></span></label>
+          <div class="field"><label for="idea_candidate_title_${index}">Working idea label</label><input id="idea_candidate_title_${index}" data-idea-candidate-title value="${escapeHtml(candidate.workingLabel || "")}"></div>
+          <div class="field"><label for="idea_candidate_summary_${index}">Neutral summary</label><textarea id="idea_candidate_summary_${index}" data-idea-candidate-summary rows="3">${escapeHtml(candidate.neutralSummary || "")}</textarea></div>
+          <p class="item-meta">${escapeHtml(t("type"))}: ${escapeHtml(candidate.candidateType || "unknown")} · Confidence: ${Math.round(Number(candidate.confidence?.score || 0) * 100)}%</p>
+          ${candidate.confidence?.uncertaintyNotes ? `<p class="notice"><strong>Uncertainty:</strong> ${escapeDisplay(candidate.confidence.uncertaintyNotes, 1000)}</p>` : ""}
+          <details class="technical-details"><summary>Evidence and provenance</summary>${(candidate.evidence || []).map((evidence) => `<p class="item-meta">${escapeDisplay(evidence.excerpt || evidence.discoveryChunkId, 500)}<br>Chunk: ${escapeDisplay(evidence.discoveryChunkId, DISPLAY_META_LIMIT)} · ${escapeDisplay(evidence.relationship || "supports", DISPLAY_META_LIMIT)}</p>`).join("")}<p class="item-meta">Provider: ${escapeDisplay(candidate.provenance?.providerId || "unknown", DISPLAY_META_LIMIT)} · Model: ${escapeDisplay(candidate.provenance?.modelId || "unknown", DISPLAY_META_LIMIT)}</p></details>
+        </article>
+      `).join("")}
+    </div>
+    <div class="field"><label for="ideaReviewAction">What should happen to the selected candidates?</label><select id="ideaReviewAction"><option value="accept">Keep as separate confirmed ideas</option><option value="merge">Merge into one confirmed idea</option><option value="reject">Reject</option><option value="defer">Defer</option><option value="mark_uncertain">Keep unresolved</option></select></div>
+    <div data-idea-merge-fields hidden>
+      <div class="field"><label for="ideaMergeTitle">Merged idea title</label><input id="ideaMergeTitle" value="${escapeHtml(candidates[0]?.workingLabel || "")}"></div>
+      <div class="field"><label for="ideaMergeSummary">Merged idea summary</label><textarea id="ideaMergeSummary" rows="3">${escapeHtml(candidates.map((candidate) => candidate.neutralSummary || "").filter(Boolean).join(" ").slice(0, 2000))}</textarea></div>
+    </div>
+    <div class="field"><label for="ideaReviewActor">Reviewed by</label><select id="ideaReviewActor">${activeActorOptions(actor?.name || "")}</select></div>
+    <div class="field"><label for="ideaReviewReason">Why</label><textarea id="ideaReviewReason" rows="2" required placeholder="Explain the review decision"></textarea></div>
+    <button class="btn" type="button" data-confirm-idea-review>Confirm idea review</button>
+  `;
+}
+
+async function runFakeIdeaAnalysis(discoveryCaseId, actor, reason = "") {
+  const caseView = await platformAdapter.discovery.getCase({ discoveryCaseId });
+  const capabilities = await platformAdapter.analysis.describeCapabilities();
+  if (capabilities.realProviderInstalled !== false || capabilities.arm?.executionLocation !== "local") throw new Error("Only the fake local analysis arm is allowed in this foundation flow.");
+  const chunks = caseView.chunks || [];
+  if (!chunks.length) throw new Error("No extracted text chunks are available for idea analysis.");
+  const extractionById = new Map((caseView.extractions || []).map((extraction) => [extraction.id, extraction]));
+  const versionById = new Map((caseView.fileVersions || []).map((version) => [version.id, version]));
+  const assetById = new Map((caseView.fileAssets || []).map((asset) => [asset.id, asset]));
+  const privacyClasses = new Set((caseView.fileVersions || []).map((version) => assetById.get(version.fileAssetId)?.privacyClass || "local_only"));
+  if (privacyClasses.size !== 1) throw new Error("Mixed privacy classes must be reviewed in separate Discovery Cases before analysis.");
+  const privacyClass = [...privacyClasses][0];
+  const sourceScopeMap = new Map();
+  for (const chunk of chunks) {
+    const extraction = extractionById.get(chunk.discoveryExtractionId);
+    if (!extraction) continue;
+    if (!sourceScopeMap.has(extraction.fileVersionId)) sourceScopeMap.set(extraction.fileVersionId, { fileVersionId: extraction.fileVersionId, sourceSha256: extraction.sourceSha256, expectedChunkIds: [] });
+    sourceScopeMap.get(extraction.fileVersionId).expectedChunkIds.push(chunk.id);
+  }
+  const analysisRunId = uid("idea_run");
+  await platformAdapter.analysis.createRun({ id: analysisRunId, discoveryCaseId, actorId: capabilities.arm.armId, actorType: "tool", method: "ai", status: "running", sourceScope: [...sourceScopeMap.values()], provenance: { providerId: capabilities.arm.providerId, modelId: "deterministic_fake_v0.1" } });
+  const chunkScopes = chunks.map((chunk) => ({ discoveryChunkId: chunk.id, chunkTextSha256: chunk.textSha256 }));
+  const authorizationRecordId = uid("idea_privacy");
+  const authorization = await platformAdapter.analysis.authorizeTransmission({ id: authorizationRecordId, discoveryCaseId, actorId: actor.id, actorType: "human", providerId: capabilities.arm.providerId, purpose: "idea_candidate_discovery", privacyClass, chunkScopes, redactionMode: "none", reason: reason || "Authorized exact chunks for local test idea analysis." });
+  const inputChunks = [];
+  for (const chunk of chunks) {
+    const read = await platformAdapter.discovery.readChunkText({ discoveryChunkId: chunk.id });
+    const extraction = extractionById.get(chunk.discoveryExtractionId);
+    const version = versionById.get(extraction.fileVersionId);
+    inputChunks.push({ discoveryChunkId: chunk.id, discoveryExtractionId: extraction.id, fileVersionId: version.id, sourceSha256: extraction.sourceSha256, chunkTextSha256: chunk.textSha256, content: { type: "text", text: read.text }, redactionState: "original" });
+  }
+  const requestId = uid("analysis_request");
+  const result = await platformAdapter.analysis.submitAnalysisBatch({ contractVersion: "0.1", requestId, idempotencyKey: uid("analysis_idempotency"), submittedAt: nowIso(), arm: capabilities.arm, analysisRunId, discoveryCaseId, purpose: "idea_candidate_discovery", privacyAuthorization: { authorizationRecordId: authorization.authorization.id, authorizedBy: actor.id, authorizedAt: authorization.authorization.authorizedAt, providerId: capabilities.arm.providerId, purpose: "idea_candidate_discovery", privacyClass, chunkScopes, redactionMode: "none" }, batch: { batchId: uid("analysis_batch"), batchIndex: 0, isFinalBatch: true }, input: { chunks: inputChunks }, analysisOptions: { language: currentLanguage(), candidateTypes: capabilities.supportedCandidateTypes, maxCandidates: capabilities.limits.candidatesPerResultPage, includeRelationships: false, includeClarificationQuestions: true }, provenance: { projectStateContract: "ai-analysis-arm-v0.1", ideaCandidateSchema: "0.1", analysisStrategy: "fake_local_contract_test" } });
+  return result;
+}
+
 function openDiscoveryReviewModal({ discoveryCaseId, analysis, extractions = [], actor, reason, groupLabel = "", sequencePosition = null, onConfirmed = null }) {
   const bestName = analysis.suggestedProjectNames?.[0]?.name || "";
   const suggestedUnits = (analysis.documentUnits || []).slice(0, 8);
   const slotCount = Math.min(8, Math.max(3, suggestedUnits.length + 2));
-  const unitSlots = Array.from({ length: slotCount }, (_, index) => suggestedUnits[index] || { id: `manual_unit_${index + 1}`, title: "", summary: "", fileVersionIds: [], evidence: [], suggested: false });
+  let unitSlots = Array.from({ length: slotCount }, (_, index) => suggestedUnits[index] || { id: `manual_unit_${index + 1}`, title: "", summary: "", fileVersionIds: [], evidence: [], suggested: false });
   const suggestedMode = analysis.unitModeSuggestion === "multiple_units" ? "multiple_units" : "one_item";
   showModal({
     title: sequencePosition ? `Review Discovery (${sequencePosition.index} of ${sequencePosition.total})` : "Review Discovery",
@@ -7941,8 +8019,9 @@ function openDiscoveryReviewModal({ discoveryCaseId, analysis, extractions = [],
       <p class="notice">Project State found a possible name and routing. These are suggestions, not decisions.</p>
       <div class="field"><label for="unitReviewMode">How should this material be reviewed?</label><select id="unitReviewMode" name="unitReviewMode"><option value="one_item"${suggestedMode === "one_item" ? " selected" : ""}>Treat it as one item</option><option value="multiple_units"${suggestedMode === "multiple_units" ? " selected" : ""}>Review several ideas separately</option></select></div>
       <div data-single-discovery-route>
-        <div class="field"><label>Suggested project name</label><input name="proposedProjectName" value="${escapeHtml(bestName)}"></div>
+        <div class="field"><label>Working file-based name, only if treated as one item</label><input name="proposedProjectName" value="${escapeHtml(bestName)}"></div>
       </div>
+      ${platformAdapter.analysis?.available ? `<section class="panel" data-idea-analysis-panel><p class="meta-label">Idea analysis</p><p class="notice">For long documents, review content-backed ideas before project naming. The installed arm is a local deterministic test fixture: it sends nothing outside Project State and creates no authority.</p><button class="btn secondary" type="button" data-run-idea-analysis>Run local test idea analysis</button><div data-idea-analysis-output></div></section>` : ""}
       <div data-multiple-discovery-routes>
         <p class="notice">Each included unit will receive its own route and pending Intake proposal. Suggested boundaries are editable and do not alter the original file.</p>
         <div class="list">${unitSlots.map((unit, index) => renderDiscoveryUnitEditor(unit, index, { included: index < suggestedUnits.length })).join("")}</div>
@@ -7997,6 +8076,71 @@ function openDiscoveryReviewModal({ discoveryCaseId, analysis, extractions = [],
   };
   modeField?.addEventListener("change", syncDiscoveryUnitMode);
   syncDiscoveryUnitMode();
+  const ideaPanel = reviewModal?.querySelector("[data-idea-analysis-panel]");
+  const ideaOutput = ideaPanel?.querySelector("[data-idea-analysis-output]");
+  let currentIdeaCandidates = [];
+  ideaPanel?.addEventListener("click", async (event) => {
+    const runButton = event.target.closest("[data-run-idea-analysis]");
+    if (runButton) {
+      runButton.disabled = true;
+      runButton.textContent = "Analyzing exact chunks…";
+      try {
+        const result = await runFakeIdeaAnalysis(discoveryCaseId, actor, reason);
+        currentIdeaCandidates = result.candidates || [];
+        if (!currentIdeaCandidates.length) {
+          ideaOutput.innerHTML = `<p class="notice">The local test arm found no Idea Candidates. No project or route was created.</p>`;
+          return;
+        }
+        ideaOutput.innerHTML = renderIdeaCandidateReview(currentIdeaCandidates, actor);
+      } catch (error) {
+        console.error("Local idea analysis failed.", error);
+        ideaOutput.innerHTML = `<p class="notice danger">Idea analysis could not continue: ${escapeDisplay(error.message || "Unknown error", DISPLAY_META_LIMIT)}</p>`;
+        runButton.disabled = false;
+        runButton.textContent = "Retry local test idea analysis";
+      }
+      return;
+    }
+    const confirmButton = event.target.closest("[data-confirm-idea-review]");
+    if (!confirmButton) return;
+    const selected = [...ideaPanel.querySelectorAll("[data-idea-candidate-index]")].filter((row) => row.querySelector("[data-idea-candidate-select]")?.checked).map((row) => {
+      const index = Number(row.dataset.ideaCandidateIndex);
+      return { candidate: currentIdeaCandidates[index], title: row.querySelector("[data-idea-candidate-title]")?.value.trim() || currentIdeaCandidates[index]?.workingLabel || "Untitled idea", summary: row.querySelector("[data-idea-candidate-summary]")?.value.trim() || currentIdeaCandidates[index]?.neutralSummary || "" };
+    });
+    if (!selected.length) { window.alert("Select at least one Idea Candidate to review."); return; }
+    const reviewReason = ideaPanel.querySelector("#ideaReviewReason")?.value.trim() || "";
+    if (!reviewReason) { window.alert("Record why you made this Idea Review decision."); return; }
+    const reviewActorName = ideaPanel.querySelector("#ideaReviewActor")?.value || "";
+    const reviewActor = getOrCreateActor(reviewActorName, "Human");
+    const selectedAction = ideaPanel.querySelector("#ideaReviewAction")?.value || "accept";
+    const reviewAction = selectedAction;
+    let resultingUnits = [];
+    if (reviewAction === "accept") resultingUnits = selected.map((item) => ({ id: uid("idea_unit"), title: item.title, summary: item.summary, sourceCandidateIds: [item.candidate.id], unresolvedUncertainty: item.candidate.confidence?.uncertaintyNotes ? [item.candidate.confidence.uncertaintyNotes] : [] }));
+    if (reviewAction === "merge") resultingUnits = [{ id: uid("idea_unit"), title: ideaPanel.querySelector("#ideaMergeTitle")?.value.trim() || selected[0].title, summary: ideaPanel.querySelector("#ideaMergeSummary")?.value.trim() || selected.map((item) => item.summary).join(" ").slice(0, 2000), sourceCandidateIds: selected.map((item) => item.candidate.id), unresolvedUncertainty: selected.map((item) => item.candidate.confidence?.uncertaintyNotes).filter(Boolean) }];
+    confirmButton.disabled = true;
+    try {
+      const review = await platformAdapter.analysis.recordReviewDecision({ id: uid("idea_review"), discoveryCaseId, actorId: reviewActor.id, actorType: "human", action: reviewAction, candidateIds: selected.map((item) => item.candidate.id), reason: reviewReason, resultingUnits });
+      const confirmedUnits = review.confirmedIdeaUnits || [];
+      if (confirmedUnits.length) {
+        unitSlots = confirmedUnits.map((unit) => ({ id: unit.id, title: unit.title, summary: unit.summary, fileVersionIds: [...new Set((unit.evidence || []).map((evidence) => evidence.fileVersionId).filter(Boolean))], evidence: unit.evidence || [], suggested: false }));
+        const multipleList = reviewModal.querySelector("[data-multiple-discovery-routes] .list");
+        if (multipleList) multipleList.innerHTML = unitSlots.map((unit, index) => renderDiscoveryUnitEditor(unit, index, { included: true })).join("");
+        if (modeField) modeField.value = "multiple_units";
+        syncDiscoveryUnitMode();
+        ideaOutput.innerHTML = `<p class="notice"><strong>Idea review confirmed.</strong> ${confirmedUnits.length} Confirmed Idea ${confirmedUnits.length === 1 ? "Unit is" : "Units are"} now ready for project naming and routing below. These units are still not Core.</p>`;
+      } else {
+        ideaOutput.innerHTML = `<p class="notice"><strong>Idea review recorded.</strong> No Confirmed Idea Unit was created, so project naming and routing were not changed.</p>`;
+      }
+    } catch (error) {
+      console.error("Idea review failed.", error);
+      window.alert(error.message || "Idea review could not be recorded.");
+      confirmButton.disabled = false;
+    }
+  });
+  ideaPanel?.addEventListener("change", (event) => {
+    if (event.target.id !== "ideaReviewAction") return;
+    const mergeFields = ideaPanel.querySelector("[data-idea-merge-fields]");
+    if (mergeFields) mergeFields.hidden = event.target.value !== "merge";
+  });
 }
 
 function renderIntakeQueue() {

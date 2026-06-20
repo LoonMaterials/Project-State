@@ -84,6 +84,8 @@ The desktop **Files** screen is the human file-import path. It can select multip
 
 A document can be treated as one item or reviewed as several editable ideas with independent routes. Several proposals from one document retain one immutable File Version and managed copy. Folder import shows deterministic relative-folder groups and lets the user use those groups, treat the folder as one case, or review every file separately. Resulting groups are reviewed sequentially; groups larger than 24 files continue as numbered parts rather than silently dropping files.
 
+The Idea Analysis foundation stores exact analysis scope, human provider authorization, transmission receipts, non-authoritative Idea Candidates, human review decisions, and Confirmed Idea Units separately. The installed analysis arm is a deterministic local contract-test fixture only. It contacts no provider, uses no credentials, cannot name projects or route material, and cannot create human review or Core authority.
+
 Queue review is separate from approval:
 
 New

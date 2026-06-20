@@ -406,6 +406,26 @@ SQLite tables:
 - approval_records
 - recovery_records
 
+Discovery and analysis tables:
+
+- file_assets
+- file_versions
+- discovery_cases
+- discovery_case_files
+- discovery_interactions
+- security_receipts
+- discovery_events
+- discovery_extractions
+- discovery_chunks
+- idea_analysis_runs
+- idea_privacy_authorizations
+- idea_transmission_receipts
+- ai_analysis_jobs
+- idea_candidates
+- ai_analysis_result_receipts
+- idea_review_decisions
+- confirmed_idea_units
+
 Managed folders:
 
 - sources
@@ -801,3 +821,68 @@ The governing specification is `FOLDER_DISCOVERY_FLOW.md`.
 - All 34 of 34 non-live regression checks and syntax checks passed after the combined document/folder implementation.
 
 The next folder improvements are usability extensions rather than authority changes: drag-and-drop movement between suggested groups, pause/resume for large processing queues, richer similarity evidence, and optional provider-neutral analysis suggestions.
+
+## 24. Idea Candidate Model v0.1
+
+Status: design, additive storage, fake local validation, and human review UI implemented and verified 2026-06-20.
+
+The governing specification is `IDEA_CANDIDATE_MODEL.md`, with machine-readable contract and example fixtures at `fixtures/idea-candidate-v0.1-contract.json` and `fixtures/idea-candidate-v0.1-example.json`.
+
+The design replaces title-first semantic discovery with:
+
+`Exact source → Stable chunks → Analysis coverage → Idea Candidates → Human review → Confirmed Idea Units → Project/routing suggestions`
+
+Key boundaries:
+
+- An Idea Candidate is never a project name, fact, decision, route, approval, or Core record.
+- Every candidate requires exact File Version/extraction/chunk evidence and confidence with uncertainty.
+- Idea Analysis Runs state precisely which chunks were analyzed, skipped, blocked, or failed; continuation replaces silent truncation.
+- Human review decisions are separate append-only objects supporting merge, split, rename, correction, rejection, deferral, duplication, and uncertainty.
+- Confirmed Idea Units remain Discovery objects until later routing, Intake, and individual approval.
+- AI providers produce provider-neutral suggestions and cannot create human decisions, confirm routes, approve Intake, or write Core.
+
+## 25. AI Analysis Arm Contract v0.1
+
+Status: contract and fake local validation arm implemented 2026-06-20; no real cloud or local model provider is installed.
+
+The governing specification is `AI_ANALYSIS_ARM_CONTRACT.md`, with machine-readable contract and full request/result/receipt example at `fixtures/ai-analysis-arm-v0.1-contract.json` and `fixtures/ai-analysis-arm-v0.1-example.json`.
+
+The contract defines:
+
+- capability discovery for local or remote replaceable providers;
+- explicit human privacy authorization for exact chunk IDs and hashes;
+- bounded batch submission and large-document continuation;
+- provider coverage acknowledgment and exact evidence validation;
+- non-authoritative Idea Candidate result ingestion;
+- idempotent retries and atomic result-page receipts;
+- cancellation, partial/failure states, stable error codes, usage, cost, and retention reporting;
+- encrypted machine-local end-user credentials excluded from backups, exports, logs, candidates, receipts, and history.
+
+AI Analysis Arm v0.1 deliberately does not request project names or routes. Those occur only after human review produces Confirmed Idea Units.
+
+### Foundation implementation and verification
+
+- The SQLite spine now contains 38 required tables, including eight additive Idea Analysis tables.
+- `analysisArms` exposes capability discovery, run creation, human authorization, batch submission, status/results/cancellation/receipts, human review, and bounded state reads.
+- The fake local arm produces deterministic evidence-backed candidates from exact chunks and makes no external request.
+- Machine privacy authorization and machine review decisions are blocked.
+- Wrong privacy classes, tampered chunk content, mismatched evidence, and conflicting idempotency reuse fail closed.
+- Exact retries deduplicate, completed jobs cannot be falsely cancelled, and forged continuation cursors are rejected.
+- Human merge review created one Confirmed Idea Unit without changing Core.
+- Candidate, authorization, transmission, result-receipt, review, and confirmed-unit records preserve append-only boundaries where required.
+- Credentials are absent and analysis records survive backup/restore.
+- The focused AI Analysis foundation gates passed with `realProviderInstalled: false`.
+
+### Human Idea Review implementation and verification
+
+- Discovery review offers **Run local test idea analysis** and explicitly states that the installed arm is deterministic, local, non-authoritative, and performs no external transmission.
+- Candidate review shows editable working labels and neutral summaries, confidence, uncertainty, exact evidence, and provider/model provenance.
+- Known human actor and reason are required for review.
+- Selected candidates may remain separate, merge, reject, defer, or remain unresolved.
+- Only Confirmed Idea Units replace the title/heading fallback as inputs to project naming and routing.
+- The file-derived label is visibly demoted to a working name used only when the user treats the source as one item.
+- The isolated live flow recorded one analysis run, privacy authorization, local transmission receipt, candidate, human review, Confirmed Idea Unit, and pending Intake proposal.
+- The live flow had zero external transmission, zero Core authority, and zero renderer exceptions.
+- All 38 of 38 non-live regression checks and syntax checks passed.
+
+The next gated step is encrypted end-user credential configuration and a provider-connector shell with network calls still disabled. A real provider call should occur only after credential redaction/exclusion, cost preview/limits, provider consent, and a full fake-connector test pass.

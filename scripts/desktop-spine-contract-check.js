@@ -42,7 +42,15 @@ const REQUIRED_TABLES = [
   "security_receipts",
   "discovery_events",
   "discovery_extractions",
-  "discovery_chunks"
+  "discovery_chunks",
+  "idea_analysis_runs",
+  "idea_privacy_authorizations",
+  "idea_transmission_receipts",
+  "ai_analysis_jobs",
+  "idea_candidates",
+  "ai_analysis_result_receipts",
+  "idea_review_decisions",
+  "confirmed_idea_units"
 ];
 const REQUIRED_SAFETY_PHRASES = [
   "Human approval is required",
@@ -55,7 +63,8 @@ const REQUIRED_SAFETY_PHRASES = [
 ];
 const REQUIRED_BRIDGE_METHODS = {
   storage: ["loadStore", "saveStore", "saveMeta", "preserveRecoveryRecord", "verifyIntegrity", "importBrowserExport", "createBackupPackage", "restoreBackupPackage", "reset"],
-  discoveryStorage: ["initialize", "registerFileVersion", "createCase", "attachFileVersion", "appendInteraction", "appendSecurityReceipt", "appendEvent", "readFoundationState", "stageTrustedFile", "extractFileVersion", "readExtractionText", "analyzeCase", "recordAnswer", "confirmRouting", "getCase", "promoteToIntake"],
+  discoveryStorage: ["initialize", "registerFileVersion", "createCase", "attachFileVersion", "appendInteraction", "appendSecurityReceipt", "appendEvent", "readFoundationState", "stageTrustedFile", "extractFileVersion", "readExtractionText", "readChunkText", "analyzeCase", "recordAnswer", "confirmRouting", "getCase", "promoteToIntake"],
+  analysisArms: ["describeCapabilities", "createRun", "authorizeTransmission", "submitAnalysisBatch", "getAnalysisStatus", "getResultPage", "cancelAnalysis", "getReceipt", "recordReviewDecision", "readState"],
   securityArms: ["authorizeContentAccess"],
   files: ["metadata", "localPath", "readAsDataUrl", "readAsText", "readAsArrayBuffer", "extractText", "inflateRaw"],
   downloads: ["saveTextFile"]

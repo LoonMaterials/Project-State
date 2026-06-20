@@ -170,6 +170,38 @@
     {
       "name": "discovery_chunks",
       "purpose": "Stable checksummed text chunks stored under discovery managed files."
+    },
+    {
+      "name": "idea_analysis_runs",
+      "purpose": "Provider-neutral analysis scope, coverage, provenance, continuation, and candidate indexes."
+    },
+    {
+      "name": "idea_privacy_authorizations",
+      "purpose": "Append-only human authorization for exact provider, purpose, chunk hashes, and redaction scope."
+    },
+    {
+      "name": "idea_transmission_receipts",
+      "purpose": "Append-only records of exact chunks submitted to local or remote analysis arms."
+    },
+    {
+      "name": "ai_analysis_jobs",
+      "purpose": "Idempotent AI Analysis Arm request lifecycle and validated result metadata."
+    },
+    {
+      "name": "idea_candidates",
+      "purpose": "Append-only evidence-backed non-authoritative Idea Candidate suggestions."
+    },
+    {
+      "name": "ai_analysis_result_receipts",
+      "purpose": "Append-only result-page receipts mapping provider candidate IDs to durable Project State candidate IDs."
+    },
+    {
+      "name": "idea_review_decisions",
+      "purpose": "Append-only human accept, reject, defer, merge, split, rename, correction, duplication, and uncertainty decisions."
+    },
+    {
+      "name": "confirmed_idea_units",
+      "purpose": "Human-confirmed non-Core Discovery idea units eligible for later project matching and routing review."
     }
   ],
   "largeContentRules": [
@@ -194,6 +226,8 @@
     "File Versions, optional legacy Security Receipts, Discovery Interactions, and Discovery Events are append-only.",
     "Every staged content read requires current bytes to match the registered File Version size and SHA-256.",
     "External-security acknowledgment is not a clean or safe verdict.",
+    "AI Analysis Arms receive only explicitly human-authorized exact chunks and return non-authoritative Idea Candidates.",
+    "Idea Review Decisions are human-only and Confirmed Idea Units remain non-Core until later routing, Intake, and individual approval.",
     "No Discovery storage record grants external arms human approval or Core authority."
   ],
   "minimumBridgeMethods": {
@@ -232,11 +266,24 @@
       "stageTrustedFile",
       "extractFileVersion",
       "readExtractionText",
+      "readChunkText",
       "analyzeCase",
       "recordAnswer",
       "confirmRouting",
       "getCase",
       "promoteToIntake"
+    ],
+    "analysisArms": [
+      "describeCapabilities",
+      "createRun",
+      "authorizeTransmission",
+      "submitAnalysisBatch",
+      "getAnalysisStatus",
+      "getResultPage",
+      "cancelAnalysis",
+      "getReceipt",
+      "recordReviewDecision",
+      "readState"
     ],
     "securityArms": [
       "authorizeContentAccess"

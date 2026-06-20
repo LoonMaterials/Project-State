@@ -226,3 +226,27 @@ The next Discovery flow layer is governed by `MULTI_IDEA_DOCUMENT_FLOW.md`.
 - Folder-scale grouping follows only after this unit flow passes its isolated live acceptance gate.
 
 Folder-scale continuation is governed by `FOLDER_DISCOVERY_FLOW.md`. The v0.1 foundation exposes deterministic relative-folder grouping, one-case and per-file correction choices, 24-file continuation parts with no silent omission, and sequential governed review of every resulting Discovery Case.
+
+## Idea Candidate continuation — 2026-06-20
+
+The evidence-backed semantic layer is governed by `IDEA_CANDIDATE_MODEL.md` and `fixtures/idea-candidate-v0.1-contract.json`.
+
+Project State now distinguishes the design of four objects before AI integration:
+
+1. Idea Analysis Run — exact scope and coverage.
+2. Idea Candidate — immutable, evidenced, non-authoritative suggestion.
+3. Idea Review Decision — append-only human merge, split, correction, acceptance, rejection, or deferral.
+4. Confirmed Idea Unit — human-confirmed Discovery object eligible for later project matching and routing suggestions, but still not Core.
+
+File and document titles remain metadata. Project naming is deferred until after human idea review.
+
+## AI Analysis Arm continuation — 2026-06-20
+
+The provider-neutral analysis boundary is governed by `AI_ANALYSIS_ARM_CONTRACT.md` and `fixtures/ai-analysis-arm-v0.1-contract.json`.
+
+- Project State transmits only explicitly authorized, checksum-verified bounded chunks.
+- Provider configuration alone does not authorize content transmission.
+- Responses must report exact coverage and evidence from the transmitted chunk set.
+- Version 0.1 returns Idea Candidate suggestions only; it does not request project names or routing.
+- Result paging, continuation, idempotency, cancellation, usage/cost reporting, retention declarations, and stable errors are defined before a real provider is installed.
+- Storage and a fake/local validation arm must pass before the first real provider integration.

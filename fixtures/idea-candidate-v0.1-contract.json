@@ -1,0 +1,86 @@
+{
+  "app": "Project State",
+  "contractType": "Idea Candidate Model",
+  "contractVersion": "0.1",
+  "implementationStatus": "design_complete",
+  "governingProgression": [
+    "exact_source",
+    "stable_chunks",
+    "analysis_coverage",
+    "idea_candidates",
+    "human_review",
+    "confirmed_idea_units",
+    "project_and_routing_suggestions",
+    "intake",
+    "individual_approval",
+    "core"
+  ],
+  "objects": {
+    "IdeaAnalysisRun": {
+      "required": ["id", "schemaVersion", "discoveryCaseId", "actorId", "actorType", "method", "status", "startedAt", "completedAt", "sourceScope", "coverage", "provenance", "candidateIds"],
+      "statuses": ["complete", "partial", "failed", "cancelled"],
+      "methods": ["human", "deterministic", "ai", "hybrid"]
+    },
+    "IdeaCandidate": {
+      "required": ["id", "schemaVersion", "analysisRunId", "discoveryCaseId", "createdBy", "createdByType", "createdAt", "method", "workingLabel", "neutralSummary", "candidateType", "scope", "evidence", "confidence", "provenance"],
+      "minimumEvidenceReferences": 1,
+      "methods": ["human", "deterministic", "ai", "hybrid"],
+      "candidateTypes": ["project_concept", "design_concept", "requirement", "decision_candidate", "question", "risk", "task", "reference", "observation", "claim_candidate", "relationship_candidate", "other", "unknown"],
+      "scopes": ["standalone", "supporting", "cross_cutting", "unknown"]
+    },
+    "EvidenceReference": {
+      "required": ["id", "fileAssetId", "fileVersionId", "sourceSha256", "discoveryExtractionId", "relationship"],
+      "relationships": ["supports", "mentions", "contrasts", "limits", "depends_on", "context_only"],
+      "exactTextRequires": ["discoveryChunkId", "chunkTextSha256"]
+    },
+    "CandidateRelationship": {
+      "required": ["id", "relationshipType", "targetCandidateId", "confidence", "evidenceReferenceIds", "provenance"],
+      "relationshipTypes": ["related_to", "overlaps", "duplicate_of", "parent_of", "child_of", "supports", "contradicts", "depends_on", "limits"]
+    },
+    "IdeaReviewDecision": {
+      "required": ["id", "discoveryCaseId", "action", "candidateIds", "decidedBy", "decidedAt", "reason", "resultingIdeaUnitIds"],
+      "actions": ["accept", "reject", "defer", "rename", "correct_summary", "merge", "split", "mark_duplicate", "mark_uncertain"],
+      "humanOnly": true,
+      "appendOnly": true
+    },
+    "ConfirmedIdeaUnit": {
+      "required": ["id", "discoveryCaseId", "title", "summary", "sourceCandidateIds", "evidence", "confirmedBy", "confirmedAt", "reason", "unresolvedUncertainty"],
+      "humanConfirmed": true,
+      "coreAuthority": false,
+      "routingAuthority": false
+    }
+  },
+  "confidence": {
+    "minimum": 0,
+    "maximum": 1,
+    "requiredFields": ["score", "basis", "uncertaintyNotes"],
+    "meaning": "confidence that the candidate is distinct and accurately summarized, not that it is true, feasible, approved, or a project"
+  },
+  "sizeLimits": {
+    "workingLabelCharacters": 200,
+    "neutralSummaryCharacters": 2000,
+    "uncertaintyNotesCharacters": 2000,
+    "keyTerms": 32,
+    "evidenceReferencesPerCandidate": 50,
+    "relationshipsPerCandidate": 50,
+    "questionsPerCandidate": 20,
+    "evidenceExcerptCharacters": 500,
+    "candidatesPerResponsePage": 100
+  },
+  "candidateRelationshipTypes": ["related_to", "overlaps", "duplicate_of", "parent_of", "child_of", "supports", "contradicts", "depends_on", "limits"],
+  "reviewActions": ["accept", "reject", "defer", "rename", "correct_summary", "merge", "split", "mark_duplicate", "mark_uncertain"],
+  "aiArmAllowed": ["analyze_allowed_chunks", "propose_candidates", "propose_relationships", "propose_clarification_questions", "report_confidence", "report_partial_coverage", "return_continuation"],
+  "aiArmForbidden": ["claim_unreceived_coverage", "create_or_change_source_records", "create_human_review_decisions", "create_confirmed_idea_units", "confirm_projects_or_routes", "approve_intake", "write_core", "set_human_authority_fields", "omit_candidate_evidence", "store_credentials_or_hidden_prompts"],
+  "invariants": [
+    "An Idea Candidate is a non-authoritative Discovery proposal, not a project, fact, decision, route, Intake approval, or Core record.",
+    "Every candidate has at least one exact Evidence Reference attached to the same Discovery Case.",
+    "Analysis coverage lists processed, skipped, blocked, and failed chunks and never implies unprocessed material was examined.",
+    "Working labels describe ideas and are not project names.",
+    "Human review decisions are separate append-only records and cannot be created by machine actors.",
+    "Only human-confirmed Idea Units are eligible for later project matching and routing suggestions.",
+    "Confirmed Idea Units remain non-Core until routed through Intake and individually approved.",
+    "Re-analysis appends a new run and new candidates without rewriting previous candidates or reviews.",
+    "Provider replacement does not change the durable object format or authority boundary.",
+    "Candidate and response limits require continuation and never silent truncation."
+  ]
+}

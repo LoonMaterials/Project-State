@@ -61,6 +61,14 @@ Use SQLite for structured records:
 - `discovery_events`
 - `discovery_extractions`
 - `discovery_chunks`
+- `idea_analysis_runs`
+- `idea_privacy_authorizations`
+- `idea_transmission_receipts`
+- `ai_analysis_jobs`
+- `idea_candidates`
+- `ai_analysis_result_receipts`
+- `idea_review_decisions`
+- `confirmed_idea_units`
 
 Managed Folders
 

@@ -76,11 +76,24 @@ window.ProjectStateDesktop = {
     async stageTrustedFile(payload) {},
     async extractFileVersion(payload) {},
     async readExtractionText(payload) {},
+    async readChunkText(payload) {},
     async analyzeCase(payload) {},
     async recordAnswer(payload) {},
     async confirmRouting(payload) {},
     async getCase(payload) {},
     async promoteToIntake(payload) {}
+  },
+  analysisArms: {
+    async describeCapabilities() {},
+    async createRun(payload) {},
+    async authorizeTransmission(payload) {},
+    async submitAnalysisBatch(envelope) {},
+    async getAnalysisStatus(requestId) {},
+    async getResultPage(requestId, cursor) {},
+    async cancelAnalysis(requestId) {},
+    async getReceipt(requestId) {},
+    async recordReviewDecision(payload) {},
+    async readState(payload) {}
   },
   securityArms: {
     async authorizeContentAccess(reference) {}
@@ -133,6 +146,8 @@ The bridge currently uses Node's built-in SQLite support. If the final packaging
 Discovery implementation:
 
 The `discoveryStorage` methods stage user-trusted files as project-independent File Assets and append-only File Versions, then create Discovery Cases, deterministic extractions, chunks, Interactions, and Discovery Events. Project State does not scan files for malware and does not claim that a file is clean or safe. Staging requires the user to acknowledge that they have handled security with their own tools. Every later read rechecks the staged file size and SHA-256 so changed bytes fail closed.
+
+The `analysisArms` methods implement the provider-neutral Idea Candidate boundary. The installed implementation is a fake local contract-test arm only: it accepts exact human-authorized chunks, validates checksums and idempotency, creates non-authoritative candidates and receipts, blocks machine review decisions, and records human-confirmed non-Core Idea Units. It performs no external request and stores no provider credential.
 
 Discovery can suggest a project name, find possible existing-project matches, ask adaptive questions, and record a human routing confirmation. Promotion creates pending Intake proposals only. A Discovery Case may exist without a project, machine actors cannot record user answers or routing confirmations, and neither Discovery nor an outside arm can approve Intake or write Core.
 

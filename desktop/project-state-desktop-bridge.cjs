@@ -9,6 +9,8 @@ const { DatabaseSync } = require("node:sqlite");
 const ROOT = path.join(__dirname, "..");
 const SCHEMA_FILE = path.join(__dirname, "spine-schema.sql");
 const API_ARM_CONTRACT_FILE = path.join(ROOT, "fixtures", "api-arm-v0.1-contract.json");
+const IDEA_CANDIDATE_CONTRACT_FILE = path.join(ROOT, "fixtures", "idea-candidate-v0.1-contract.json");
+const AI_ANALYSIS_ARM_CONTRACT_FILE = path.join(ROOT, "fixtures", "ai-analysis-arm-v0.1-contract.json");
 const DEFAULT_STORAGE_ROOT = path.join(os.homedir(), "Project State Storage");
 const DATABASE_FILE = "project-state.db";
 const FOLDERS = ["sources", "extracts", "attachments", "quarantine", "discovery", "backups", "recovery", "manifests", "logs", "temp", "integrations"];
@@ -47,7 +49,15 @@ const REQUIRED_TABLES = [
   "security_receipts",
   "discovery_events",
   "discovery_extractions",
-  "discovery_chunks"
+  "discovery_chunks",
+  "idea_analysis_runs",
+  "idea_privacy_authorizations",
+  "idea_transmission_receipts",
+  "ai_analysis_jobs",
+  "idea_candidates",
+  "ai_analysis_result_receipts",
+  "idea_review_decisions",
+  "confirmed_idea_units"
 ];
 
 function createProjectStateDesktopBridge(options = {}) {
@@ -134,6 +144,9 @@ function createProjectStateDesktopBridge(options = {}) {
       async readExtractionText(payload = {}) {
         return readDiscoveryExtractionText({ storageRoot, dbPath, payload });
       },
+      async readChunkText(payload = {}) {
+        return readDiscoveryChunkText({ storageRoot, dbPath, payload });
+      },
       async analyzeCase(payload = {}) {
         return analyzeDiscoveryCase({ storageRoot, dbPath, payload });
       },
@@ -148,6 +161,38 @@ function createProjectStateDesktopBridge(options = {}) {
       },
       async promoteToIntake(payload = {}) {
         return promoteDiscoveryToIntake({ storageRoot, dbPath, payload });
+      }
+    },
+    analysisArms: {
+      async describeCapabilities() {
+        return describeFakeAnalysisArmCapabilities();
+      },
+      async createRun(payload = {}) {
+        return createIdeaAnalysisRun({ storageRoot, dbPath, payload });
+      },
+      async authorizeTransmission(payload = {}) {
+        return authorizeIdeaTransmission({ storageRoot, dbPath, payload });
+      },
+      async submitAnalysisBatch(envelope = {}) {
+        return submitFakeAnalysisBatch({ storageRoot, dbPath, envelope });
+      },
+      async getAnalysisStatus(requestId = "") {
+        return getIdeaAnalysisJob({ storageRoot, dbPath, requestId });
+      },
+      async getResultPage(requestId = "", cursor = null) {
+        return getIdeaAnalysisResultPage({ storageRoot, dbPath, requestId, cursor });
+      },
+      async cancelAnalysis(requestId = "") {
+        return cancelIdeaAnalysisJob({ storageRoot, dbPath, requestId });
+      },
+      async getReceipt(requestId = "") {
+        return getIdeaAnalysisReceipt({ storageRoot, dbPath, requestId });
+      },
+      async recordReviewDecision(payload = {}) {
+        return recordIdeaReviewDecision({ storageRoot, dbPath, payload });
+      },
+      async readState(payload = {}) {
+        return readIdeaAnalysisState({ storageRoot, dbPath, payload });
       }
     },
     securityArms: {
@@ -982,6 +1027,294 @@ function readDiscoveryChunks(db, caseId = "") {
   return db.prepare(`SELECT chunk.record_json FROM discovery_chunks AS chunk JOIN discovery_extractions AS extraction ON extraction.id = chunk.discovery_extraction_id WHERE extraction.discovery_case_id = ? ORDER BY chunk.chunk_index`).all(caseId).map(parseRecordRow);
 }
 
+const IDEA_ANALYSIS_METHODS = new Set(["human", "deterministic", "ai", "hybrid"]);
+const IDEA_ANALYSIS_STATUSES = new Set(["running", "complete", "partial", "failed", "cancelled"]);
+const IDEA_REVIEW_ACTIONS = new Set(["accept", "reject", "defer", "rename", "correct_summary", "merge", "split", "mark_duplicate", "mark_uncertain"]);
+const FAKE_ANALYSIS_ARM_ID = "project_state_fake_analysis";
+const FAKE_ANALYSIS_PROVIDER_ID = "project_state_fake_local";
+
+function analysisArmError(code, message, fieldPath = "") {
+  const error = new Error(message);
+  error.code = code;
+  error.fieldPath = fieldPath;
+  return error;
+}
+
+function describeFakeAnalysisArmCapabilities() {
+  const contract = JSON.parse(fs.readFileSync(AI_ANALYSIS_ARM_CONTRACT_FILE, "utf8"));
+  return {
+    ok: true,
+    contractVersion: contract.contractVersion,
+    operations: contract.operations,
+    arm: { armId: FAKE_ANALYSIS_ARM_ID, displayName: "Project State Fake Local Analysis Arm", armVersion: "0.1.0", providerId: FAKE_ANALYSIS_PROVIDER_ID, executionLocation: "local" },
+    supportedCandidateTypes: contract.candidateTypes,
+    supports: { structuredOutput: true, relationships: false, clarificationQuestions: true, continuation: true, cancellation: true, usageReporting: true },
+    limits: { maximumRequestBytes: 1048576, maximumChunks: 100, candidatesPerResultPage: contract.maximums.candidatesPerResultPage },
+    retention: { policyId: "local_fixture_no_external_transmission", declaredRetention: "Project State test storage only" },
+    realProviderInstalled: false
+  };
+}
+
+async function createIdeaAnalysisRun({ storageRoot, dbPath, payload = {} }) {
+  await ensureSpine(storageRoot);
+  const id = requiredDiscoveryId(payload.id || payload.analysisRunId, "Idea Analysis Run ID");
+  const discoveryCaseId = requiredDiscoveryId(payload.discoveryCaseId, "Discovery Case ID");
+  const actorId = requiredDiscoveryId(payload.actorId, "Analysis actor ID");
+  const actorType = requiredDiscoveryText(payload.actorType || "tool", "Analysis actor type");
+  const method = String(payload.method || "ai");
+  const status = String(payload.status || "running");
+  if (!IDEA_ANALYSIS_METHODS.has(method)) throw analysisArmError("INVALID_ENVELOPE", "Idea Analysis Run method is not supported.", "method");
+  if (!IDEA_ANALYSIS_STATUSES.has(status)) throw analysisArmError("INVALID_ENVELOPE", "Idea Analysis Run status is not supported.", "status");
+  const startedAt = requiredDiscoveryTimestamp(payload.startedAt || nowIso(), "Idea Analysis Run startedAt");
+  const sourceScope = Array.isArray(payload.sourceScope) ? cloneJson(payload.sourceScope) : [];
+  if (!sourceScope.length) throw analysisArmError("INVALID_ENVELOPE", "Idea Analysis Run requires exact source scope.", "sourceScope");
+  const record = { id, schemaVersion: "0.1", discoveryCaseId, actorId, actorType, method, status, startedAt, completedAt: payload.completedAt || null, sourceScope, coverage: cloneJson(payload.coverage || { expectedChunkCount: sourceScope.flatMap((item) => item.expectedChunkIds || []).length, analyzedChunkIds: [], skippedChunkIds: [], blockedChunkIds: [], failedChunkIds: [], coverageRatio: 0 }), provenance: cloneJson(payload.provenance || {}), candidateIds: cloneJson(payload.candidateIds || []) };
+  const db = openDatabase(dbPath);
+  try {
+    if (!dbRecord(db, "discovery_cases", discoveryCaseId)) throw analysisArmError("INVALID_ENVELOPE", "Discovery Case was not found.", "discoveryCaseId");
+    const memberships = new Set(db.prepare("SELECT file_version_id AS id FROM discovery_case_files WHERE discovery_case_id = ?").all(discoveryCaseId).map((row) => row.id));
+    for (const scope of sourceScope) {
+      const fileVersionId = requiredDiscoveryId(scope.fileVersionId, "Source scope File Version ID");
+      if (!memberships.has(fileVersionId)) throw analysisArmError("INVALID_EVIDENCE", "Source scope File Version is not attached to the Discovery Case.", "sourceScope.fileVersionId");
+      const version = dbRecord(db, "file_versions", fileVersionId);
+      if (!version || requiredSha256(scope.sourceSha256) !== version.sha256) throw analysisArmError("CHUNK_CHECKSUM_MISMATCH", "Source scope checksum does not match the immutable File Version.", "sourceScope.sourceSha256");
+      for (const chunkId of scope.expectedChunkIds || []) {
+        const chunk = db.prepare(`SELECT chunk.record_json FROM discovery_chunks AS chunk JOIN discovery_extractions AS extraction ON extraction.id = chunk.discovery_extraction_id WHERE chunk.id = ? AND extraction.discovery_case_id = ?`).get(chunkId, discoveryCaseId);
+        if (!chunk) throw analysisArmError("CHUNK_NOT_FOUND", `Source scope chunk was not found: ${chunkId}`, "sourceScope.expectedChunkIds");
+      }
+    }
+    insertStrict(db, "idea_analysis_runs", { id, discovery_case_id: discoveryCaseId, actor_id: actorId, actor_type: actorType, method, status, started_at: startedAt, completed_at: record.completedAt, record_json: JSON.stringify(record) });
+    return { ok: true, analysisRun: record };
+  } finally { db.close(); }
+}
+
+async function authorizeIdeaTransmission({ storageRoot, dbPath, payload = {} }) {
+  await ensureSpine(storageRoot);
+  const id = requiredDiscoveryId(payload.id || payload.authorizationRecordId, "Privacy Authorization ID");
+  const discoveryCaseId = requiredDiscoveryId(payload.discoveryCaseId, "Discovery Case ID");
+  const authorizedBy = requiredDiscoveryId(payload.authorizedBy || payload.actorId, "Authorizing actor ID");
+  if (String(payload.actorType || "human") !== "human") throw analysisArmError("PRIVACY_AUTHORIZATION_REQUIRED", "Only a human may authorize provider transmission.", "actorType");
+  const authorizedAt = requiredDiscoveryTimestamp(payload.authorizedAt || nowIso(), "Privacy Authorization authorizedAt");
+  const providerId = requiredDiscoveryId(payload.providerId, "Privacy Authorization provider ID");
+  const purpose = String(payload.purpose || "idea_candidate_discovery");
+  const privacyClass = String(payload.privacyClass || "");
+  if (purpose !== "idea_candidate_discovery") throw analysisArmError("INVALID_PURPOSE", "Privacy Authorization purpose is not supported.", "purpose");
+  if (!DISCOVERY_PRIVACY_CLASSES.has(privacyClass)) throw analysisArmError("PRIVACY_SCOPE_MISMATCH", "Privacy Authorization class is not supported.", "privacyClass");
+  if (providerId !== FAKE_ANALYSIS_PROVIDER_ID && privacyClass !== "provider_allowed") throw analysisArmError("PRIVACY_SCOPE_MISMATCH", "Remote provider transmission requires the provider_allowed privacy class.", "privacyClass");
+  const chunkScopes = Array.isArray(payload.chunkScopes) ? cloneJson(payload.chunkScopes) : [];
+  if (!chunkScopes.length) throw analysisArmError("PRIVACY_SCOPE_MISMATCH", "Privacy Authorization requires at least one exact chunk scope.", "chunkScopes");
+  const record = { id, schemaVersion: "0.1", discoveryCaseId, authorizedBy, actorType: "human", authorizedAt, providerId, purpose, privacyClass, chunkScopes, redactionMode: String(payload.redactionMode || "none"), expiresAt: payload.expiresAt || null, reason: requiredDiscoveryText(payload.reason, "Privacy Authorization reason") };
+  const db = openDatabase(dbPath);
+  try {
+    if (!dbRecord(db, "discovery_cases", discoveryCaseId)) throw analysisArmError("INVALID_ENVELOPE", "Discovery Case was not found.", "discoveryCaseId");
+    for (const scope of chunkScopes) {
+      const chunkId = requiredDiscoveryId(scope.discoveryChunkId, "Authorized Discovery Chunk ID");
+      const row = db.prepare(`SELECT chunk.record_json FROM discovery_chunks AS chunk JOIN discovery_extractions AS extraction ON extraction.id = chunk.discovery_extraction_id WHERE chunk.id = ? AND extraction.discovery_case_id = ?`).get(chunkId, discoveryCaseId);
+      if (!row) throw analysisArmError("CHUNK_NOT_FOUND", `Authorized chunk was not found: ${chunkId}`, "chunkScopes");
+      const chunk = parseRecordRow(row);
+      if (requiredSha256(scope.chunkTextSha256) !== chunk.textSha256) throw analysisArmError("CHUNK_CHECKSUM_MISMATCH", `Authorized chunk checksum mismatch: ${chunkId}`, "chunkScopes");
+      const extractionRow = db.prepare("SELECT record_json FROM discovery_extractions WHERE id = ?").get(chunk.discoveryExtractionId);
+      const extraction = extractionRow ? parseRecordRow(extractionRow) : null;
+      const asset = extraction ? dbRecord(db, "file_assets", extraction.fileAssetId) : null;
+      if (!asset || asset.privacyClass !== privacyClass) throw analysisArmError("PRIVACY_SCOPE_MISMATCH", `Chunk source privacy class does not match the authorization: ${chunkId}`, "privacyClass");
+    }
+    insertStrict(db, "idea_privacy_authorizations", { id, discovery_case_id: discoveryCaseId, authorized_by: authorizedBy, authorized_at: authorizedAt, provider_id: providerId, purpose, privacy_class: privacyClass, record_json: JSON.stringify(record) });
+    return { ok: true, authorization: record };
+  } finally { db.close(); }
+}
+
+function collectObjectKeys(value, output = []) {
+  if (!value || typeof value !== "object") return output;
+  for (const [key, child] of Object.entries(value)) { output.push(key); collectObjectKeys(child, output); }
+  return output;
+}
+
+function fakeIdeaCandidateFromChunk({ chunk, extraction, envelope, index, text }) {
+  const compact = String(text || "").replace(/\s+/g, " ").trim();
+  const heading = String(text || "").split(/\r?\n/).map((line) => line.trim()).find((line) => /^#{1,6}\s+/.test(line));
+  const workingLabel = (heading ? heading.replace(/^#{1,6}\s+/, "") : compact.split(/[.!?]/)[0] || `Idea from chunk ${index + 1}`).slice(0, 200);
+  return {
+    clientCandidateId: `fake_candidate_${String(index + 1).padStart(4, "0")}`,
+    workingLabel,
+    neutralSummary: compact.slice(0, 2000),
+    candidateType: "other",
+    scope: "unknown",
+    keyTerms: [...new Set(workingLabel.toLowerCase().replace(/[^a-z0-9\s]/g, " ").split(/\s+/).filter((term) => term.length > 3))].slice(0, 32),
+    evidence: [{ discoveryChunkId: chunk.id, discoveryExtractionId: extraction.id, fileVersionId: extraction.fileVersionId, sourceSha256: extraction.sourceSha256, chunkTextSha256: chunk.textSha256, relationship: "supports", excerpt: compact.slice(0, 500) }],
+    confidence: { score: 0.5, basis: "Fake local arm produced one deterministic candidate from one exact chunk for contract testing.", uncertaintyNotes: "No semantic AI provider was used." },
+    relationships: [],
+    clarificationQuestions: [{ clientQuestionId: `fake_question_${String(index + 1).padStart(4, "0")}`, text: "Should this candidate remain separate, merge with another idea, or be deferred?", affects: "grouping", allowNotSure: true }],
+    provenance: { providerId: FAKE_ANALYSIS_PROVIDER_ID, modelId: "deterministic_fake_v0.1", externalJobId: `fake_job_${envelope.requestId}` }
+  };
+}
+
+async function submitFakeAnalysisBatch({ storageRoot, dbPath, envelope = {} }) {
+  await ensureSpine(storageRoot);
+  const contract = JSON.parse(fs.readFileSync(AI_ANALYSIS_ARM_CONTRACT_FILE, "utf8"));
+  const ideaContract = JSON.parse(fs.readFileSync(IDEA_CANDIDATE_CONTRACT_FILE, "utf8"));
+  for (const field of contract.submissionRequired) if (!Object.prototype.hasOwnProperty.call(envelope, field)) throw analysisArmError("INVALID_ENVELOPE", `Analysis envelope is missing: ${field}`, field);
+  if (envelope.contractVersion !== contract.contractVersion) throw analysisArmError("UNSUPPORTED_CONTRACT_VERSION", "AI Analysis Arm contract version is not supported.", "contractVersion");
+  const requestId = requiredDiscoveryId(envelope.requestId, "Analysis request ID");
+  const idempotencyKey = requiredDiscoveryId(envelope.idempotencyKey, "Analysis idempotency key");
+  requiredDiscoveryTimestamp(envelope.submittedAt, "Analysis submittedAt");
+  const analysisRunId = requiredDiscoveryId(envelope.analysisRunId, "Idea Analysis Run ID");
+  const discoveryCaseId = requiredDiscoveryId(envelope.discoveryCaseId, "Discovery Case ID");
+  if (envelope.purpose !== contract.purpose) throw analysisArmError("INVALID_PURPOSE", "Analysis purpose is not supported.", "purpose");
+  const armId = requiredDiscoveryId(envelope.arm?.armId, "Analysis Arm ID");
+  const providerId = requiredDiscoveryId(envelope.arm?.providerId, "Analysis provider ID");
+  if (armId !== FAKE_ANALYSIS_ARM_ID || providerId !== FAKE_ANALYSIS_PROVIDER_ID) throw analysisArmError("INVALID_ARM", "Only the fake local analysis arm is implemented.", "arm");
+  const forbiddenKeys = new Set(contract.forbiddenSubmissionAndResultFields);
+  const forbidden = collectObjectKeys(envelope).filter((key) => forbiddenKeys.has(key));
+  if (forbidden.length) throw analysisArmError("FORBIDDEN_FIELD", `Analysis envelope contains forbidden fields: ${[...new Set(forbidden)].join(", ")}`, forbidden[0]);
+  const chunks = Array.isArray(envelope.input?.chunks) ? envelope.input.chunks : [];
+  if (!chunks.length) throw analysisArmError("INVALID_ENVELOPE", "Analysis envelope requires chunks.", "input.chunks");
+  if (chunks.length > 100 || Buffer.byteLength(JSON.stringify(envelope), "utf8") > 1048576) throw analysisArmError("PAYLOAD_TOO_LARGE", "Fake analysis batch exceeds local fixture limits.", "input.chunks");
+  const canonicalChecksum = crypto.createHash("sha256").update(stableStringify(envelope)).digest("hex");
+  const db = openDatabase(dbPath);
+  try {
+    const existingByKey = db.prepare("SELECT record_json, payload_checksum FROM ai_analysis_jobs WHERE idempotency_key = ?").get(idempotencyKey);
+    if (existingByKey) {
+      if (existingByKey.payload_checksum !== canonicalChecksum) throw analysisArmError("IDEMPOTENCY_CONFLICT", "Analysis idempotency key was reused with different content.", "idempotencyKey");
+      const existingJob = parseRecordRow(existingByKey);
+      const existingReceipt = db.prepare("SELECT record_json FROM ai_analysis_result_receipts WHERE request_id = ? AND result_page = 0").get(existingJob.id);
+      return { ok: true, deduplicated: true, job: existingJob, result: existingJob.result, receipt: existingReceipt ? parseRecordRow(existingReceipt) : null };
+    }
+    const run = dbRecord(db, "idea_analysis_runs", analysisRunId);
+    if (!run || run.discoveryCaseId !== discoveryCaseId) throw analysisArmError("INVALID_ENVELOPE", "Idea Analysis Run does not match the Discovery Case.", "analysisRunId");
+    const authorizationId = requiredDiscoveryId(envelope.privacyAuthorization?.authorizationRecordId, "Privacy Authorization ID");
+    const authorization = dbRecord(db, "idea_privacy_authorizations", authorizationId);
+    if (!authorization || authorization.discoveryCaseId !== discoveryCaseId || authorization.providerId !== providerId || authorization.purpose !== envelope.purpose) throw analysisArmError("PRIVACY_SCOPE_MISMATCH", "Privacy Authorization does not match this provider, purpose, or Discovery Case.", "privacyAuthorization");
+    const authorizedScopes = new Map((authorization.chunkScopes || []).map((scope) => [scope.discoveryChunkId, scope.chunkTextSha256]));
+    const validated = [];
+    for (const [index, supplied] of chunks.entries()) {
+      for (const field of contract.chunkRequired) if (!Object.prototype.hasOwnProperty.call(supplied, field)) throw analysisArmError("INVALID_ENVELOPE", `Analysis chunk is missing: ${field}`, `input.chunks.${index}.${field}`);
+      const chunkId = requiredDiscoveryId(supplied.discoveryChunkId, "Discovery Chunk ID");
+      if (authorizedScopes.get(chunkId) !== supplied.chunkTextSha256) throw analysisArmError("PRIVACY_SCOPE_MISMATCH", `Chunk is not authorized for transmission: ${chunkId}`, `input.chunks.${index}`);
+      const row = db.prepare(`SELECT chunk.record_json AS chunk_json, extraction.record_json AS extraction_json FROM discovery_chunks AS chunk JOIN discovery_extractions AS extraction ON extraction.id = chunk.discovery_extraction_id WHERE chunk.id = ? AND extraction.discovery_case_id = ?`).get(chunkId, discoveryCaseId);
+      if (!row) throw analysisArmError("CHUNK_NOT_FOUND", `Analysis chunk was not found: ${chunkId}`, `input.chunks.${index}`);
+      const chunk = JSON.parse(row.chunk_json);
+      const extraction = JSON.parse(row.extraction_json);
+      if (supplied.discoveryExtractionId !== extraction.id || supplied.fileVersionId !== extraction.fileVersionId || supplied.sourceSha256 !== extraction.sourceSha256 || supplied.chunkTextSha256 !== chunk.textSha256) throw analysisArmError("CHUNK_CHECKSUM_MISMATCH", `Analysis chunk evidence mismatch: ${chunkId}`, `input.chunks.${index}`);
+      const physicalText = fs.readFileSync(resolveManagedPath(storageRoot, chunk.textPath), "utf8");
+      if (checksumText(physicalText) !== chunk.textSha256 || checksumText(String(supplied.content?.text || "")) !== chunk.textSha256) throw analysisArmError("CHUNK_CHECKSUM_MISMATCH", `Analysis chunk content mismatch: ${chunkId}`, `input.chunks.${index}.content`);
+      validated.push({ chunk, extraction, text: physicalText });
+    }
+    const maxCandidates = Math.min(Number(envelope.analysisOptions?.maxCandidates) || 100, contract.maximums.candidatesPerResultPage);
+    const rawCandidates = validated.slice(0, maxCandidates).map((item, index) => fakeIdeaCandidateFromChunk({ ...item, envelope, index }));
+    for (const candidate of rawCandidates) {
+      if (!ideaContract.objects.IdeaCandidate.candidateTypes.includes(candidate.candidateType) || !candidate.evidence.length) throw analysisArmError("PROVIDER_RESPONSE_INVALID", "Fake provider generated an invalid candidate.");
+    }
+    const completedAt = nowIso();
+    const candidateRecords = rawCandidates.map((candidate) => ({ ...candidate, id: makeId("idea_candidate"), schemaVersion: "0.1", analysisRunId, discoveryCaseId, createdBy: armId, createdByType: "tool", createdAt: completedAt, method: "ai" }));
+    const result = { contractVersion: "0.1", requestId, idempotencyKey, externalJobId: `fake_job_${requestId}`, status: "complete", completedAt, resolvedProvider: { providerId, modelId: "deterministic_fake_v0.1", resolvedModelVersion: "0.1.0" }, coverage: { receivedChunks: validated.map(({ chunk }) => ({ discoveryChunkId: chunk.id, chunkTextSha256: chunk.textSha256 })), analyzedChunkIds: validated.map(({ chunk }) => chunk.id), skippedChunks: [], failedChunks: [], coverageStatus: "complete", continuationCursor: null }, candidates: rawCandidates, usage: { inputTokens: Math.ceil(validated.reduce((sum, item) => sum + item.text.length, 0) / 4), outputTokens: Math.ceil(JSON.stringify(rawCandidates).length / 4), providerRequestCount: 0, durationMs: 0, cost: { amount: 0, currency: "USD", estimated: false } }, retention: { policyId: "local_fixture_no_external_transmission", declaredRetention: "Project State test storage only", deletionAt: null } };
+    const receipt = { contractVersion: "0.1", requestId, idempotencyKey, analysisRunId, resultPage: 0, candidateMappings: candidateRecords.map((candidate) => ({ clientCandidateId: candidate.clientCandidateId, ideaCandidateId: candidate.id })), receivedAt: completedAt, boundary: contract.receiptBoundary };
+    const transmissionReceipt = { id: makeId("idea_transmission"), discoveryCaseId, analysisRunId, authorizationId, providerId, purpose: envelope.purpose, transmittedAt: completedAt, executionLocation: "local", externalTransmission: false, chunkScopes: validated.map(({ chunk }) => ({ discoveryChunkId: chunk.id, chunkTextSha256: chunk.textSha256, redactionState: "original" })) };
+    const job = { id: requestId, analysisRunId, discoveryCaseId, armId, providerId, idempotencyKey, payloadChecksum: canonicalChecksum, status: "complete", submittedAt: envelope.submittedAt, updatedAt: completedAt, batch: cloneJson(envelope.batch), privacyAuthorizationId: authorizationId, transmissionReceiptId: transmissionReceipt.id, result };
+    const nextCoverage = { expectedChunkCount: validated.length, analyzedChunkIds: validated.map(({ chunk }) => chunk.id), skippedChunkIds: [], blockedChunkIds: [], failedChunkIds: [], coverageRatio: 1 };
+    const nextRun = { ...run, status: "complete", completedAt, coverage: nextCoverage, candidateIds: candidateRecords.map((candidate) => candidate.id), provenance: { ...run.provenance, providerId, modelId: "deterministic_fake_v0.1", requestId } };
+    db.exec("BEGIN IMMEDIATE TRANSACTION");
+    try {
+      insertStrict(db, "ai_analysis_jobs", { id: requestId, analysis_run_id: analysisRunId, discovery_case_id: discoveryCaseId, arm_id: armId, provider_id: providerId, idempotency_key: idempotencyKey, payload_checksum: canonicalChecksum, status: "complete", submitted_at: envelope.submittedAt, updated_at: completedAt, record_json: JSON.stringify(job) });
+      insertStrict(db, "idea_transmission_receipts", { id: transmissionReceipt.id, discovery_case_id: discoveryCaseId, analysis_run_id: analysisRunId, authorization_id: authorizationId, provider_id: providerId, transmitted_at: completedAt, record_json: JSON.stringify(transmissionReceipt) });
+      for (const candidate of candidateRecords) insertStrict(db, "idea_candidates", { id: candidate.id, analysis_run_id: analysisRunId, discovery_case_id: discoveryCaseId, client_candidate_id: candidate.clientCandidateId, created_by: armId, created_by_type: "tool", created_at: completedAt, candidate_type: candidate.candidateType, working_label: candidate.workingLabel, record_json: JSON.stringify(candidate) });
+      insertStrict(db, "ai_analysis_result_receipts", { id: makeId("analysis_receipt"), request_id: requestId, analysis_run_id: analysisRunId, result_page: 0, received_at: completedAt, boundary: contract.receiptBoundary, record_json: JSON.stringify(receipt) });
+      db.prepare("UPDATE idea_analysis_runs SET status = ?, completed_at = ?, record_json = ? WHERE id = ?").run("complete", completedAt, JSON.stringify(nextRun), analysisRunId);
+      db.exec("COMMIT");
+    } catch (error) { try { db.exec("ROLLBACK"); } catch {} throw error; }
+    return { ok: true, deduplicated: false, job, result, receipt, candidates: candidateRecords, transmissionReceipt };
+  } finally { db.close(); }
+}
+
+async function getIdeaAnalysisJob({ storageRoot, dbPath, requestId }) {
+  await ensureSpine(storageRoot);
+  const id = requiredDiscoveryId(requestId, "Analysis request ID");
+  const db = openDatabase(dbPath);
+  try { return dbRecord(db, "ai_analysis_jobs", id); } finally { db.close(); }
+}
+
+async function getIdeaAnalysisResultPage({ storageRoot, dbPath, requestId, cursor }) {
+  await ensureSpine(storageRoot);
+  if (cursor !== null && cursor !== undefined && cursor !== "0" && cursor !== 0) throw analysisArmError("INVALID_ENVELOPE", "Fake local analysis arm has only result page 0.", "cursor");
+  const job = await getIdeaAnalysisJob({ storageRoot, dbPath, requestId });
+  return job ? { resultPage: 0, result: job.result, continuationCursor: null } : null;
+}
+
+async function getIdeaAnalysisReceipt({ storageRoot, dbPath, requestId }) {
+  await ensureSpine(storageRoot);
+  const id = requiredDiscoveryId(requestId, "Analysis request ID");
+  const db = openDatabase(dbPath);
+  try {
+    const row = db.prepare("SELECT record_json FROM ai_analysis_result_receipts WHERE request_id = ? ORDER BY result_page").get(id);
+    return row ? parseRecordRow(row) : null;
+  } finally { db.close(); }
+}
+
+async function cancelIdeaAnalysisJob({ storageRoot, dbPath, requestId }) {
+  await ensureSpine(storageRoot);
+  const id = requiredDiscoveryId(requestId, "Analysis request ID");
+  const db = openDatabase(dbPath);
+  try {
+    const current = dbRecord(db, "ai_analysis_jobs", id);
+    if (!current) return null;
+    if (["complete", "failed", "cancelled"].includes(current.status)) return { ok: true, changed: false, status: current.status };
+    const updatedAt = nowIso();
+    const next = { ...current, status: "cancelled", updatedAt, cancelledAt: updatedAt };
+    db.prepare("UPDATE ai_analysis_jobs SET status = ?, updated_at = ?, record_json = ? WHERE id = ?").run("cancelled", updatedAt, JSON.stringify(next), id);
+    return { ok: true, changed: true, status: "cancelled" };
+  } finally { db.close(); }
+}
+
+async function recordIdeaReviewDecision({ storageRoot, dbPath, payload = {} }) {
+  await ensureSpine(storageRoot);
+  const id = requiredDiscoveryId(payload.id || payload.reviewDecisionId, "Idea Review Decision ID");
+  const discoveryCaseId = requiredDiscoveryId(payload.discoveryCaseId, "Discovery Case ID");
+  if (String(payload.actorType || "human") !== "human") throw analysisArmError("FORBIDDEN_FIELD", "Only a human may create an Idea Review Decision.", "actorType");
+  const action = String(payload.action || "");
+  if (!IDEA_REVIEW_ACTIONS.has(action)) throw analysisArmError("INVALID_ENVELOPE", "Idea Review action is not supported.", "action");
+  const candidateIds = [...new Set((payload.candidateIds || []).map((value) => requiredDiscoveryId(value, "Idea Candidate ID")))];
+  if (!candidateIds.length) throw analysisArmError("INVALID_ENVELOPE", "Idea Review Decision requires candidates.", "candidateIds");
+  const decidedBy = requiredDiscoveryId(payload.decidedBy || payload.actorId, "Review actor ID");
+  const decidedAt = requiredDiscoveryTimestamp(payload.decidedAt || nowIso(), "Review decidedAt");
+  const reason = requiredDiscoveryText(payload.reason, "Idea Review reason");
+  const resultingUnits = Array.isArray(payload.resultingUnits) ? cloneJson(payload.resultingUnits) : [];
+  const actionsRequiringUnits = new Set(["accept", "rename", "correct_summary", "merge", "split"]);
+  if (actionsRequiringUnits.has(action) && !resultingUnits.length) throw analysisArmError("INVALID_ENVELOPE", "This Idea Review action requires at least one resulting Confirmed Idea Unit.", "resultingUnits");
+  const db = openDatabase(dbPath);
+  try {
+    const candidates = candidateIds.map((candidateId) => dbRecord(db, "idea_candidates", candidateId));
+    if (candidates.some((candidate) => !candidate || candidate.discoveryCaseId !== discoveryCaseId)) throw analysisArmError("INVALID_EVIDENCE", "Review candidates must exist in the same Discovery Case.", "candidateIds");
+    const availableEvidence = new Map(candidates.flatMap((candidate) => (candidate.evidence || []).map((evidence) => [`${evidence.discoveryChunkId}:${evidence.chunkTextSha256}`, evidence])));
+    const unitRecords = resultingUnits.map((unit, index) => {
+      const unitId = requiredDiscoveryId(unit.id || unit.ideaUnitId, "Confirmed Idea Unit ID");
+      const title = requiredDiscoveryText(unit.title, "Confirmed Idea Unit title").slice(0, 200);
+      const summary = requiredDiscoveryText(unit.summary, "Confirmed Idea Unit summary").slice(0, 2000);
+      const sourceCandidateIds = [...new Set((unit.sourceCandidateIds || candidateIds).map((value) => requiredDiscoveryId(value, "Source Candidate ID")))];
+      if (sourceCandidateIds.some((candidateId) => !candidateIds.includes(candidateId))) throw analysisArmError("INVALID_EVIDENCE", "Confirmed Idea Unit cites a candidate outside the review decision.", `resultingUnits.${index}.sourceCandidateIds`);
+      const requestedEvidence = Array.isArray(unit.evidence) && unit.evidence.length ? unit.evidence : [...availableEvidence.values()];
+      for (const evidence of requestedEvidence) if (!availableEvidence.has(`${evidence.discoveryChunkId}:${evidence.chunkTextSha256}`)) throw analysisArmError("INVALID_EVIDENCE", "Confirmed Idea Unit evidence was not retained from its candidates.", `resultingUnits.${index}.evidence`);
+      return { id: unitId, discoveryCaseId, reviewDecisionId: id, title, summary, sourceCandidateIds, evidence: requestedEvidence, confirmedBy: decidedBy, confirmedAt: decidedAt, reason, unresolvedUncertainty: cloneJson(unit.unresolvedUncertainty || []), coreAuthority: false, routingAuthority: false };
+    });
+    const decision = { id, schemaVersion: "0.1", discoveryCaseId, action, candidateIds, decidedBy, actorType: "human", decidedAt, reason, resultingIdeaUnitIds: unitRecords.map((unit) => unit.id), supersedesDecisionId: payload.supersedesDecisionId || null };
+    db.exec("BEGIN IMMEDIATE TRANSACTION");
+    try {
+      insertStrict(db, "idea_review_decisions", { id, discovery_case_id: discoveryCaseId, action, decided_by: decidedBy, decided_at: decidedAt, supersedes_decision_id: decision.supersedesDecisionId, record_json: JSON.stringify(decision) });
+      for (const unit of unitRecords) insertStrict(db, "confirmed_idea_units", { id: unit.id, discovery_case_id: discoveryCaseId, review_decision_id: id, title: unit.title, confirmed_by: decidedBy, confirmed_at: decidedAt, record_json: JSON.stringify(unit) });
+      db.exec("COMMIT");
+    } catch (error) { try { db.exec("ROLLBACK"); } catch {} throw error; }
+    return { ok: true, reviewDecision: decision, confirmedIdeaUnits: unitRecords, coreChanged: false };
+  } finally { db.close(); }
+}
+
+async function readIdeaAnalysisState({ storageRoot, dbPath, payload = {} }) {
+  await ensureSpine(storageRoot);
+  const discoveryCaseId = String(payload.discoveryCaseId || "").trim();
+  const db = openDatabase(dbPath);
+  try {
+    const read = (table) => discoveryCaseId ? db.prepare(`SELECT record_json FROM ${table} WHERE discovery_case_id = ? ORDER BY rowid`).all(discoveryCaseId).map(parseRecordRow) : readRecordJson(db, table);
+    return { ok: true, schema: readMeta(db, "idea_analysis_schema"), analysisRuns: read("idea_analysis_runs"), privacyAuthorizations: read("idea_privacy_authorizations"), transmissionReceipts: read("idea_transmission_receipts"), jobs: read("ai_analysis_jobs"), candidates: read("idea_candidates"), resultReceipts: readRecordJson(db, "ai_analysis_result_receipts"), reviewDecisions: read("idea_review_decisions"), confirmedIdeaUnits: read("confirmed_idea_units") };
+  } finally { db.close(); }
+}
+
 async function stageTrustedDiscoveryFile({ storageRoot, dbPath, payload = {} }) {
   await ensureSpine(storageRoot);
   if (payload.externalSecurityAcknowledged !== true) throw securityGateError("EXTERNAL_SECURITY_ACKNOWLEDGMENT_REQUIRED", "Confirm that security checking is handled outside Project State before adding files.");
@@ -1097,6 +1430,26 @@ async function readDiscoveryExtractionText({ storageRoot, dbPath, payload = {} }
   const text = await fsp.readFile(resolveManagedPath(storageRoot, extraction.textPath), "utf8");
   if (Buffer.byteLength(text, "utf8") !== extraction.textBytes || checksumText(text) !== extraction.textSha256) throw new Error("Discovery Extraction derivative integrity failed.");
   return { ok: true, status: extraction.status, text };
+}
+
+async function readDiscoveryChunkText({ storageRoot, dbPath, payload = {} }) {
+  const chunkId = requiredDiscoveryId(payload.discoveryChunkId || payload.chunkId || payload.id, "Discovery Chunk ID");
+  const db = openDatabase(dbPath);
+  let chunk;
+  let extraction;
+  let version;
+  try {
+    chunk = dbRecord(db, "discovery_chunks", chunkId);
+    if (!chunk) throw new Error("Discovery Chunk was not found.");
+    extraction = dbRecord(db, "discovery_extractions", chunk.discoveryExtractionId);
+    if (!extraction) throw new Error("Discovery Extraction was not found.");
+    version = dbRecord(db, "file_versions", extraction.fileVersionId);
+    if (!version) throw new Error("Discovery File Version was not found.");
+  } finally { db.close(); }
+  await authorizeDiscoveryContentAccess({ storageRoot, dbPath, reference: { managedPath: version.managedPath } });
+  const text = await fsp.readFile(resolveManagedPath(storageRoot, chunk.textPath), "utf8");
+  if (Buffer.byteLength(text, "utf8") !== chunk.textBytes || checksumText(text) !== chunk.textSha256) throw new Error("Discovery Chunk derivative integrity failed.");
+  return { ok: true, chunk, extraction, fileVersion: version, text };
 }
 
 function chunkDeterministicText(text, targetCharacters) {

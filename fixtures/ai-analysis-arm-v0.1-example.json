@@ -1,0 +1,40 @@
+{
+  "submission": {
+    "contractVersion": "0.1",
+    "requestId": "analysis_request_example_001",
+    "idempotencyKey": "analysis_idempotency_example_001",
+    "submittedAt": "2026-06-20T19:00:00.000Z",
+    "arm": {"armId": "ai_arm_example", "displayName": "Example Analysis Arm", "armVersion": "0.1.0", "providerId": "provider_example", "executionLocation": "remote"},
+    "analysisRunId": "idea_run_example_001",
+    "discoveryCaseId": "discovery_case_example_001",
+    "purpose": "idea_candidate_discovery",
+    "privacyAuthorization": {"authorizationRecordId": "privacy_authorization_example_001", "authorizedBy": "actor_owner", "authorizedAt": "2026-06-20T18:59:00.000Z", "providerId": "provider_example", "purpose": "idea_candidate_discovery", "privacyClass": "provider_allowed", "chunkScopes": [{"discoveryChunkId": "chunk_0001", "chunkTextSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}], "redactionMode": "none"},
+    "batch": {"batchId": "analysis_batch_example_001", "batchIndex": 0, "isFinalBatch": true},
+    "input": {"chunks": [{"discoveryChunkId": "chunk_0001", "discoveryExtractionId": "extraction_example_001", "fileVersionId": "file_version_example_001", "sourceSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "chunkTextSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "content": {"type": "text", "text": "The local history remains recoverable without replacing earlier records."}, "locator": {"headingPath": ["Recovery"], "lineStart": 12, "lineEnd": 18}, "redactionState": "original"}]},
+    "analysisOptions": {"language": "en", "candidateTypes": ["project_concept", "design_concept", "requirement", "decision_candidate", "question", "risk", "task", "reference", "observation", "claim_candidate", "relationship_candidate", "other", "unknown"], "maxCandidates": 100, "includeRelationships": true, "includeClarificationQuestions": true},
+    "provenance": {"projectStateContract": "ai-analysis-arm-v0.1", "ideaCandidateSchema": "0.1", "analysisStrategy": "bounded_chunk_candidate_discovery"}
+  },
+  "result": {
+    "contractVersion": "0.1",
+    "requestId": "analysis_request_example_001",
+    "idempotencyKey": "analysis_idempotency_example_001",
+    "externalJobId": "provider_job_example_001",
+    "status": "complete",
+    "completedAt": "2026-06-20T19:00:05.000Z",
+    "resolvedProvider": {"providerId": "provider_example", "modelId": "model_example", "resolvedModelVersion": "model_example_2026_06"},
+    "coverage": {"receivedChunks": [{"discoveryChunkId": "chunk_0001", "chunkTextSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}], "analyzedChunkIds": ["chunk_0001"], "skippedChunks": [], "failedChunks": [], "coverageStatus": "complete", "continuationCursor": null},
+    "candidates": [{"clientCandidateId": "candidate_1", "workingLabel": "Recoverable local project history", "neutralSummary": "The source describes preserving local project history and recovering it without replacing prior records.", "candidateType": "design_concept", "scope": "standalone", "keyTerms": ["local history", "recovery"], "evidence": [{"discoveryChunkId": "chunk_0001", "discoveryExtractionId": "extraction_example_001", "fileVersionId": "file_version_example_001", "sourceSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "chunkTextSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "relationship": "supports", "locator": {"headingPath": ["Recovery"], "lineStart": 12, "lineEnd": 18}, "excerpt": "The local history remains recoverable without replacing earlier records."}], "confidence": {"score": 0.86, "basis": "The concept is stated directly in the supplied chunk.", "uncertaintyNotes": "The scope of external attachments is not stated."}, "relationships": [], "clarificationQuestions": [{"clientQuestionId": "question_1", "text": "Does recovery include externally linked attachments?", "affects": "meaning", "allowNotSure": true}], "provenance": {"providerId": "provider_example", "modelId": "model_example", "externalJobId": "provider_job_example_001"}}],
+    "usage": {"inputTokens": 18, "outputTokens": 120, "providerRequestCount": 1, "durationMs": 5000, "cost": {"amount": 0.001, "currency": "USD", "estimated": false}},
+    "retention": {"policyId": "provider_policy_example", "declaredRetention": "provider-declared", "deletionAt": null}
+  },
+  "receipt": {
+    "contractVersion": "0.1",
+    "requestId": "analysis_request_example_001",
+    "idempotencyKey": "analysis_idempotency_example_001",
+    "analysisRunId": "idea_run_example_001",
+    "resultPage": 0,
+    "candidateMappings": [{"clientCandidateId": "candidate_1", "ideaCandidateId": "idea_candidate_example_001"}],
+    "receivedAt": "2026-06-20T19:00:06.000Z",
+    "boundary": "discovery_suggestions_pending_human_review"
+  }
+}

@@ -300,6 +300,113 @@ CREATE TABLE IF NOT EXISTS discovery_chunks (
   FOREIGN KEY(discovery_extraction_id) REFERENCES discovery_extractions(id) ON UPDATE RESTRICT ON DELETE RESTRICT
 );
 
+CREATE TABLE IF NOT EXISTS idea_analysis_runs (
+  id TEXT PRIMARY KEY,
+  discovery_case_id TEXT NOT NULL,
+  actor_id TEXT NOT NULL,
+  actor_type TEXT NOT NULL,
+  method TEXT NOT NULL CHECK(method IN ('human', 'deterministic', 'ai', 'hybrid')),
+  status TEXT NOT NULL CHECK(status IN ('complete', 'partial', 'failed', 'cancelled', 'running')),
+  started_at TEXT NOT NULL,
+  completed_at TEXT,
+  record_json TEXT NOT NULL,
+  FOREIGN KEY(discovery_case_id) REFERENCES discovery_cases(id) ON UPDATE RESTRICT ON DELETE RESTRICT
+);
+
+CREATE TABLE IF NOT EXISTS idea_privacy_authorizations (
+  id TEXT PRIMARY KEY,
+  discovery_case_id TEXT NOT NULL,
+  authorized_by TEXT NOT NULL,
+  authorized_at TEXT NOT NULL,
+  provider_id TEXT NOT NULL,
+  purpose TEXT NOT NULL CHECK(purpose = 'idea_candidate_discovery'),
+  privacy_class TEXT NOT NULL CHECK(privacy_class IN ('local_only', 'personal', 'confidential', 'restricted', 'provider_allowed')),
+  record_json TEXT NOT NULL,
+  FOREIGN KEY(discovery_case_id) REFERENCES discovery_cases(id) ON UPDATE RESTRICT ON DELETE RESTRICT
+);
+
+CREATE TABLE IF NOT EXISTS idea_transmission_receipts (
+  id TEXT PRIMARY KEY,
+  discovery_case_id TEXT NOT NULL,
+  analysis_run_id TEXT NOT NULL,
+  authorization_id TEXT NOT NULL,
+  provider_id TEXT NOT NULL,
+  transmitted_at TEXT NOT NULL,
+  record_json TEXT NOT NULL,
+  FOREIGN KEY(discovery_case_id) REFERENCES discovery_cases(id) ON UPDATE RESTRICT ON DELETE RESTRICT,
+  FOREIGN KEY(analysis_run_id) REFERENCES idea_analysis_runs(id) ON UPDATE RESTRICT ON DELETE RESTRICT,
+  FOREIGN KEY(authorization_id) REFERENCES idea_privacy_authorizations(id) ON UPDATE RESTRICT ON DELETE RESTRICT
+);
+
+CREATE TABLE IF NOT EXISTS ai_analysis_jobs (
+  id TEXT PRIMARY KEY,
+  analysis_run_id TEXT NOT NULL,
+  discovery_case_id TEXT NOT NULL,
+  arm_id TEXT NOT NULL,
+  provider_id TEXT NOT NULL,
+  idempotency_key TEXT NOT NULL UNIQUE,
+  payload_checksum TEXT NOT NULL CHECK(length(payload_checksum) = 64),
+  status TEXT NOT NULL CHECK(status IN ('accepted', 'queued', 'running', 'partial', 'complete', 'failed', 'cancel_requested', 'cancelled')),
+  submitted_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  record_json TEXT NOT NULL,
+  FOREIGN KEY(analysis_run_id) REFERENCES idea_analysis_runs(id) ON UPDATE RESTRICT ON DELETE RESTRICT,
+  FOREIGN KEY(discovery_case_id) REFERENCES discovery_cases(id) ON UPDATE RESTRICT ON DELETE RESTRICT
+);
+
+CREATE TABLE IF NOT EXISTS idea_candidates (
+  id TEXT PRIMARY KEY,
+  analysis_run_id TEXT NOT NULL,
+  discovery_case_id TEXT NOT NULL,
+  client_candidate_id TEXT NOT NULL,
+  created_by TEXT NOT NULL,
+  created_by_type TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  candidate_type TEXT NOT NULL,
+  working_label TEXT NOT NULL,
+  record_json TEXT NOT NULL,
+  UNIQUE(analysis_run_id, client_candidate_id),
+  FOREIGN KEY(analysis_run_id) REFERENCES idea_analysis_runs(id) ON UPDATE RESTRICT ON DELETE RESTRICT,
+  FOREIGN KEY(discovery_case_id) REFERENCES discovery_cases(id) ON UPDATE RESTRICT ON DELETE RESTRICT
+);
+
+CREATE TABLE IF NOT EXISTS ai_analysis_result_receipts (
+  id TEXT PRIMARY KEY,
+  request_id TEXT NOT NULL,
+  analysis_run_id TEXT NOT NULL,
+  result_page INTEGER NOT NULL CHECK(result_page >= 0),
+  received_at TEXT NOT NULL,
+  boundary TEXT NOT NULL CHECK(boundary = 'discovery_suggestions_pending_human_review'),
+  record_json TEXT NOT NULL,
+  UNIQUE(request_id, result_page),
+  FOREIGN KEY(request_id) REFERENCES ai_analysis_jobs(id) ON UPDATE RESTRICT ON DELETE RESTRICT,
+  FOREIGN KEY(analysis_run_id) REFERENCES idea_analysis_runs(id) ON UPDATE RESTRICT ON DELETE RESTRICT
+);
+
+CREATE TABLE IF NOT EXISTS idea_review_decisions (
+  id TEXT PRIMARY KEY,
+  discovery_case_id TEXT NOT NULL,
+  action TEXT NOT NULL,
+  decided_by TEXT NOT NULL,
+  decided_at TEXT NOT NULL,
+  supersedes_decision_id TEXT,
+  record_json TEXT NOT NULL,
+  FOREIGN KEY(discovery_case_id) REFERENCES discovery_cases(id) ON UPDATE RESTRICT ON DELETE RESTRICT,
+  FOREIGN KEY(supersedes_decision_id) REFERENCES idea_review_decisions(id) ON UPDATE RESTRICT ON DELETE RESTRICT
+);
+
+CREATE TABLE IF NOT EXISTS confirmed_idea_units (
+  id TEXT PRIMARY KEY,
+  discovery_case_id TEXT NOT NULL,
+  review_decision_id TEXT NOT NULL,
+  title TEXT NOT NULL,
+  confirmed_by TEXT NOT NULL,
+  confirmed_at TEXT NOT NULL,
+  record_json TEXT NOT NULL,
+  FOREIGN KEY(discovery_case_id) REFERENCES discovery_cases(id) ON UPDATE RESTRICT ON DELETE RESTRICT,
+  FOREIGN KEY(review_decision_id) REFERENCES idea_review_decisions(id) ON UPDATE RESTRICT ON DELETE RESTRICT
+);
+
 CREATE TRIGGER IF NOT EXISTS file_assets_sha256_immutable
 BEFORE UPDATE OF sha256 ON file_assets
 BEGIN
@@ -363,5 +470,33 @@ BEFORE UPDATE ON discovery_chunks BEGIN SELECT RAISE(ABORT, 'discovery chunks ar
 CREATE TRIGGER IF NOT EXISTS discovery_chunks_append_only_delete
 BEFORE DELETE ON discovery_chunks BEGIN SELECT RAISE(ABORT, 'discovery chunks are append-only'); END;
 
+CREATE TRIGGER IF NOT EXISTS idea_privacy_authorizations_append_only_update
+BEFORE UPDATE ON idea_privacy_authorizations BEGIN SELECT RAISE(ABORT, 'idea privacy authorizations are append-only'); END;
+CREATE TRIGGER IF NOT EXISTS idea_privacy_authorizations_append_only_delete
+BEFORE DELETE ON idea_privacy_authorizations BEGIN SELECT RAISE(ABORT, 'idea privacy authorizations are append-only'); END;
+CREATE TRIGGER IF NOT EXISTS idea_transmission_receipts_append_only_update
+BEFORE UPDATE ON idea_transmission_receipts BEGIN SELECT RAISE(ABORT, 'idea transmission receipts are append-only'); END;
+CREATE TRIGGER IF NOT EXISTS idea_transmission_receipts_append_only_delete
+BEFORE DELETE ON idea_transmission_receipts BEGIN SELECT RAISE(ABORT, 'idea transmission receipts are append-only'); END;
+CREATE TRIGGER IF NOT EXISTS idea_candidates_append_only_update
+BEFORE UPDATE ON idea_candidates BEGIN SELECT RAISE(ABORT, 'idea candidates are append-only'); END;
+CREATE TRIGGER IF NOT EXISTS idea_candidates_append_only_delete
+BEFORE DELETE ON idea_candidates BEGIN SELECT RAISE(ABORT, 'idea candidates are append-only'); END;
+CREATE TRIGGER IF NOT EXISTS ai_analysis_result_receipts_append_only_update
+BEFORE UPDATE ON ai_analysis_result_receipts BEGIN SELECT RAISE(ABORT, 'AI analysis result receipts are append-only'); END;
+CREATE TRIGGER IF NOT EXISTS ai_analysis_result_receipts_append_only_delete
+BEFORE DELETE ON ai_analysis_result_receipts BEGIN SELECT RAISE(ABORT, 'AI analysis result receipts are append-only'); END;
+CREATE TRIGGER IF NOT EXISTS idea_review_decisions_append_only_update
+BEFORE UPDATE ON idea_review_decisions BEGIN SELECT RAISE(ABORT, 'idea review decisions are append-only'); END;
+CREATE TRIGGER IF NOT EXISTS idea_review_decisions_append_only_delete
+BEFORE DELETE ON idea_review_decisions BEGIN SELECT RAISE(ABORT, 'idea review decisions are append-only'); END;
+CREATE TRIGGER IF NOT EXISTS confirmed_idea_units_append_only_update
+BEFORE UPDATE ON confirmed_idea_units BEGIN SELECT RAISE(ABORT, 'confirmed idea units are append-only'); END;
+CREATE TRIGGER IF NOT EXISTS confirmed_idea_units_append_only_delete
+BEFORE DELETE ON confirmed_idea_units BEGIN SELECT RAISE(ABORT, 'confirmed idea units are append-only'); END;
+
 INSERT OR IGNORE INTO meta (key, value_json, updated_at)
 VALUES ('discovery_schema', '{"version":"0.1","migration":"additive"}', '2026-06-19T00:00:00.000Z');
+
+INSERT OR IGNORE INTO meta (key, value_json, updated_at)
+VALUES ('idea_analysis_schema', '{"version":"0.1","migration":"additive","providerInstalled":false}', '2026-06-20T00:00:00.000Z');

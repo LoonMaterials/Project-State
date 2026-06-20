@@ -1,0 +1,73 @@
+{
+  "analysisRun": {
+    "id": "idea_run_example_001",
+    "schemaVersion": "0.1",
+    "discoveryCaseId": "discovery_case_example_001",
+    "actorId": "analysis_arm_example",
+    "actorType": "tool",
+    "method": "ai",
+    "status": "complete",
+    "startedAt": "2026-06-20T18:00:00.000Z",
+    "completedAt": "2026-06-20T18:01:00.000Z",
+    "sourceScope": [{"fileVersionId": "file_version_example_001", "sourceSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "expectedChunkIds": ["chunk_0001", "chunk_0002"]}],
+    "coverage": {"expectedChunkCount": 2, "analyzedChunkIds": ["chunk_0001", "chunk_0002"], "skippedChunkIds": [], "blockedChunkIds": [], "failedChunkIds": [], "coverageRatio": 1},
+    "provenance": {"providerId": "provider_example", "modelId": "model_example", "requestId": "request_example_001", "promptTemplateVersion": "idea-candidate-v0.1", "transmissionReceiptId": "transmission_example_001"},
+    "candidateIds": ["idea_candidate_example_001"]
+  },
+  "candidates": [{
+    "id": "idea_candidate_example_001",
+    "schemaVersion": "0.1",
+    "analysisRunId": "idea_run_example_001",
+    "discoveryCaseId": "discovery_case_example_001",
+    "createdBy": "analysis_arm_example",
+    "createdByType": "tool",
+    "createdAt": "2026-06-20T18:01:00.000Z",
+    "method": "ai",
+    "workingLabel": "Recoverable local project history",
+    "neutralSummary": "The source describes preserving project history locally and recovering it without replacing prior records.",
+    "candidateType": "design_concept",
+    "scope": "standalone",
+    "keyTerms": ["local history", "recovery", "append-only"],
+    "evidence": [{
+      "id": "evidence_example_001",
+      "fileAssetId": "file_asset_example_001",
+      "fileVersionId": "file_version_example_001",
+      "sourceSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "discoveryExtractionId": "extraction_example_001",
+      "discoveryChunkId": "chunk_0001",
+      "chunkTextSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "relationship": "supports",
+      "locator": {"headingPath": ["Recovery"], "lineStart": 12, "lineEnd": 18},
+      "excerpt": "The local history remains recoverable without replacing earlier records.",
+      "excerptSha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+    }],
+    "confidence": {"score": 0.86, "basis": "The concept is stated across two adjacent paragraphs under the Recovery heading.", "uncertaintyNotes": "The source does not state whether recovery includes external attachments."},
+    "relationships": [],
+    "clarificationQuestions": [{"id": "question_example_001", "text": "Does recovery include externally linked attachments?", "affects": "meaning", "allowNotSure": true}],
+    "provenance": {"providerId": "provider_example", "modelId": "model_example", "requestId": "request_example_001", "clientCandidateId": "candidate_1"}
+  }],
+  "reviewDecision": {
+    "id": "idea_review_example_001",
+    "discoveryCaseId": "discovery_case_example_001",
+    "action": "rename",
+    "candidateIds": ["idea_candidate_example_001"],
+    "decidedBy": "actor_owner",
+    "decidedAt": "2026-06-20T18:05:00.000Z",
+    "reason": "The revised title better reflects the source scope.",
+    "resultingIdeaUnitIds": ["idea_unit_example_001"]
+  },
+  "confirmedIdeaUnits": [{
+    "id": "idea_unit_example_001",
+    "discoveryCaseId": "discovery_case_example_001",
+    "title": "Local history and recovery",
+    "summary": "Preserve append-only local project history and support recovery without replacing earlier records.",
+    "sourceCandidateIds": ["idea_candidate_example_001"],
+    "evidence": ["evidence_example_001"],
+    "confirmedBy": "actor_owner",
+    "confirmedAt": "2026-06-20T18:05:00.000Z",
+    "reason": "The revised title better reflects the source scope.",
+    "unresolvedUncertainty": ["Whether external attachments are included remains unknown."],
+    "coreAuthority": false,
+    "routingAuthority": false
+  }]
+}
