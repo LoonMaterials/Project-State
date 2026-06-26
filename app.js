@@ -5686,6 +5686,7 @@ function actionPermission(action = "") {
 }
 
 function actionAllowedForCurrentActor(action = "", project = getProject()) {
+  if (needsFirstRunSetup() && action === "restore-storage") return true;
   const actor = currentActor();
   const role = normalizeActorRole(actor?.role, actor?.type);
   if (["create-intake", "create-ai-work-order", "propose-correction"].includes(action)) return actorHasPermission(actor, "create", project);
@@ -6595,6 +6596,10 @@ function renderFirstRunSetup() {
           </div>
         </div>
         <p class="notice">${escapeHtml(t("userPrivacyNotice"))}</p>
+        <p class="notice">If you expected existing projects, restore a Project State backup before starting a new blank setup.</p>
+        <div class="button-row">
+          <button class="btn secondary" type="button" data-action="restore-storage">${escapeHtml(t("restore"))}</button>
+        </div>
         <form class="form" data-first-run-setup>
           <div class="field">
             <label for="setupActorName">${escapeHtml(t("primaryActor"))}</label>
@@ -10367,6 +10372,10 @@ function contextProposalSchema() {
 }
 
 function exportStorageBackup() {
+  if (needsFirstRunSetup()) {
+    window.alert("No saved Project State database is available yet. Restore a backup or complete setup before creating a backup.");
+    return;
+  }
   if (ProjectStateStorage.usesExternalStore()) {
     openDesktopBackupPackageModal();
     return;
@@ -11114,12 +11123,13 @@ function wireFlowControls(form) {
 function auditFields({ actorLabel = t("approvedBy"), reasonLabel = t("reason") } = {}) {
   const defaultActorName = auditWorkSession.actorName || currentActor()?.name || "";
   const defaultReason = auditWorkSession.reason || "";
+  const options = activeActorOptions(defaultActorName);
   return `
     <div class="field">
       <label for="actorName">${escapeHtml(actorLabel)}</label>
-      <select id="actorName" name="actorName" required>
-        ${activeActorOptions(defaultActorName)}
-      </select>
+      ${options
+        ? `<select id="actorName" name="actorName" required>${options}</select>`
+        : `<input id="actorName" name="actorName" value="${escapeHtml(defaultActorName)}" list="actorNameSuggestions" autocomplete="name" required>${actorSuggestionDatalist("actorNameSuggestions")}`}
       <p class="field-help">Known active human identity. Every confirmed change still records this actor separately.</p>
     </div>
     <div class="field">
