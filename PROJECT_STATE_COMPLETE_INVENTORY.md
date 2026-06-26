@@ -34,9 +34,10 @@ The approved next-stage system is defined in `DISCOVERY_FIRST_SYSTEM.md`, `SECUR
 - App-first Electron desktop runtime.
 - Electron main process, preload bridge, and desktop bridge implementation.
 - Desktop bridge required for authoritative Project State operation.
-- Browser mode retained only as a read-only development, inspection, export, and legacy-migration harness.
-- Startup gate warns when the desktop bridge is unavailable.
-- No silent fallback from desktop storage to browser storage for authoritative work.
+- Browser mode is no longer a working Project State runtime.
+- Startup gate switches missing-bridge launches into desktop-required mode.
+- No silent fallback from desktop storage to browser storage for authoritative work, file reading, downloads, Intake, Discovery, or API work.
+- Old browser JSON can still be imported through the desktop migration path, but browser storage is not a live app spine.
 - Web testing is externally isolated: HTTP/HTTPS cannot activate an injected desktop bridge, and Content Security Policy blocks outbound connections, objects, frames, and workers.
 - Platform adapter boundary separates UI behavior from desktop storage, file access, extraction, and downloads.
 - API arms are designed to connect through the desktop Intake Airlock rather than Core or storage directly.

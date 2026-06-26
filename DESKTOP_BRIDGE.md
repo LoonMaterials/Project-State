@@ -1,13 +1,14 @@
 Project State Desktop Bridge
 
-Project State is now app-first. The desktop bridge is required for real Project State mode, and browser-only file and storage calls are isolated behind a platform adapter in `app.js`.
+Project State is now app-first. The desktop bridge is required for real Project State mode. Browser-only file and storage calls are no longer valid app starts; they exist only as disabled compatibility helpers behind the platform adapter in `app.js`.
 
-Legacy/dev browser adapter:
+Missing-bridge adapter:
 
-- `browser`
-- Uses IndexedDB split stores when available
-- Falls back to the legacy JSON record only when IndexedDB is unavailable
-- Handles legacy/dev file reads and download exports only
+- `desktop-required`
+- Does not use IndexedDB as a Project State spine
+- Does not fall back to the legacy localStorage JSON record
+- Does not read local files through browser file APIs
+- Does not save or export through browser download APIs
 
 Desktop implementation files:
 
@@ -23,11 +24,11 @@ Desktop app runtime:
 
 A desktop wrapper exposes `window.ProjectStateDesktop` before `app.js` loads. When the bridge is present, Project State uses the desktop storage spine as the full app runtime.
 
-Browser mode is now a development and legacy migration harness. It remains useful for export, inspection, and migration testing, but it is not the primary runtime for new storage, backup, restore, intake, file-reading, or API work. It must not be expanded into a second production runtime.
+Browser mode is no longer a working Project State runtime. Old browser JSON can still be imported through the desktop bridge, but Project State should not run as a browser app for storage, backup, restore, intake, file-reading, API work, or Discovery.
 
 App-first rule:
 
-New storage, backup, restore, intake, file-reading, and API work must target the desktop bridge. Browser mode may support legacy import/export, diagnostics, and development checks, but it should not receive new authoritative Project State features.
+New storage, backup, restore, intake, file-reading, and API work must target the desktop bridge. Browser mode must not receive new authoritative Project State features and must not be treated as a second production runtime.
 
 API arm rule:
 
@@ -157,18 +158,18 @@ External files, APIs, AI, chats, notes, and other arms should still land in the 
 
 Runtime rule:
 
-Full Project State mode requires the desktop bridge and desktop storage spine. If `window.ProjectStateDesktop` is missing, the app should show browser/dev mode and avoid treating browser storage as the authoritative spine.
+Full Project State mode requires the desktop bridge and desktop storage spine. If `window.ProjectStateDesktop` is missing, the app should show desktop-required mode and refuse to treat browser storage as a Project State spine.
 
 Startup gate:
 
 - If the desktop bridge exists, Project State opens in normal app mode.
-- If the desktop bridge is missing, Project State opens a Browser/dev mode gate.
-- Browser/dev mode may inspect loaded local data and export raw data for migration.
-- Browser/dev mode must not silently save, migrate, back up, restore, intake, read files as authoritative sources, or edit Project State records.
+- If the desktop bridge is missing, Project State opens a desktop-required gate.
+- Missing desktop bridge means desktop-required mode.
+- Desktop-required mode must not save, migrate, back up, restore, intake, read files as authoritative sources, export browser state, or edit Project State records.
 
 Web-testing isolation:
 
-- HTTP and HTTPS runtimes always select the self-contained browser adapter, even if a page attempts to inject `window.ProjectStateDesktop`.
+- HTTP and HTTPS runtimes always select the locked desktop-required adapter, even if a page attempts to inject `window.ProjectStateDesktop`.
 - The entry document blocks outbound connections, external objects, frames, and workers with Content Security Policy.
 - Browser testing exposes no API Arm transport, native filesystem dialogs, desktop storage, or provider bridge.
 - The internal Electron preload bridge remains available only to the installed `file:` desktop runtime.

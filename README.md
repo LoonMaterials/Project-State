@@ -193,14 +193,14 @@ Storage and Backup
 
 Project State separates primary storage from backup:
 
-Primary storage: the desktop platform storage spine. Browser storage remains available only as a development and legacy migration harness; full Project State mode requires the desktop bridge.
+Primary storage: the desktop platform storage spine. Browser storage is not a Project State runtime; old browser JSON can only be brought forward through the desktop migration/import path. Full Project State mode requires the desktop bridge.
 Backup storage: a user-controlled Project State desktop backup package exported from the app.
 
 The backup file should live somewhere outside the primary storage location, such as a separate local folder or an external drive. Without a server, primary storage and backup must not be treated as the same location.
 
-The desktop storage spine is SQLite plus managed local folders. New storage, backup, restore, intake, file-reading, and API work should target the desktop bridge instead of expanding browser mode. The current contract lives in `DESKTOP_STORAGE_SPINE.md` and `fixtures/desktop-spine-v0.1-contract.json`.
+The desktop storage spine is SQLite plus managed local folders. New storage, backup, restore, intake, file-reading, Discovery, and API work must target the desktop bridge. The current contract lives in `DESKTOP_STORAGE_SPINE.md` and `fixtures/desktop-spine-v0.1-contract.json`.
 
-Startup gate: when the desktop bridge is present, Project State opens normally. When the bridge is missing, the app opens Browser/dev mode for inspection and raw export only. Browser/dev mode must not silently save, migrate, back up, restore, intake, read files as authoritative sources, or edit Project State records.
+Startup gate: when the desktop bridge is present, Project State opens normally. When the bridge is missing, the app opens desktop-required mode and refuses storage, backup, restore, intake, file-reading, Discovery, API, browser-state export, and edits.
 
 First-Run Setup
 
@@ -500,7 +500,7 @@ Arms: future inputs such as APIs, AI, Codex, notes, email, meetings, calendars, 
 
 Arms do not write directly to the core. They create intake items. A human must approve intake before it becomes a Decision, Fact, Open Question, Next Action, Source, Relationship, or Project Status change. Rejected and archived intake remains outside the core.
 
-API arms follow the same rule: they plug into the desktop app's Intake Airlock, not directly into Core or Spine. Browser/dev mode is not an equal production target for API work.
+API arms follow the same rule: they plug into the desktop app's Intake Airlock, not directly into Core or Spine. Browser mode is not a production target for API work.
 
 API Arm Contract v0.1 is documented in `API_ARM_CONTRACT.md` with its machine-readable companion at `fixtures/api-arm-v0.1-contract.json`. The desktop bridge implements capability discovery, envelope submission, and receipt lookup under `window.ProjectStateDesktop.intakeArms`, including validation, idempotent atomic batch acceptance, durable Airlock receipts, and server-owned workflow fields. A successful receipt means only that an outside proposal is retained in the Airlock pending human review.
 
@@ -552,4 +552,4 @@ Settings now includes a read-only Integrity Dashboard. It reports storage warnin
 
 Source File Verification
 
-Sources can now verify their recorded local file reference. In desktop mode, Project State checks whether the absolute local path still exists and whether the file size still matches the recorded source metadata. Verification requires actor and reason, saves the result on the source, and records history. Browser/dev mode cannot verify local paths and marks those checks as not verifiable.
+Sources can now verify their recorded local file reference. In desktop mode, Project State checks whether the absolute local path still exists and whether the file size still matches the recorded source metadata. Verification requires actor and reason, saves the result on the source, and records history. Desktop-required mode cannot verify local paths.

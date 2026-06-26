@@ -86,8 +86,13 @@ async function main() {
     assert(apiItems.every((item) => item.status === "pending"), "API folder file proposals should remain pending.");
     const appSource = fs.readFileSync(path.join(__dirname, "..", "app.js"), "utf8");
     assert(appSource.includes("function isDiscoveryStagingIntake"), "App is missing the Discovery staging Intake classifier.");
+    assert(appSource.includes("function isRawFileUploadStagingIntake"), "App is missing the legacy raw file-upload staging classifier.");
+    assert(appSource.includes("Uploaded .+ source file"), "App does not recognize legacy file-upload staging summaries.");
     assert(appSource.includes("visibleIntakeItems(store.intakeItems || [])"), "App Intake queue does not filter Discovery staging records.");
     assert(appSource.includes("!isDiscoveryStagingIntake(item)"), "Managed file list does not hide Discovery staging records.");
+    assert(appSource.includes("for (const intake of visibleIntakeItems(store.intakeItems || []))"), "Needs Attention and handoff views do not hide Discovery staging records.");
+    assert(appSource.includes("const pending = visibleIntakeItems(store.intakeItems || []).filter"), "Batch triage does not hide Discovery staging records.");
+    assert(appSource.includes("return visibleIntakeItems(store.intakeItems || [])\n    .filter"), "Next pending Intake navigation does not hide Discovery staging records.");
 
     console.log("API Folder Discovery Check");
     console.log(JSON.stringify({
@@ -97,7 +102,10 @@ async function main() {
       headingUnitsDetected: titles,
       extractionComplete: true,
       pendingFileEvidenceRetained: true,
-      stagingHiddenFromNormalIntake: true
+      stagingHiddenFromNormalIntake: true,
+      stagingHiddenFromNeedsAttention: true,
+      stagingHiddenFromBatchTriage: true,
+      legacyRawFileUploadsHidden: true
     }, null, 2));
     console.log("API folder discovery: ok");
   } finally {

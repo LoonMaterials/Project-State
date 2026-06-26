@@ -381,17 +381,17 @@ const LANGUAGES = {
     platformStorageSpine: "Platform storage spine",
     platformAdapterLabel: "Platform Adapter",
     primaryStorage: "Primary Storage",
-    localBrowserStorageSpine: "Local browser storage spine",
+    localBrowserStorageSpine: "Desktop storage spine",
     desktopRuntime: "Desktop App Runtime",
     desktopRuntimeReady: "Desktop storage spine active.",
-    browserDevRuntime: "Browser / Dev Runtime",
-    browserRuntimeWarning: "Project State is running without the desktop bridge. Browser mode is for legacy export, migration, and development only; use the desktop app for full storage, backup, restore, intake, and API work.",
-    browserDevGateTitle: "Browser/dev mode",
-    browserDevGateSubtitle: "The desktop bridge is required for real Project State mode.",
-    browserDevGateNotice: "This screen can inspect loaded local data and export raw data for migration. It will not silently save, migrate, back up, restore, intake, or edit Project State records.",
-    browserDevGateReadOnly: "Read-only/dev access",
+    browserDevRuntime: "Desktop app required",
+    browserRuntimeWarning: "Project State is running without the desktop bridge. The Windows desktop app is required for storage, backup, restore, intake, file reading, Discovery, and API work.",
+    browserDevGateTitle: "Desktop app required",
+    browserDevGateSubtitle: "The desktop bridge is required for Project State.",
+    browserDevGateNotice: "This launch cannot act as Project State. Open the Windows desktop app so the desktop storage spine, managed files, Discovery, and API arms are available.",
+    browserDevGateReadOnly: "Locked runtime",
     browserDevGateCounts: "Loaded records",
-    browserDevNoSilentStorage: "No serious storage work runs without the desktop bridge.",
+    browserDevNoSilentStorage: "No Project State work runs without the desktop bridge.",
     saveBlockedApproval: "Unsaved changes: approval gate blocked save",
     saveStorageFailed: "Unsaved changes: {message}",
     storageFailed: "storage failed",
@@ -763,7 +763,7 @@ const LANGUAGES = {
     lastVerified: "Last verified",
     verificationReasonPlaceholder: "Why are source files being verified?",
     sourceFileVerificationComplete: "Source file verification complete.",
-    sourceFileVerificationNotice: "Desktop mode can verify absolute local file paths. Browser/dev mode can only mark source files as not verifiable.",
+    sourceFileVerificationNotice: "Desktop mode can verify absolute local file paths. Desktop-required mode cannot verify local paths.",
     summary: "Summary",
     tags: "Tags",
     mode: "Mode",
@@ -3349,7 +3349,6 @@ function desktopBridgeAllowed() {
 }
 
 function createDesktopPlatformAdapter(bridge) {
-  const browserFallback = createBrowserPlatformAdapter();
   const storage = bridge.storage || {};
   const files = bridge.files || {};
   const downloads = bridge.downloads || {};
@@ -3404,29 +3403,29 @@ function createDesktopPlatformAdapter(bridge) {
         return null;
       },
       supportsIndexedDb() {
-        return browserFallback.storage.supportsIndexedDb();
+        return false;
       },
-      async openDatabase(name, version, onUpgrade) {
-        return browserFallback.storage.openDatabase(name, version, onUpgrade);
+      async openDatabase() {
+        return null;
       },
-      getLegacyItem(key) {
-        return browserFallback.storage.getLegacyItem(key);
+      getLegacyItem() {
+        return "";
       },
-      setLegacyItem(key, value) {
-        return browserFallback.storage.setLegacyItem(key, value);
+      setLegacyItem() {
+        return null;
       },
-      removeLegacyItem(key) {
-        return browserFallback.storage.removeLegacyItem(key);
+      removeLegacyItem() {
+        return null;
       }
     },
     files: {
       metadata(file) {
         if (typeof files.metadata === "function") return files.metadata(file);
-        return browserFileMetadata(file);
+        return null;
       },
       localPath(file) {
         if (typeof files.localPath === "function") return files.localPath(file);
-        return browserLocalFilePath(file);
+        return "";
       },
       async inspectImportSelection(payload) {
         if (typeof files.inspectImportSelection === "function") return files.inspectImportSelection(payload);
@@ -3438,19 +3437,24 @@ function createDesktopPlatformAdapter(bridge) {
       },
       async verifyLocalFile(reference) {
         if (typeof files.verifyLocalFile === "function") return files.verifyLocalFile(reference);
-        return browserVerifyLocalFile(reference);
+        return {
+          status: "unverifiable",
+          exists: false,
+          checkedAt: nowIso(),
+          reason: "Desktop file verification is unavailable."
+        };
       },
       async readAsDataUrl(file) {
         if (typeof files.readAsDataUrl === "function") return files.readAsDataUrl(file);
-        return browserReadFileAsDataUrl(file);
+        throw new Error("Desktop file reading is unavailable.");
       },
       async readAsText(file) {
         if (typeof files.readAsText === "function") return files.readAsText(file);
-        return browserReadFileAsText(file);
+        throw new Error("Desktop file reading is unavailable.");
       },
       async readAsArrayBuffer(file) {
         if (typeof files.readAsArrayBuffer === "function") return files.readAsArrayBuffer(file);
-        return browserReadFileAsArrayBuffer(file);
+        throw new Error("Desktop file reading is unavailable.");
       },
       async extractText(file) {
         if (typeof files.extractText === "function") return files.extractText(file);
@@ -3458,13 +3462,13 @@ function createDesktopPlatformAdapter(bridge) {
       },
       async inflateRaw(bytes) {
         if (typeof files.inflateRaw === "function") return files.inflateRaw(bytes);
-        return browserInflateRaw(bytes);
+        throw new Error("Desktop compressed file reading is unavailable.");
       }
     },
     downloads: {
       saveTextFile(fileName, text, type) {
         if (typeof downloads.saveTextFile === "function") return downloads.saveTextFile({ fileName, text, type });
-        return browserSaveTextFile(fileName, text, type);
+        throw new Error("Desktop file saving is unavailable.");
       }
     },
     dialogs: {
@@ -3528,8 +3532,8 @@ function createDesktopPlatformAdapter(bridge) {
 
 function createBrowserPlatformAdapter() {
   return {
-    id: "browser",
-    label: "Browser platform adapter",
+    id: "desktop-required",
+    label: "Desktop app required",
     dialogs: {
       available: false,
       async pickFile() { return null; },
@@ -3539,47 +3543,40 @@ function createBrowserPlatformAdapter() {
     storage: {
       externalStore: false,
       supported() {
-        return typeof indexedDB !== "undefined";
+        return false;
       },
       supportsIndexedDb() {
-        return typeof indexedDB !== "undefined";
+        return false;
       },
-      async openDatabase(name, version, onUpgrade) {
-        if (typeof indexedDB === "undefined") return null;
-        return new Promise((resolve, reject) => {
-          const request = indexedDB.open(name, version);
-          request.addEventListener("upgradeneeded", () => onUpgrade(request.result));
-          request.addEventListener("success", () => resolve(request.result));
-          request.addEventListener("error", () => reject(request.error));
-        });
+      async openDatabase() {
+        return null;
       },
-      getLegacyItem(key) {
-        if (typeof localStorage === "undefined") return "";
-        return localStorage.getItem(key) || "";
+      getLegacyItem() {
+        return "";
       },
-      setLegacyItem(key, value) {
-        if (typeof localStorage !== "undefined") localStorage.setItem(key, value);
+      setLegacyItem() {
+        return null;
       },
-      removeLegacyItem(key) {
-        if (typeof localStorage !== "undefined") localStorage.removeItem(key);
+      removeLegacyItem() {
+        return null;
       }
     },
     files: {
-      metadata: browserFileMetadata,
-      localPath: browserLocalFilePath,
+      metadata() { return null; },
+      localPath() { return ""; },
       async inspectImportSelection() { return { candidates: [], skipped: [] }; },
       async stageManagedFiles() { return { staged: [], errors: [] }; },
       verifyLocalFile: browserVerifyLocalFile,
-      readAsDataUrl: browserReadFileAsDataUrl,
-      readAsText: browserReadFileAsText,
-      readAsArrayBuffer: browserReadFileAsArrayBuffer,
+      async readAsDataUrl() { throw new Error("Desktop app required for file reading."); },
+      async readAsText() { throw new Error("Desktop app required for file reading."); },
+      async readAsArrayBuffer() { throw new Error("Desktop app required for file reading."); },
       async extractText() {
         return null;
       },
-      inflateRaw: browserInflateRaw
+      async inflateRaw() { throw new Error("Desktop app required for compressed file reading."); }
     },
     downloads: {
-      saveTextFile: browserSaveTextFile
+      saveTextFile() { throw new Error("Desktop app required for file saving."); }
     },
     armTransport: {
       available: false,
@@ -3592,76 +3589,13 @@ function createBrowserPlatformAdapter() {
   };
 }
 
-function browserLocalFilePath(file) {
-  return file?.webkitRelativePath || file?.name || "";
-}
-
-function browserFileMetadata(file) {
-  if (!file || typeof file.name !== "string" || !file.name) return null;
-  return {
-    name: file.name,
-    type: file.type || "",
-    size: file.size || 0,
-    lastModified: file.lastModified ? new Date(file.lastModified).toISOString() : ""
-  };
-}
-
 async function browserVerifyLocalFile() {
   return {
     status: "unverifiable",
     exists: false,
     checkedAt: nowIso(),
-    reason: "Browser/dev mode cannot verify local file paths."
+    reason: "Desktop app required for local file verification."
   };
-}
-
-function browserReadFileAsDataUrl(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.addEventListener("load", () => resolve(reader.result));
-    reader.addEventListener("error", () => reject(reader.error));
-    reader.readAsDataURL(file);
-  });
-}
-
-function browserReadFileAsText(file) {
-  if (typeof file?.text === "function") return file.text();
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.addEventListener("load", () => resolve(reader.result || ""));
-    reader.addEventListener("error", () => reject(reader.error));
-    reader.readAsText(file);
-  });
-}
-
-function browserReadFileAsArrayBuffer(file) {
-  if (typeof file?.arrayBuffer === "function") return file.arrayBuffer();
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.addEventListener("load", () => resolve(reader.result));
-    reader.addEventListener("error", () => reject(reader.error));
-    reader.readAsArrayBuffer(file);
-  });
-}
-
-function browserSaveTextFile(fileName, text, type = "text/plain") {
-  const blob = new Blob([text], { type });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = fileName;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  URL.revokeObjectURL(url);
-}
-
-async function browserInflateRaw(compressed) {
-  if (typeof DecompressionStream === "undefined") {
-    throw new Error("This platform cannot read compressed DOCX text locally.");
-  }
-  const stream = new Blob([compressed]).stream().pipeThrough(new DecompressionStream("deflate-raw"));
-  return new Uint8Array(await new Response(stream).arrayBuffer());
 }
 
 const platformAdapter = createProjectStatePlatformAdapter();
@@ -3675,7 +3609,7 @@ const ProjectStateStorage = {
     return Boolean(platformAdapter.storage.supportsIndexedDb?.());
   },
   supported() {
-    return this.usesExternalStore() || this.browserDbSupported();
+    return this.usesExternalStore();
   },
   async open() {
     if (!this.browserDbSupported()) return null;
@@ -3838,15 +3772,7 @@ const ProjectStateStorage = {
       storageMode = "desktop-spine";
       return;
     }
-    if (this.browserDbSupported()) {
-      await this.writeSplitStore(nextStore, manifest);
-      await this.verifySplitStore(nextStore, manifest);
-      platformAdapter.storage.removeLegacyItem(STORAGE_KEY);
-      storageMode = "browser-dev-indexeddb-split";
-      return;
-    }
-    platformAdapter.storage.setLegacyItem(STORAGE_KEY, JSON.stringify(nextStore, null, 2));
-    storageMode = "browser-dev-legacy-json";
+    throw new Error("Desktop storage spine is required for Project State saves.");
   },
   async ensureMeta(nextStore) {
     const snapshot = JSON.stringify(nextStore);
@@ -4019,16 +3945,12 @@ function seriousStorageWorkAllowed() {
 
 function currentStorageModeName() {
   if (ProjectStateStorage.usesExternalStore()) return "desktop-spine";
-  if (ProjectStateStorage.browserDbSupported()) return "browser-dev-indexeddb-split";
-  return "browser-dev-legacy-json";
+  return "desktop-required";
 }
 
 function storageModeForLoadedSource(source = "") {
   if (ProjectStateStorage.usesExternalStore()) return source || "desktop-spine";
-  if (source === "legacy-json" && ProjectStateStorage.browserDbSupported()) return "browser-dev-migrated-to-indexeddb-split";
-  if (source === "legacy-json") return "browser-dev-legacy-json";
   if (source === "empty") return currentStorageModeName();
-  if (String(source).startsWith("indexeddb")) return `browser-dev-${source}`;
   return source || currentStorageModeName();
 }
 
@@ -6205,7 +6127,7 @@ function buildWorkInboxItems() {
     sortAt: item.sortAt || nowIso()
   });
 
-  for (const intake of store.intakeItems || []) {
+  for (const intake of visibleIntakeItems(store.intakeItems || [])) {
     if (intake.archived || intake.status !== "pending") continue;
     const projectName = intake.projectId ? projectNameById(intake.projectId) || t("missingProject") : t("noTargetProject");
     const state = normalizeIntakeQueueState(intake.queueState);
@@ -6645,9 +6567,6 @@ function renderBrowserDevModeGate() {
               `).join("")}
             </div>
           </div>
-          <div class="button-row">
-            <button class="btn" data-action="export-current-raw-data">${escapeHtml(t("exportRawCurrentData"))}</button>
-          </div>
         </div>
       </section>
     </main>
@@ -6655,7 +6574,7 @@ function renderBrowserDevModeGate() {
 }
 
 function browserDevActionAllowed(action) {
-  return ["export-current-raw-data", "export-failed-data"].includes(action);
+  return ["export-failed-data"].includes(action);
 }
 
 function renderFirstRunSetup() {
@@ -7634,7 +7553,26 @@ function pendingIntakeCount() {
 }
 
 function isDiscoveryStagingIntake(item = {}) {
-  return Boolean(item.evidence?.apiFolderDiscovery);
+  if (item.evidence?.apiFolderDiscovery) return true;
+  return isRawFileUploadStagingIntake(item);
+}
+
+function isRawFileUploadStagingIntake(item = {}) {
+  const evidence = item.evidence || {};
+  const managedFile = evidence.managedFile || {};
+  const proposed = item.proposedChange || {};
+  const managedPath = String(managedFile.managedPath || "");
+  const fileName = String(evidence.fileName || managedFile.fileName || "");
+  const title = String(item.title || "");
+  const proposedText = String(proposed.text || "");
+  const summary = String(proposed.summary || "");
+  return item.armType === "file"
+    && item.proposedObjectType === "Source"
+    && Boolean(evidence.managedFile)
+    && managedPath.startsWith("sources/intake_")
+    && (!fileName || title === fileName)
+    && (!fileName || proposedText === fileName)
+    && /^Uploaded .+ source file \(\d+ bytes\) awaiting human review\.$/.test(summary);
 }
 
 function visibleIntakeItems(intakeItems = []) {
@@ -8750,7 +8688,7 @@ function renderHandoffSection(title, items = [], emptyMessage = "") {
 
 function projectHandoffApprovalItems(project, collections = {}) {
   const items = [];
-  for (const intake of store.intakeItems || []) {
+  for (const intake of visibleIntakeItems(store.intakeItems || [])) {
     if (intake.projectId !== project.id || intake.archived || intake.status !== "pending") continue;
     items.push({
       title: intake.title,
@@ -11422,13 +11360,13 @@ function openReviewIntakeQueueModal(intakeId) {
 }
 
 function nextPendingIntake(currentId = "", { readyOnly = false } = {}) {
-  return (store.intakeItems || [])
+  return visibleIntakeItems(store.intakeItems || [])
     .filter((item) => item.id !== currentId && item.status === "pending" && !item.archived && (!readyOnly || item.queueState === "ready"))
     .sort((a, b) => intakeQueueStateRank(a.queueState) - intakeQueueStateRank(b.queueState) || dateSortValue(a.createdAt) - dateSortValue(b.createdAt))[0] || null;
 }
 
 function openBatchTriageModal() {
-  const pending = (store.intakeItems || []).filter((item) => item.status === "pending" && !item.archived);
+  const pending = visibleIntakeItems(store.intakeItems || []).filter((item) => item.status === "pending" && !item.archived);
   if (!pending.length) return;
   showModal({
     title: t("batchTriage"),
