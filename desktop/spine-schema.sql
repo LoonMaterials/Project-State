@@ -195,7 +195,7 @@ CREATE TABLE IF NOT EXISTS file_versions (
   sha256 TEXT NOT NULL CHECK(length(sha256) = 64),
   byte_size INTEGER NOT NULL CHECK(byte_size >= 0),
   original_name TEXT NOT NULL,
-  managed_path TEXT NOT NULL CHECK(managed_path LIKE 'quarantine/%'),
+  managed_path TEXT NOT NULL CHECK(managed_path LIKE 'quarantine/%' OR managed_path LIKE 'sources/%'),
   created_at TEXT NOT NULL,
   record_json TEXT NOT NULL,
   UNIQUE(file_asset_id, sha256),

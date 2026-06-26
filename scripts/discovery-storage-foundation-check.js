@@ -126,9 +126,9 @@ async function main() {
     sha256: checksum,
     byteSize: fileBytes.length,
     originalName: "original.txt",
-    managedPath: "sources/original.txt",
+    managedPath: "attachments/original.txt",
     createdAt: TIME
-  }), "inside quarantine");
+  }), "quarantine/ or sources/");
 
   const createdCase = await bridge.discoveryStorage.createCase({
     id: "case_foundation",

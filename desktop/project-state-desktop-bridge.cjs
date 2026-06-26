@@ -662,8 +662,52 @@ function openDatabase(dbPath) {
   fs.mkdirSync(path.dirname(dbPath), { recursive: true });
   const db = new DatabaseSync(dbPath);
   db.exec("PRAGMA busy_timeout = 5000;");
-  db.exec(fs.readFileSync(SCHEMA_FILE, "utf8"));
+  const schema = fs.readFileSync(SCHEMA_FILE, "utf8");
+  db.exec(schema);
+  migrateFileVersionsManagedPathConstraint(db);
+  db.exec(schema);
   return db;
+}
+
+function migrateFileVersionsManagedPathConstraint(db) {
+  const row = db.prepare("SELECT sql FROM sqlite_schema WHERE type = 'table' AND name = 'file_versions'").get();
+  const createSql = String(row?.sql || "");
+  if (!createSql.includes("managed_path LIKE 'quarantine/%'") || createSql.includes("managed_path LIKE 'sources/%'")) return;
+  db.exec("PRAGMA foreign_keys = OFF;");
+  try {
+    db.exec("BEGIN IMMEDIATE TRANSACTION;");
+    db.exec(`
+      DROP TRIGGER IF EXISTS file_versions_append_only_update;
+      DROP TRIGGER IF EXISTS file_versions_append_only_delete;
+      DROP TABLE IF EXISTS file_versions_new;
+      CREATE TABLE file_versions_new (
+        id TEXT PRIMARY KEY,
+        file_asset_id TEXT NOT NULL,
+        sha256 TEXT NOT NULL CHECK(length(sha256) = 64),
+        byte_size INTEGER NOT NULL CHECK(byte_size >= 0),
+        original_name TEXT NOT NULL,
+        managed_path TEXT NOT NULL CHECK(managed_path LIKE 'quarantine/%' OR managed_path LIKE 'sources/%'),
+        created_at TEXT NOT NULL,
+        record_json TEXT NOT NULL,
+        UNIQUE(file_asset_id, sha256),
+        UNIQUE(id, file_asset_id),
+        UNIQUE(id, file_asset_id, sha256),
+        FOREIGN KEY(file_asset_id) REFERENCES file_assets(id) ON UPDATE RESTRICT ON DELETE RESTRICT
+      );
+      INSERT INTO file_versions_new (id, file_asset_id, sha256, byte_size, original_name, managed_path, created_at, record_json)
+      SELECT id, file_asset_id, sha256, byte_size, original_name, managed_path, created_at, record_json FROM file_versions;
+      DROP TABLE file_versions;
+      ALTER TABLE file_versions_new RENAME TO file_versions;
+      INSERT OR REPLACE INTO meta (key, value_json, updated_at)
+      VALUES ('file_versions_managed_path_constraint', '{"version":"0.1","managedRoots":["quarantine","sources"]}', '2026-06-25T00:00:00.000Z');
+    `);
+    db.exec("COMMIT;");
+  } catch (error) {
+    try { db.exec("ROLLBACK;"); } catch {}
+    throw error;
+  } finally {
+    db.exec("PRAGMA foreign_keys = ON;");
+  }
 }
 
 const DISCOVERY_CASE_STATUSES = new Set(["created", "security_pending", "security_blocked", "extracting", "questioning", "routing", "ready_for_intake", "promoted", "archived"]);
@@ -695,7 +739,7 @@ async function registerDiscoveryFileVersion({ storageRoot, dbPath, payload = {} 
   const byteSize = Number(payload.byteSize);
   if (!Number.isSafeInteger(byteSize) || byteSize < 0) throw new Error("File Version byte size must be a non-negative integer.");
   const originalName = requiredDiscoveryText(payload.originalName, "File Version original name");
-  const managedPath = requiredQuarantinePath(payload.managedPath);
+  const managedPath = requiredFileVersionManagedPath(payload.managedPath);
   const createdAt = requiredDiscoveryTimestamp(payload.createdAt || nowIso(), "File Version createdAt");
   const privacyClass = String(payload.privacyClass || "local_only");
   if (!DISCOVERY_PRIVACY_CLASSES.has(privacyClass)) throw new Error("File Asset privacy class is not supported.");
@@ -1001,9 +1045,10 @@ function requiredSha256(value) {
   return text;
 }
 
-function requiredQuarantinePath(value) {
+function requiredFileVersionManagedPath(value) {
   const text = String(value || "").replace(/\\/g, "/").replace(/^\.\//, "");
-  if (!text.startsWith("quarantine/") || text.includes("../") || path.isAbsolute(text)) throw new Error("File Version managed path must remain inside quarantine/.");
+  const allowedManagedRoot = text.startsWith("quarantine/") || text.startsWith("sources/");
+  if (!allowedManagedRoot || text.includes("../") || path.isAbsolute(text)) throw new Error("File Version managed path must remain inside quarantine/ or sources/.");
   return text;
 }
 
@@ -1744,23 +1789,24 @@ async function authorizeDiscoveryContentAccess({ storageRoot, dbPath, reference 
     : pathFromFileLike(reference?.path || reference?.localPath || reference);
   if (!suppliedPath) return { ok: true, governed: false, reason: "non-path file reference" };
 
-  const quarantineRoot = path.resolve(storageRoot, "quarantine");
+  const governedRoots = [path.resolve(storageRoot, "quarantine"), path.resolve(storageRoot, "sources")];
   const resolvedPath = path.resolve(suppliedPath);
-  if (resolvedPath !== quarantineRoot && !resolvedPath.startsWith(`${quarantineRoot}${path.sep}`)) {
-    return { ok: true, governed: false, reason: "outside Discovery quarantine" };
+  const governed = governedRoots.some((root) => resolvedPath === root || resolvedPath.startsWith(`${root}${path.sep}`));
+  if (!governed) {
+    return { ok: true, governed: false, reason: "outside Discovery managed source roots" };
   }
 
   const managedPath = relativeManagedPath(storageRoot, resolvedPath);
   const db = openDatabase(dbPath);
   try {
     const versionRow = db.prepare("SELECT id, file_asset_id, sha256, byte_size, record_json FROM file_versions WHERE managed_path = ?").get(managedPath);
-    if (!versionRow) throw securityGateError("FILE_VERSION_MISMATCH", "Quarantined content is not registered as a File Version.");
+    if (!versionRow) throw securityGateError("FILE_VERSION_MISMATCH", "Managed content is not registered as a File Version.");
     if (!fs.existsSync(resolvedPath) || !fs.statSync(resolvedPath).isFile()) {
-      throw securityGateError("FILE_VERSION_MISMATCH", "Registered quarantined content is missing.");
+      throw securityGateError("FILE_VERSION_MISMATCH", "Registered managed content is missing.");
     }
     const stat = fs.statSync(resolvedPath);
     if (stat.size !== versionRow.byte_size || await checksumFile(resolvedPath) !== versionRow.sha256) {
-      throw securityGateError("FILE_VERSION_MISMATCH", "Quarantined content no longer matches its immutable File Version.");
+      throw securityGateError("FILE_VERSION_MISMATCH", "Managed content no longer matches its immutable File Version.");
     }
     const version = JSON.parse(versionRow.record_json);
     if (version.externalSecurityAcknowledged === true && version.externalSecurityAcknowledgedBy && version.externalSecurityAcknowledgedAt) {

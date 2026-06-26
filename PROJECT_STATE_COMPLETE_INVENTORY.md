@@ -303,6 +303,8 @@ File Arm Contract v0.1:
 - 25 MiB file limit, 8 KiB metadata-header limit, safe file names, and an explicit extension allowlist.
 - Executable/script-like files are rejected; uploaded bytes are never executed or automatically extracted.
 - Managed files are stored under `sources/`, included in backups, and verified by binary SHA-256 integrity checks.
+- API/File Arm retained `sources/` files can now be registered as Discovery File Versions and read by Discovery without relying on the outside original source path.
+- API folder submissions can now create grouped Discovery Cases, extract retained files, and detect document units from headings such as separate ideas inside one mixed note.
 - Transport receipts do not expose managed paths.
 - Human approval creates the Source record and Change History together, retaining Unverified trust and verified-file metadata.
 - Generic file connector computes SHA-256 and uses the same environment-only token handoff.
@@ -547,6 +549,7 @@ Implemented storage behavior:
 - `scripts/api-arm-implementation-check.js`: desktop submission, receipt, idempotency, rejection, Core-isolation, stale-save, and backup/restore verification.
 - `scripts/api-arm-submit.js`: provider-neutral metadata connector.
 - `scripts/api-arm-submit-file.js`: provider-neutral managed-file connector.
+- `scripts/api-arm-submit-folder.js`: provider-neutral recursive folder connector that preserves relative paths and creates Discovery-aware file groups.
 - `scripts/release-artifact-check.js`: unpacked ASAR, connector, secret-exclusion, and packaged-runtime verification.
 - `scripts/release-installer-check.js`: installer checksum, signature status, and release-candidate manifest generation.
 - `scripts/*.js`: maintained syntax, runtime, migration, storage, backup, restore, and interaction verification tools.
@@ -694,6 +697,7 @@ Status: Discovery rebuild without bundled antivirus is complete through the non-
 - Project State states clearly that it does not scan files for malware and does not claim they are safe.
 - A human must acknowledge external security responsibility before selected files are copied into managed staging.
 - Current staged bytes must match the immutable File Version size and SHA-256 before content access.
+- Discovery File Versions may point at Project State-managed `quarantine/` files or API/File Arm-managed `sources/` files; both are exact-checksum gated.
 - Deterministic parsing runs before optional AI assistance.
 - AI suggestions retain provider, evidence, confidence, privacy, and non-authority labels.
 - Project State asks adaptive questions and accepts `Not sure` or unassigned material.

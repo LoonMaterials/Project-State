@@ -231,6 +231,10 @@ const LANGUAGES = {
     openingSubtitle: "Loading the storage spine and checking local project records.",
     search: "Search",
     searchPlaceholder: "Search projects and records",
+    refreshStorage: "Refresh",
+    refreshedFromStorage: "Refreshed from storage.",
+    storageRefreshFailed: "Storage refresh failed.",
+    storageRecoveryNotice: "Project State could not load saved data. Recovery details were preserved.",
     projects: "Projects",
     workInbox: "Work Inbox",
     workInboxSubtitle: "Items that need human attention across Project State.",
@@ -974,6 +978,10 @@ const LANGUAGES = {
     openingSubtitle: "Chargement de l’axe de stockage et vérification des dossiers de projet locaux.",
     search: "Rechercher",
     searchPlaceholder: "Rechercher des projets et des enregistrements",
+    refreshStorage: "Actualiser",
+    refreshedFromStorage: "Stockage actualisé.",
+    storageRefreshFailed: "L’actualisation du stockage a échoué.",
+    storageRecoveryNotice: "Project State n’a pas pu charger les données enregistrées. Les détails de récupération ont été conservés.",
     projects: "Projets",
     workInbox: "Boîte de travail",
     workInboxSubtitle: "Éléments qui demandent une attention humaine dans Project State.",
@@ -1717,6 +1725,10 @@ const LANGUAGES = {
     openingSubtitle: "Speicher-Spine wird geladen und lokale Projektdaten werden geprüft.",
     search: "Suchen",
     searchPlaceholder: "Projekte und Einträge suchen",
+    refreshStorage: "Aktualisieren",
+    refreshedFromStorage: "Aus Speicher aktualisiert.",
+    storageRefreshFailed: "Speicheraktualisierung fehlgeschlagen.",
+    storageRecoveryNotice: "Project State konnte gespeicherte Daten nicht laden. Wiederherstellungsdetails wurden erhalten.",
     projects: "Projekte",
     workInbox: "Arbeits-Eingang",
     workInboxSubtitle: "Elemente, die menschliche Aufmerksamkeit in Project State benötigen.",
@@ -2460,6 +2472,10 @@ const LANGUAGES = {
     openingSubtitle: "Cargando la columna de almacenamiento y revisando los registros locales del proyecto.",
     search: "Buscar",
     searchPlaceholder: "Buscar proyectos y registros",
+    refreshStorage: "Actualizar",
+    refreshedFromStorage: "Actualizado desde almacenamiento.",
+    storageRefreshFailed: "No se pudo actualizar el almacenamiento.",
+    storageRecoveryNotice: "Project State no pudo cargar los datos guardados. Se conservaron los detalles de recuperación.",
     projects: "Proyectos",
     workInbox: "Bandeja de trabajo",
     workInboxSubtitle: "Elementos que necesitan atención humana en Project State.",
@@ -4505,6 +4521,18 @@ async function loadStore() {
   }
 }
 
+async function refreshFromExternalStorage() {
+  const loadedStore = await loadStore();
+  if (!loadedStore) {
+    window.alert(t("storageRecoveryNotice"));
+    return;
+  }
+  store = loadedStore;
+  await refreshDiscoveryWorkspace();
+  setSaveStatus("saved", t("refreshedFromStorage"));
+  render();
+}
+
 function normalizeStore(parsed) {
   const context = migrationContext();
   const actors = Array.isArray(parsed.actors) ? parsed.actors.map((actor) => normalizeActor(actor, context)) : [];
@@ -5724,7 +5752,7 @@ function actionPermission(action = "") {
   if (["create-project", "add-decision", "add-fact", "add-conflict", "add-source", "add-relationship", "add-question", "add-action", "add-extract", "read-file-extract", "suggest-extract", "create-draft-project", "import-files", "import-folder"].includes(action)) return "create";
   if (["edit-status", "edit-object", "assign-object", "mark-complete", "attach-source", "attach-image", "archive-object", "unarchive-project", "manage-project-roles", "review-source-freshness", "verify-source-file", "verify-all-source-files", "archive-ai-work-order", "edit-file-source", "archive-file-source"].includes(action)) return "edit";
   if (["approve-intake", "approve-extract", "approve-draft-project"].includes(action)) return "approve";
-  if (["export-project", "export-handoff", "context-pack", "view-object-history", "show-history", "view-history", "show-changes-since", "history-file-source"].includes(action)) return "audit";
+  if (["export-project", "export-handoff", "context-pack", "view-object-history", "show-history", "view-history", "show-changes-since", "history-file-source", "refresh-storage"].includes(action)) return "audit";
   if (["show-settings", "backup-storage", "restore-storage", "reset-local-data", "export-current-raw-data", "enable-arm-transport", "disable-arm-transport", "rotate-arm-transport-token", "revoke-arm-transport"].includes(action)) return "admin";
   return "";
 }
@@ -6491,6 +6519,7 @@ function shell(inner) {
         ${!activeProjectId ? `<button class="btn secondary" data-action="show-files">${escapeHtml(t("filesLibrary"))}</button>` : ""}
         ${!activeProjectId ? `<button class="btn secondary" data-action="show-archived-projects">${escapeHtml(t("archivedProjects"))}${archivedProjectCount() ? ` (${archivedProjectCount()})` : ""}</button>` : ""}
         ${!activeProjectId ? `<button class="btn secondary" data-action="show-intake">${escapeHtml(t("intake"))}${pendingIntakeCount() ? ` (${pendingIntakeCount()})` : ""}</button>` : ""}
+        ${!activeProjectId && platformAdapter.storage.externalStore ? `<button class="btn secondary" data-action="refresh-storage">${escapeHtml(t("refreshStorage"))}</button>` : ""}
         ${!activeProjectId ? `<button class="btn secondary" data-action="show-settings">${escapeHtml(t("settings"))}</button>` : ""}
         ${!activeProjectId ? `<button class="btn secondary" data-action="backup-storage">${escapeHtml(t("backup"))}</button>` : ""}
         ${!activeProjectId ? `<button class="btn secondary" data-action="restore-storage">${escapeHtml(t("restore"))}</button>` : ""}
@@ -7601,7 +7630,15 @@ function renderProjectCard(project) {
 }
 
 function pendingIntakeCount() {
-  return (store.intakeItems || []).filter((item) => item.status === "pending" && !item.archived).length;
+  return visibleIntakeItems(store.intakeItems || []).filter((item) => item.status === "pending" && !item.archived).length;
+}
+
+function isDiscoveryStagingIntake(item = {}) {
+  return Boolean(item.evidence?.apiFolderDiscovery);
+}
+
+function visibleIntakeItems(intakeItems = []) {
+  return (intakeItems || []).filter((item) => !isDiscoveryStagingIntake(item));
 }
 
 function intakeQueueStateLabel(state = "new") {
@@ -7637,14 +7674,15 @@ function intakeQueueAgeLabel(createdAt) {
 }
 
 function approvalQueueStats(intakeItems = []) {
-  const active = intakeItems.filter((item) => !item.archived);
+  const visible = visibleIntakeItems(intakeItems);
+  const active = visible.filter((item) => !item.archived);
   const pending = active.filter((item) => item.status === "pending");
   return {
     pending: pending.length,
     ready: pending.filter((item) => item.queueState === "ready").length,
     blocked: pending.filter((item) => item.queueState === "blocked").length,
-    reviewed: intakeItems.filter((item) => item.status !== "pending" && !item.archived).length,
-    archived: intakeItems.filter((item) => item.archived).length
+    reviewed: visible.filter((item) => item.status !== "pending" && !item.archived).length,
+    archived: visible.filter((item) => item.archived).length
   };
 }
 
@@ -7669,7 +7707,7 @@ function renderApprovalQueueSummary(stats) {
 }
 
 function managedFileIntakeItems() {
-  return (store.intakeItems || []).filter((item) => item.evidence?.managedFile);
+  return (store.intakeItems || []).filter((item) => item.evidence?.managedFile && !isDiscoveryStagingIntake(item));
 }
 
 function managedSourceFiles() {
@@ -8144,7 +8182,7 @@ function openDiscoveryReviewModal({ discoveryCaseId, analysis, extractions = [],
 }
 
 function renderIntakeQueue() {
-  const intakeItems = sortNewest(store.intakeItems || [], "createdAt");
+  const intakeItems = sortNewest(visibleIntakeItems(store.intakeItems || []), "createdAt");
   const pending = intakeItems
     .filter((item) => item.status === "pending" && !item.archived)
     .sort((a, b) => intakeQueueStateRank(a.queueState) - intakeQueueStateRank(b.queueState) || Date.parse(b.createdAt || "") - Date.parse(a.createdAt || ""));
@@ -14300,6 +14338,12 @@ app.addEventListener("click", (event) => {
     activeRootView = "intake";
     activeProjectId = null;
     render();
+  }
+  if (action === "refresh-storage") {
+    refreshFromExternalStorage().catch((error) => {
+      console.error("Storage refresh failed.", error);
+      window.alert(error.message || t("storageRefreshFailed"));
+    });
   }
   if (action === "show-settings") {
     activeRootView = "settings";

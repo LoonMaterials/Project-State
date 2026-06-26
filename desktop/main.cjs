@@ -107,7 +107,7 @@ function registerNativeDialogIpc() {
 
 app.whenReady().then(async () => {
   const desktopBridge = createProjectStateDesktopBridge({ storageRoot: STORAGE_ROOT, label: "Project State Desktop" });
-  const fileIntake = createApiArmFileIntake({ storageRoot: STORAGE_ROOT, intakeArms: desktopBridge.intakeArms, storage: desktopBridge.storage });
+  const fileIntake = createApiArmFileIntake({ storageRoot: STORAGE_ROOT, intakeArms: desktopBridge.intakeArms, storage: desktopBridge.storage, discoveryStorage: desktopBridge.discoveryStorage });
   apiArmTransportManager = createApiArmTransportManager({ storageRoot: STORAGE_ROOT, safeStorage, intakeArms: desktopBridge.intakeArms, fileIntake });
   registerApiArmTransportIpc(apiArmTransportManager);
   registerNativeDialogIpc();

@@ -51,6 +51,7 @@ The generic file connector computes SHA-256 from the bytes it reads. Project Sta
 - Executable and script-like file extensions are rejected in v0.1.
 - Uploaded bytes are never executed, rendered as HTML, or treated as authority.
 - Files are stored under the managed `sources/` folder, never at an arm-supplied path.
+- Folder-oriented connectors may include explicit Discovery metadata so the retained managed source is also registered as an immutable Discovery File Version, extracted, and analyzed as part of a grouped Discovery Case before routing.
 - The response never exposes the managed filesystem path.
 
 The accepted v0.1 file extensions are PDF, DOCX, TXT, Markdown, CSV, JSON, PNG, JPG/JPEG, WEBP, and GIF.

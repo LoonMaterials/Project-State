@@ -78,6 +78,7 @@ Use folders for large evidence and source material:
 - `extracts/`: long extract text, chunk text, parsed chat segments, OCR/transcription output later.
 - `attachments/`: screenshots, images, and attached media.
 - `quarantine/`: managed staging copies of files the user has already chosen to trust. Project State performs no malware scan. Staging requires an external-security responsibility acknowledgment, and later reads require the bytes to keep matching the registered size and SHA-256.
+- `sources/`: managed retained source files from approved imports and File Arm/API uploads. API-uploaded source files may be linked into Discovery as immutable File Versions without requiring the outside original path again.
 - `discovery/`: Discovery metadata artifacts and future deterministic derivatives kept outside approved Core sources.
 - `backups/`: user-controlled backup packages.
 - `recovery/`: failed loads, failed migrations, corrupt raw data exports.
@@ -114,7 +115,7 @@ FileAsset
   -> Interaction and DiscoveryEvent history
 ```
 
-A DiscoveryCase does not require a project. File Versions, Discovery Interactions, and Discovery Events are append-only. The acknowledgment is recorded on the exact staged File Version and checksum; it means only that the user accepts responsibility for checking the source externally. It is not a clean-file verdict. Exact-byte verification blocks extraction or promotion if the staged copy changes. These records do not grant an outside arm human confirmation, Intake approval, or Core authority. The legacy `security_receipts` table remains only for schema compatibility and optional future provider-neutral receipts; no security provider ships with Project State.
+A DiscoveryCase does not require a project. File Versions, Discovery Interactions, and Discovery Events are append-only. The acknowledgment is recorded on the exact File Version and checksum; it means only that the user accepts responsibility for checking the source externally. It is not a clean-file verdict. Exact-byte verification blocks extraction or promotion if the managed copy changes. These records do not grant an outside arm human confirmation, Intake approval, or Core authority. The legacy `security_receipts` table remains only for schema compatibility and optional future provider-neutral receipts; no security provider ships with Project State.
 
 Intake Airlock Rule
 
