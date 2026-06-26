@@ -12,11 +12,15 @@ function main() {
     "function appendArchivedDeletionAudit",
     "function openDeleteArchivedProjectModal",
     "function openDeleteAllArchivedProjectsModal",
+    "function intakeItemsForAirlock",
+    "function removeIntakeRecordsForDeletedArchives",
     "data-action=\"delete-archived-project\"",
     "data-action=\"delete-all-archived-projects\"",
     "DELETE ARCHIVE",
     "DELETE ALL ARCHIVED",
+    "Capitalization does not matter.",
     "Managed source-file cleanup is separate.",
+    "It also removes archived Intake/Airlock records and Intake records tied to the removed projects.",
     "saveStore({ allowWithoutCoreApproval: true, reason: \"archived-project-delete\" })",
     "saveStore({ allowWithoutCoreApproval: true, reason: \"all-archived-projects-delete\" })"
   ];
@@ -39,6 +43,18 @@ function main() {
     "Bulk archived delete must remove only archived project records."
   );
   assert(
+    /removeIntakeRecordsForDeletedArchives\(projects, \{ includeAllArchivedIntake: true \}\);/.test(app),
+    "Bulk archived delete must remove archived Intake/Airlock ghosts."
+  );
+  assert(
+    /function validateTypedConfirmation[\s\S]+\.trim\(\)\.toUpperCase\(\) === expectedValue\.toUpperCase\(\)/.test(app),
+    "Typed delete confirmation must be case-insensitive."
+  );
+  assert(
+    /function renderIntakeQueue\(\) \{\s*const intakeItems = sortNewest\(intakeItemsForAirlock\(store\.intakeItems \|\| \[\]\), "createdAt"\);/.test(app),
+    "Intake Airlock must hide archived intake records from visible work lists."
+  );
+  assert(
     /\["delete-project", "delete-archived-project", "delete-all-archived-projects"\]\.includes\(action\)\) return role === "owner";/.test(app),
     "Permanent archive delete controls must remain owner-only."
   );
@@ -56,7 +72,8 @@ function main() {
     archivedOnlyPermanentDelete: true,
     bulkArchiveDelete: true,
     ownerOnlyControls: true,
-    typedConfirmation: true,
+    typedConfirmationCaseInsensitive: true,
+    intakeAirlockGhostCleanup: true,
     settingsAuditLog: true,
     activeDeleteRequestPreserved: true
   }, null, 2));

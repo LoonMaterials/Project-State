@@ -6692,6 +6692,8 @@ function renderProjectList() {
 
 function renderArchivedProjectList() {
   const projects = sortNewest(store.projects.filter((project) => project.archived), "updatedAt");
+  const archivedIntakeCount = visibleIntakeItems(store.intakeItems || []).filter((item) => item.archived).length;
+  const hasArchivedRecords = projects.length || archivedIntakeCount;
 
   shell(`
     <section class="view-head">
@@ -6699,7 +6701,7 @@ function renderArchivedProjectList() {
         <h1 class="view-title">${escapeHtml(t("archivedProjects"))}</h1>
         <p class="view-subtitle">${escapeHtml(t("archivedProjectsNotice"))}</p>
       </div>
-      ${projects.length ? `
+      ${hasArchivedRecords ? `
         <div class="button-row">
           <button class="btn secondary" data-action="show-projects">${escapeHtml(t("backToProjects"))}</button>
           <button class="btn danger" data-action="delete-all-archived-projects">Delete all archived</button>
@@ -7541,6 +7543,7 @@ function archivedDeletionSummary(project = {}) {
   const sourceCount = (project.sources || []).length;
   const historyCount = (project.changes || []).length;
   const imageCount = countProjectImages(project);
+  const intakeRecordCount = (store.intakeItems || []).filter((item) => item.projectId === project.id).length;
   return {
     projectId: project.id || "",
     projectName: project.name || "",
@@ -7548,7 +7551,8 @@ function archivedDeletionSummary(project = {}) {
     deletionStatus: project.deletionStatus || "",
     sourceCount,
     historyCount,
-    imageCount
+    imageCount,
+    intakeRecordCount
   };
 }
 
@@ -7625,6 +7629,25 @@ function isRawFileUploadStagingIntake(item = {}) {
 
 function visibleIntakeItems(intakeItems = []) {
   return (intakeItems || []).filter((item) => !isDiscoveryStagingIntake(item));
+}
+
+function intakeItemsForAirlock(intakeItems = []) {
+  return visibleIntakeItems(intakeItems).filter((item) => !item.archived);
+}
+
+function removeIntakeRecordsForDeletedArchives(projects = [], { includeAllArchivedIntake = false } = {}) {
+  const projectIds = new Set(projects.map((project) => project.id).filter(Boolean));
+  const removed = [];
+  store.intakeItems = (store.intakeItems || []).filter((item) => {
+    const tiedToDeletedProject = item.projectId && projectIds.has(item.projectId);
+    const archivedIntake = includeAllArchivedIntake && item.archived;
+    if (tiedToDeletedProject || archivedIntake) {
+      removed.push(item);
+      return false;
+    }
+    return true;
+  });
+  return removed;
 }
 
 function intakeQueueStateLabel(state = "new") {
@@ -8471,12 +8494,12 @@ function openDiscoveryReviewModal({ discoveryCaseId, analysis, extractions = [],
 }
 
 function renderIntakeQueue() {
-  const intakeItems = sortNewest(visibleIntakeItems(store.intakeItems || []), "createdAt");
+  const intakeItems = sortNewest(intakeItemsForAirlock(store.intakeItems || []), "createdAt");
   const pending = intakeItems
-    .filter((item) => item.status === "pending" && !item.archived)
+    .filter((item) => item.status === "pending")
     .sort((a, b) => intakeQueueStateRank(a.queueState) - intakeQueueStateRank(b.queueState) || Date.parse(b.createdAt || "") - Date.parse(a.createdAt || ""));
-  const reviewed = intakeItems.filter((item) => item.status !== "pending" || item.archived);
-  const stats = approvalQueueStats(intakeItems);
+  const reviewed = intakeItems.filter((item) => item.status !== "pending");
+  const stats = approvalQueueStats(store.intakeItems || []);
 
   shell(`
     <section class="view-head">
@@ -11164,7 +11187,7 @@ function typedConfirmationField(name, label, expectedValue) {
     <div class="field">
       <label for="${name}">${escapeHtml(label)}</label>
       <input id="${name}" name="${name}" placeholder="${escapeHtml(expectedValue)}" autocomplete="off" required>
-      <p class="item-meta">Type exactly: ${escapeHtml(expectedValue)}</p>
+      <p class="item-meta">Type: ${escapeHtml(expectedValue)}. Capitalization does not matter.</p>
     </div>
   `;
 }
@@ -12297,8 +12320,8 @@ function openDeleteProjectModal(projectId) {
 
 function validateTypedConfirmation(form, data, fieldName, expectedValue) {
   const field = form.querySelector(`[name="${fieldName}"]`);
-  if (String(data[fieldName] || "").trim() === expectedValue) return true;
-  field?.setCustomValidity(`Type exactly: ${expectedValue}`);
+  if (String(data[fieldName] || "").trim().toUpperCase() === expectedValue.toUpperCase()) return true;
+  field?.setCustomValidity(`Type ${expectedValue}. Capitalization does not matter.`);
   field?.reportValidity();
   field?.setCustomValidity("");
   return false;
@@ -12313,7 +12336,7 @@ function openDeleteArchivedProjectModal(projectId) {
     title: "Delete archived project",
     submitText: "Delete archived project",
     body: `
-      <p class="notice">This permanently removes the archived project record from Project State. It removes the project from active and archived lists. Managed source-file cleanup is separate.</p>
+      <p class="notice">This permanently removes the archived project record from Project State. It also removes Intake/Airlock records tied to this project. Managed source-file cleanup is separate.</p>
       <div class="meta-grid">
         <div>
           <p class="meta-label">Project</p>
@@ -12327,6 +12350,10 @@ function openDeleteArchivedProjectModal(projectId) {
           <p class="meta-label">History records</p>
           <p>${escapeHtml(String((project.changes || []).length))}</p>
         </div>
+        <div>
+          <p class="meta-label">Related intake records</p>
+          <p>${escapeHtml(String((store.intakeItems || []).filter((item) => item.projectId === project.id).length))}</p>
+        </div>
       </div>
       ${confirmationField("confirmPermanentArchiveDelete", "I understand this archived project record will be removed from Project State.")}
       ${typedConfirmationField("deleteArchiveConfirmation", "Confirm deletion", "DELETE ARCHIVE")}
@@ -12337,6 +12364,7 @@ function openDeleteArchivedProjectModal(projectId) {
       const actor = getOrCreateActor(data.actorName, "Human");
       if (!validateActorPermission(actor, "admin", null)) return false;
       appendArchivedDeletionAudit([project], actor, data.reason);
+      removeIntakeRecordsForDeletedArchives([project]);
       store.projects = store.projects.filter((item) => item.id !== project.id);
       if (activeProjectId === project.id) activeProjectId = null;
       activeRootView = "archived";
@@ -12347,21 +12375,38 @@ function openDeleteArchivedProjectModal(projectId) {
 
 function openDeleteAllArchivedProjectsModal() {
   const projects = sortNewest(store.projects.filter((project) => project.archived), "updatedAt");
-  if (!projects.length) return;
+  const archivedIntakeCount = visibleIntakeItems(store.intakeItems || []).filter((item) => item.archived).length;
+  const projectIds = new Set(projects.map((project) => project.id));
+  const relatedIntakeCount = visibleIntakeItems(store.intakeItems || []).filter((item) => item.projectId && projectIds.has(item.projectId)).length;
+  if (!projects.length && !archivedIntakeCount) return;
 
   showModal({
-    title: "Delete all archived projects",
+    title: "Delete all archived records",
     submitText: "Delete all archived",
     body: `
-      <p class="notice">This permanently removes ${escapeHtml(String(projects.length))} archived project record${projects.length === 1 ? "" : "s"} from Project State. Managed source-file cleanup is separate.</p>
-      <div class="item">
+      <p class="notice">This permanently removes archived project records from Project State. It also removes archived Intake/Airlock records and Intake records tied to the removed projects. Managed source-file cleanup is separate.</p>
+      <div class="meta-grid">
+        <div>
+          <p class="meta-label">Archived projects</p>
+          <p>${escapeHtml(String(projects.length))}</p>
+        </div>
+        <div>
+          <p class="meta-label">Archived intake records</p>
+          <p>${escapeHtml(String(archivedIntakeCount))}</p>
+        </div>
+        <div>
+          <p class="meta-label">Project-linked intake records</p>
+          <p>${escapeHtml(String(relatedIntakeCount))}</p>
+        </div>
+      </div>
+      ${projects.length ? `<div class="item">
         <p class="meta-label">Archived records to remove</p>
         <ul>
           ${projects.slice(0, 20).map((project) => `<li>${escapeDisplay(project.name, DISPLAY_META_LIMIT)}</li>`).join("")}
           ${projects.length > 20 ? `<li>…and ${escapeHtml(String(projects.length - 20))} more</li>` : ""}
         </ul>
-      </div>
-      ${confirmationField("confirmPermanentAllArchiveDelete", "I understand all archived project records will be removed from Project State.")}
+      </div>` : ""}
+      ${confirmationField("confirmPermanentAllArchiveDelete", "I understand archived Project State records will be removed.")}
       ${typedConfirmationField("deleteAllArchivesConfirmation", "Confirm deletion", "DELETE ALL ARCHIVED")}
       ${auditFields({ actorLabel: t("changedBy"), reasonLabel: t("reason") })}
     `,
@@ -12371,6 +12416,7 @@ function openDeleteAllArchivedProjectsModal() {
       if (!validateActorPermission(actor, "admin", null)) return false;
       const archivedIds = new Set(projects.map((project) => project.id));
       appendArchivedDeletionAudit(projects, actor, data.reason);
+      removeIntakeRecordsForDeletedArchives(projects, { includeAllArchivedIntake: true });
       store.projects = store.projects.filter((project) => !archivedIds.has(project.id));
       if (activeProjectId && archivedIds.has(activeProjectId)) activeProjectId = null;
       activeRootView = "archived";
