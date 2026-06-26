@@ -326,7 +326,7 @@ File Arm Contract v0.1:
 
 ## 10. AI and Context Readiness
 
-- No live AI provider integration is installed.
+- Optional local AI provider plumbing is installed for Qwen3 8B through Ollama; cloud/API AI is still unconfigured.
 - AI suggestions and work products are modeled as proposals.
 - Context Pack presets:
   - Current State
@@ -848,7 +848,7 @@ Key boundaries:
 
 ## 25. AI Analysis Arm Contract v0.1
 
-Status: contract and fake local validation arm implemented 2026-06-20; no real cloud or local model provider is installed.
+Status: contract and fake local validation arm implemented 2026-06-20; optional Qwen3 8B local-provider plumbing added 2026-06-26; no cloud model provider is configured.
 
 The governing specification is `AI_ANALYSIS_ARM_CONTRACT.md`, with machine-readable contract and full request/result/receipt example at `fixtures/ai-analysis-arm-v0.1-contract.json` and `fixtures/ai-analysis-arm-v0.1-example.json`.
 
@@ -870,6 +870,7 @@ AI Analysis Arm v0.1 deliberately does not request project names or routes. Thos
 - The SQLite spine now contains 38 required tables, including eight additive Idea Analysis tables.
 - `analysisArms` exposes capability discovery, run creation, human authorization, batch submission, status/results/cancellation/receipts, human review, and bounded state reads.
 - The fake local arm produces deterministic evidence-backed candidates from exact chunks and makes no external request.
+- The optional Qwen3 8B local arm uses Ollama on loopback, records `externalTransmission: false`, and remains pre-Airlock/non-Core.
 - Machine privacy authorization and machine review decisions are blocked.
 - Wrong privacy classes, tampered chunk content, mismatched evidence, and conflicting idempotency reuse fail closed.
 - Exact retries deduplicate, completed jobs cannot be falsely cancelled, and forged continuation cursors are rejected.

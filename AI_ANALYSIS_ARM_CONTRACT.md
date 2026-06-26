@@ -1,7 +1,7 @@
 # AI Analysis Arm Contract v0.1
 
 Date: 2026-06-20  
-Status: contract and fake local validation arm implemented; no real provider integration installed
+Status: contract and fake local validation arm implemented; optional Qwen3 8B local-provider plumbing added
 
 ## Purpose
 
@@ -224,6 +224,19 @@ It may not:
 
 No provider integration should begin before steps 1 through 3 pass.
 
+## Optional local provider plumbing — Qwen3 8B
+
+Project State may use Qwen3 8B through a local Ollama runtime as an optional local AI provider. This provider remains inside the AI Analysis Arm boundary:
+
+- it receives only exact Discovery chunks covered by a human authorization record;
+- it runs as `executionLocation: local`;
+- it records provider/model provenance and a local transmission receipt;
+- it creates only non-authoritative Idea Candidates;
+- it cannot create Confirmed Idea Units, routing confirmations, Intake approval, Core records, or Change History;
+- it does not change the later human Idea Review, routing, Intake, or Core approval steps.
+
+If Qwen3 8B is not installed, Project State keeps the deterministic fake local arm available for contract and UI testing. Cloud or API-based "deep thinking" providers must use the same authorization, receipt, evidence, and Airlock boundary, but will require a separate explicit provider-allowed transmission flow.
+
 ## Foundation implementation — 2026-06-20
 
 Steps 1 through 3 are implemented and verified:
@@ -236,7 +249,7 @@ Steps 1 through 3 are implemented and verified:
 - human review can produce evidence-backed Confirmed Idea Units that remain non-Core;
 - append-only records, credential exclusion, integrity, backup, and restore passed focused verification.
 
-Credential configuration and a real provider remain intentionally unimplemented.
+Cloud credential configuration remains intentionally unimplemented. The first real provider plumbing is local-only Qwen3 8B through Ollama and is optional; it is not an approval path and it does not bypass Airlock.
 
 The human Idea Review surface is also implemented. It clearly labels the installed arm as a local deterministic test fixture, exposes evidence and uncertainty, requires a known human actor and reason, records append-only review decisions, and moves only Confirmed Idea Units into later naming and routing controls.
 

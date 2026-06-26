@@ -12,7 +12,7 @@ function collectKeys(value, output = []) { if (!value || typeof value !== "objec
 
 function main() {
   assert(contract.contractVersion === "0.1" && contract.purpose === "idea_candidate_discovery", "AI Analysis Arm identity is incorrect.", contract);
-  assert(contract.implementationStatus === "design_complete_no_provider_installed", "Contract incorrectly claims a provider implementation.");
+  assert(contract.implementationStatus === "optional_local_provider_plumbing_qwen3_8b", "Contract does not describe the current optional local provider plumbing.");
   assert(contract.operations.length === 6 && contract.operations.includes("cancelAnalysis") && contract.operations.includes("getResultPage"), "Analysis lifecycle operations are incomplete.", contract.operations);
   requireFields(example.submission, contract.submissionRequired, "Example submission");
   requireFields(example.submission.arm, contract.armRequired, "Example arm");
@@ -53,11 +53,11 @@ function main() {
   assert(example.receipt.boundary === contract.receiptBoundary, "Receipt boundary incorrectly implies authority.", example.receipt);
   assert(example.receipt.candidateMappings.length === example.result.candidates.length, "Candidate mapping receipt is incomplete.");
   assert(new Set(contract.errorCodes).size === contract.errorCodes.length && contract.errorCodes.includes("PRIVACY_SCOPE_MISMATCH") && contract.errorCodes.includes("BUDGET_EXCEEDED"), "Stable errors are incomplete or duplicated.", contract.errorCodes);
-  for (const phrase of ["does not ask the provider to name projects", "Human privacy authorization", "Large-document continuation", "Credentials", "No provider integration should begin before steps 1 through 3 pass"]) assert(documentation.includes(phrase), `AI Analysis Arm documentation is missing: ${phrase}`);
+  for (const phrase of ["does not ask the provider to name projects", "Human privacy authorization", "Large-document continuation", "Credentials", "Qwen3 8B"]) assert(documentation.includes(phrase), `AI Analysis Arm documentation is missing: ${phrase}`);
   assert(contract.authorityRules.some((rule) => rule.includes("does not request project names")), "Project naming was not deferred from AI Analysis Arm v0.1.");
   assert(contract.largeDocumentRules.some((rule) => rule.includes("No candidate or chunk may be silently omitted")), "Large-document no-silent-omission rule is missing.");
   console.log("AI Analysis Arm Contract Check");
-  console.log(JSON.stringify({ contractVersion: contract.contractVersion, operations: contract.operations.length, jobStates: contract.jobStates.length, errorCodes: contract.errorCodes.length, privacyAuthorizationRequired: true, exactChunkEvidenceRequired: true, coverageValidated: true, projectNamingDeferred: true, humanAuthorityBlocked: true, idempotentPaging: true, providerInstalled: false }, null, 2));
+  console.log(JSON.stringify({ contractVersion: contract.contractVersion, operations: contract.operations.length, jobStates: contract.jobStates.length, errorCodes: contract.errorCodes.length, privacyAuthorizationRequired: true, exactChunkEvidenceRequired: true, coverageValidated: true, projectNamingDeferred: true, humanAuthorityBlocked: true, idempotentPaging: true, optionalLocalProviderPlumbing: true }, null, 2));
   console.log("AI Analysis Arm contract: ok");
 }
 

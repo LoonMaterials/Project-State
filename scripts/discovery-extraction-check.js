@@ -11,8 +11,12 @@ async function main() {
   const paragraphs = Array.from({ length: 80 }, (_, index) => `Paragraph ${index + 1}: deterministic extraction preserves exact source lineage and explicit status.`).join("\n");
   const textPath = path.join(inputRoot, "long-notes.txt");
   const imagePath = path.join(inputRoot, "image.png");
+  const largeImagePath = path.join(inputRoot, "large-archive-image.png");
+  const jsonPath = path.join(inputRoot, "archive-state.json");
   await fsp.writeFile(textPath, paragraphs, "utf8");
   await fsp.writeFile(imagePath, Buffer.from([0x89,0x50,0x4e,0x47,0x0d,0x0a,0x1a,0x0a]));
+  await fsp.writeFile(largeImagePath, Buffer.alloc(30 * 1024 * 1024, 7));
+  await fsp.writeFile(jsonPath, JSON.stringify({ project: "Archive Scale", ideas: [{ title: "JSON readable discovery", body: "JSON files should be converted into readable Discovery text." }] }, null, 2), "utf8");
   const bridge = createProjectStateDesktopBridge({ storageRoot });
   const stagedText = await bridge.discoveryStorage.stageTrustedFile({ path: textPath, actorId: "actor_owner", reason: "Trusted test fixture.", externalSecurityAcknowledged: true, timestamp: "2026-06-19T18:01:00.000Z" });
   const extracted = await bridge.discoveryStorage.extractFileVersion({ discoveryCaseId: stagedText.discoveryCaseId, fileVersionId: stagedText.fileVersionId, actorId: "deterministic_extractor", createdAt: "2026-06-19T18:02:00.000Z", chunkCharacters: 700 });
@@ -21,10 +25,17 @@ async function main() {
   const stagedImage = await bridge.discoveryStorage.stageTrustedFile({ path: imagePath, actorId: "actor_owner", reason: "Trusted image fixture.", externalSecurityAcknowledged: true, timestamp: "2026-06-19T18:03:00.000Z" });
   const image = await bridge.discoveryStorage.extractFileVersion({ discoveryCaseId: stagedImage.discoveryCaseId, fileVersionId: stagedImage.fileVersionId, actorId: "deterministic_extractor", createdAt: "2026-06-19T18:04:00.000Z" });
   assert(image.extraction.status === "metadata_only" && image.chunks.length === 0, "Image extraction was dishonest.", image);
+  const stagedLargeImage = await bridge.discoveryStorage.stageTrustedFile({ path: largeImagePath, actorId: "actor_owner", reason: "Trusted large image fixture.", externalSecurityAcknowledged: true, timestamp: "2026-06-19T18:05:00.000Z" });
+  const largeImage = await bridge.discoveryStorage.extractFileVersion({ discoveryCaseId: stagedLargeImage.discoveryCaseId, fileVersionId: stagedLargeImage.fileVersionId, actorId: "deterministic_extractor", createdAt: "2026-06-19T18:06:00.000Z" });
+  assert(largeImage.extraction.status === "metadata_only" && stagedLargeImage.sha256, "Large image above the old 25 MB limit was not safely staged as metadata-only.", largeImage);
+  const stagedJson = await bridge.discoveryStorage.stageTrustedFile({ path: jsonPath, actorId: "actor_owner", reason: "Trusted JSON fixture.", externalSecurityAcknowledged: true, timestamp: "2026-06-19T18:07:00.000Z" });
+  const json = await bridge.discoveryStorage.extractFileVersion({ discoveryCaseId: stagedJson.discoveryCaseId, fileVersionId: stagedJson.fileVersionId, actorId: "deterministic_extractor", createdAt: "2026-06-19T18:08:00.000Z", chunkCharacters: 700 });
+  const jsonText = await bridge.discoveryStorage.readExtractionText({ extractionId: json.extraction.id });
+  assert(json.extraction.status === "complete" && jsonText.text.includes("JSON file: archive-state.json") && jsonText.text.includes("JSON readable discovery"), "JSON extraction did not create readable Discovery text.", json);
   const integrity = await bridge.storage.verifyIntegrity();
-  assert(integrity.ok && integrity.checkedFiles.discoveryChunks === extracted.chunks.length, "Derivative integrity failed.", integrity);
+  assert(integrity.ok && integrity.checkedFiles.discoveryChunks === extracted.chunks.length + json.chunks.length, "Derivative integrity failed.", integrity);
   const db = new DatabaseSync(path.join(storageRoot, "project-state.db")); let blocked = false; try { db.exec(`UPDATE discovery_extractions SET status='failed' WHERE id='${extracted.extraction.id}'`); } catch { blocked = true; } db.close(); assert(blocked, "Extraction append-only trigger failed.");
   await bridge.storage.reset(); await fsp.rm(storageRoot,{recursive:true,force:true}); await fsp.rm(inputRoot,{recursive:true,force:true});
-  console.log("Discovery Extraction Check"); console.log(JSON.stringify({ completeText:true, chunks:extracted.chunks.length, metadataOnlyImage:true, derivativeIntegrity:true, appendOnly:true },null,2)); console.log("Discovery extraction: ok");
+  console.log("Discovery Extraction Check"); console.log(JSON.stringify({ completeText:true, chunks:extracted.chunks.length, metadataOnlyImage:true, largeImageAboveOldLimit:true, jsonReadable:true, derivativeIntegrity:true, appendOnly:true },null,2)); console.log("Discovery extraction: ok");
 }
 if(require.main===module)main().catch((error)=>{console.error("Discovery extraction failed:");console.error(error.message);if(error.details)console.error(JSON.stringify(error.details,null,2));process.exitCode=1;});

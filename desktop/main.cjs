@@ -65,6 +65,31 @@ function registerApiArmTransportIpc(manager) {
   handle("api-arm-transport:revoke", (payload) => manager.revoke(payload));
 }
 
+async function showNativeOpenDialog(options) {
+  console.log(JSON.stringify({
+    event: "native-dialog-open",
+    title: options.title || "",
+    properties: options.properties || [],
+    at: new Date().toISOString()
+  }));
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.show();
+    mainWindow.focus();
+    mainWindow.moveTop();
+    await new Promise((resolve) => setTimeout(resolve, 75));
+  }
+  const result = await dialog.showOpenDialog(options);
+  console.log(JSON.stringify({
+    event: "native-dialog-result",
+    title: options.title || "",
+    canceled: Boolean(result.canceled),
+    fileCount: Array.isArray(result.filePaths) ? result.filePaths.length : 0,
+    at: new Date().toISOString()
+  }));
+  return result;
+}
+
 function registerNativeDialogIpc() {
   ipcMain.handle("native-dialog:pick-file", async (event, payload = {}) => {
     if (!trustedRenderer(event)) throw new Error("Untrusted renderer request.");
@@ -74,7 +99,7 @@ function registerNativeDialogIpc() {
       properties: ["openFile"],
       filters
     };
-    const result = mainWindow ? await dialog.showOpenDialog(mainWindow, options) : await dialog.showOpenDialog(options);
+    const result = await showNativeOpenDialog(options);
     if (result.canceled || !result.filePaths[0]) return null;
     const localPath = path.resolve(result.filePaths[0]);
     return { localPath, name: path.basename(localPath) };
@@ -86,7 +111,7 @@ function registerNativeDialogIpc() {
       title: String(payload.title || "Choose a folder"),
       properties: ["openDirectory", "createDirectory"]
     };
-    const result = mainWindow ? await dialog.showOpenDialog(mainWindow, options) : await dialog.showOpenDialog(options);
+    const result = await showNativeOpenDialog(options);
     if (result.canceled || !result.filePaths[0]) return null;
     return { localPath: path.resolve(result.filePaths[0]) };
   });
@@ -99,7 +124,7 @@ function registerNativeDialogIpc() {
       properties: ["openFile", "multiSelections"],
       filters
     };
-    const result = mainWindow ? await dialog.showOpenDialog(mainWindow, options) : await dialog.showOpenDialog(options);
+    const result = await showNativeOpenDialog(options);
     if (result.canceled) return [];
     return result.filePaths.map((filePath) => ({ localPath: path.resolve(filePath), name: path.basename(filePath) }));
   });

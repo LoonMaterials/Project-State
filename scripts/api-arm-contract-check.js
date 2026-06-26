@@ -123,7 +123,7 @@ function validateDocs(contractDoc, bridgeDoc, spineDoc, readme) {
   assert(bridgeDoc.includes("API_ARM_CONTRACT.md"), "Desktop bridge doc does not point to the API arm contract.");
   assert(spineDoc.includes("API Arm Contract v0.1"), "Desktop spine doc does not point to API Arm Contract v0.1.");
   assert(readme.includes("API_ARM_CONTRACT.md"), "README does not point to the API arm contract.");
-  assert(readme.includes("No provider-specific calendar, email, chat, Codex, or AI connector is installed yet"), "README must distinguish local transport from provider-specific integrations.");
+  assert(readme.includes("No provider-specific calendar, email, chat, or Codex connector is installed yet") && readme.includes("Local AI analysis can optionally use Qwen3 8B"), "README must distinguish local AI from provider-specific cloud/API integrations.");
   return { documentationAligned: true };
 }
 

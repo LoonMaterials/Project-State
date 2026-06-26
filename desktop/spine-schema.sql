@@ -499,4 +499,4 @@ INSERT OR IGNORE INTO meta (key, value_json, updated_at)
 VALUES ('discovery_schema', '{"version":"0.1","migration":"additive"}', '2026-06-19T00:00:00.000Z');
 
 INSERT OR IGNORE INTO meta (key, value_json, updated_at)
-VALUES ('idea_analysis_schema', '{"version":"0.1","migration":"additive","providerInstalled":false}', '2026-06-20T00:00:00.000Z');
+VALUES ('idea_analysis_schema', '{"version":"0.1","migration":"additive","optionalLocalProvider":"qwen3:8b","cloudProviderConfigured":false}', '2026-06-20T00:00:00.000Z');

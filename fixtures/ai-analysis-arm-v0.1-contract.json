@@ -4,7 +4,7 @@
   "contractVersion": "0.1",
   "direction": "authorized-chunks-to-non-authoritative-idea-candidates",
   "runtime": "desktop-required",
-  "implementationStatus": "design_complete_no_provider_installed",
+  "implementationStatus": "optional_local_provider_plumbing_qwen3_8b",
   "purpose": "idea_candidate_discovery",
   "operations": ["describeCapabilities", "submitAnalysisBatch", "getAnalysisStatus", "getResultPage", "cancelAnalysis", "getReceipt"],
   "jobStates": ["accepted", "queued", "running", "partial", "complete", "failed", "cancel_requested", "cancelled"],

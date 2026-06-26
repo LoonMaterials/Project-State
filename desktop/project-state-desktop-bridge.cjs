@@ -5,6 +5,13 @@ const os = require("node:os");
 const crypto = require("node:crypto");
 const zlib = require("node:zlib");
 const { DatabaseSync } = require("node:sqlite");
+const {
+  QWEN3_8B_PROVIDER_ID,
+  QWEN3_8B_ARM_ID,
+  QWEN3_8B_MODEL_ID,
+  describeLocalAiProviders,
+  generateQwenIdeaCandidates
+} = require("./local-ai-providers.cjs");
 
 const ROOT = path.join(__dirname, "..");
 const SCHEMA_FILE = path.join(__dirname, "spine-schema.sql");
@@ -17,7 +24,8 @@ const FOLDERS = ["sources", "extracts", "attachments", "quarantine", "discovery"
 const SPLIT_TABLES = ["projects", "changes", "sources", "extracts", "attachments", "draft_projects"];
 const BACKUP_MANAGED_FOLDERS = ["sources", "extracts", "attachments", "quarantine", "discovery", "manifests", "recovery"];
 const IMPORT_FILE_EXTENSIONS = new Set([".pdf", ".docx", ".txt", ".md", ".csv", ".json", ".png", ".jpg", ".jpeg", ".webp", ".gif"]);
-const MAX_IMPORT_FILE_BYTES = 26214400;
+const MAX_IMPORT_FILE_BYTES = 2147483648;
+const MAX_TEXT_EXTRACTION_BYTES = 104857600;
 const MAX_IMPORT_FILES = 500;
 const REQUIRED_TABLES = [
   "meta",
@@ -165,7 +173,7 @@ function createProjectStateDesktopBridge(options = {}) {
     },
     analysisArms: {
       async describeCapabilities() {
-        return describeFakeAnalysisArmCapabilities();
+        return describeAnalysisArmCapabilities();
       },
       async createRun(payload = {}) {
         return createIdeaAnalysisRun({ storageRoot, dbPath, payload });
@@ -286,7 +294,7 @@ async function inspectImportSelection({ paths = [] } = {}) {
       return;
     }
     if (stat.size > MAX_IMPORT_FILE_BYTES) {
-      skipped.push({ localPath, reason: "File exceeds the 25 MB import limit." });
+      skipped.push({ localPath, reason: `File exceeds the ${formatBytesForLog(MAX_IMPORT_FILE_BYTES)} local archive import limit.` });
       return;
     }
     candidates.push({
@@ -315,21 +323,21 @@ async function stageManagedFiles({ storageRoot, files = [] } = {}) {
       const extension = path.extname(localPath).toLowerCase();
       if (!stat.isFile() || stat.isSymbolicLink()) throw new Error("Only regular files can be imported.");
       if (!IMPORT_FILE_EXTENSIONS.has(extension)) throw new Error("File type is not supported.");
-      if (!stat.size || stat.size > MAX_IMPORT_FILE_BYTES) throw new Error("File size is outside the allowed range.");
-      const bytes = await fsp.readFile(localPath);
-      const sha256 = crypto.createHash("sha256").update(bytes).digest("hex");
+      if (!stat.size || stat.size > MAX_IMPORT_FILE_BYTES) throw new Error("File size is outside the allowed archive range.");
       const fileName = safeFileName(path.basename(localPath));
       const targetPath = path.join(storageRoot, "sources", intakeId, fileName);
       const tempPath = path.join(storageRoot, "temp", `${intakeId}-${Date.now()}-${fileName}.import`);
       await fsp.mkdir(path.dirname(tempPath), { recursive: true });
-      await fsp.writeFile(tempPath, bytes, { flag: "wx" });
+      await fsp.copyFile(localPath, tempPath, fs.constants.COPYFILE_EXCL);
+      const sha256 = await checksumFile(tempPath);
+      const stagedStat = await fsp.stat(tempPath);
       await fsp.mkdir(path.dirname(targetPath), { recursive: true });
       await fsp.rename(tempPath, targetPath);
       staged.push({
         intakeId,
         fileName,
         contentType: mimeFromFileName(fileName),
-        size: bytes.length,
+        size: stagedStat.size,
         sha256,
         managedPath: relativeManagedPath(storageRoot, targetPath),
         originalPath: localPath,
@@ -1077,6 +1085,7 @@ const IDEA_ANALYSIS_STATUSES = new Set(["running", "complete", "partial", "faile
 const IDEA_REVIEW_ACTIONS = new Set(["accept", "reject", "defer", "rename", "correct_summary", "merge", "split", "mark_duplicate", "mark_uncertain"]);
 const FAKE_ANALYSIS_ARM_ID = "project_state_fake_analysis";
 const FAKE_ANALYSIS_PROVIDER_ID = "project_state_fake_local";
+const LOCAL_ANALYSIS_PROVIDER_IDS = new Set([FAKE_ANALYSIS_PROVIDER_ID, QWEN3_8B_PROVIDER_ID]);
 
 function analysisArmError(code, message, fieldPath = "") {
   const error = new Error(message);
@@ -1097,6 +1106,36 @@ function describeFakeAnalysisArmCapabilities() {
     limits: { maximumRequestBytes: 1048576, maximumChunks: 100, candidatesPerResultPage: contract.maximums.candidatesPerResultPage },
     retention: { policyId: "local_fixture_no_external_transmission", declaredRetention: "Project State test storage only" },
     realProviderInstalled: false
+  };
+}
+
+async function describeAnalysisArmCapabilities() {
+  const fake = describeFakeAnalysisArmCapabilities();
+  const providers = await describeLocalAiProviders();
+  const qwen = providers.find((provider) => provider.providerId === QWEN3_8B_PROVIDER_ID);
+  const selected = qwen?.available ? qwen : null;
+  return {
+    ...fake,
+    arm: selected?.arm || fake.arm,
+    supports: {
+      ...fake.supports,
+      structuredOutput: true,
+      relationships: Boolean(selected),
+      clarificationQuestions: true,
+      usageReporting: true
+    },
+    retention: selected?.retention || fake.retention,
+    localProviders: providers,
+    defaultProviderId: selected?.providerId || FAKE_ANALYSIS_PROVIDER_ID,
+    providerMode: selected ? "local_ai" : "local_fixture",
+    realProviderInstalled: Boolean(selected),
+    installSuggestions: [{
+      providerId: QWEN3_8B_PROVIDER_ID,
+      runtime: "ollama",
+      modelId: QWEN3_8B_MODEL_ID,
+      displayName: "Qwen3 8B",
+      command: "ollama pull qwen3:8b"
+    }]
   };
 }
 
@@ -1145,7 +1184,7 @@ async function authorizeIdeaTransmission({ storageRoot, dbPath, payload = {} }) 
   const privacyClass = String(payload.privacyClass || "");
   if (purpose !== "idea_candidate_discovery") throw analysisArmError("INVALID_PURPOSE", "Privacy Authorization purpose is not supported.", "purpose");
   if (!DISCOVERY_PRIVACY_CLASSES.has(privacyClass)) throw analysisArmError("PRIVACY_SCOPE_MISMATCH", "Privacy Authorization class is not supported.", "privacyClass");
-  if (providerId !== FAKE_ANALYSIS_PROVIDER_ID && privacyClass !== "provider_allowed") throw analysisArmError("PRIVACY_SCOPE_MISMATCH", "Remote provider transmission requires the provider_allowed privacy class.", "privacyClass");
+  if (!LOCAL_ANALYSIS_PROVIDER_IDS.has(providerId) && privacyClass !== "provider_allowed") throw analysisArmError("PRIVACY_SCOPE_MISMATCH", "Remote provider transmission requires the provider_allowed privacy class.", "privacyClass");
   const chunkScopes = Array.isArray(payload.chunkScopes) ? cloneJson(payload.chunkScopes) : [];
   if (!chunkScopes.length) throw analysisArmError("PRIVACY_SCOPE_MISMATCH", "Privacy Authorization requires at least one exact chunk scope.", "chunkScopes");
   const record = { id, schemaVersion: "0.1", discoveryCaseId, authorizedBy, actorType: "human", authorizedAt, providerId, purpose, privacyClass, chunkScopes, redactionMode: String(payload.redactionMode || "none"), expiresAt: payload.expiresAt || null, reason: requiredDiscoveryText(payload.reason, "Privacy Authorization reason") };
@@ -1207,7 +1246,9 @@ async function submitFakeAnalysisBatch({ storageRoot, dbPath, envelope = {} }) {
   if (envelope.purpose !== contract.purpose) throw analysisArmError("INVALID_PURPOSE", "Analysis purpose is not supported.", "purpose");
   const armId = requiredDiscoveryId(envelope.arm?.armId, "Analysis Arm ID");
   const providerId = requiredDiscoveryId(envelope.arm?.providerId, "Analysis provider ID");
-  if (armId !== FAKE_ANALYSIS_ARM_ID || providerId !== FAKE_ANALYSIS_PROVIDER_ID) throw analysisArmError("INVALID_ARM", "Only the fake local analysis arm is implemented.", "arm");
+  const fakeArmSelected = armId === FAKE_ANALYSIS_ARM_ID && providerId === FAKE_ANALYSIS_PROVIDER_ID;
+  const qwenArmSelected = armId === QWEN3_8B_ARM_ID && providerId === QWEN3_8B_PROVIDER_ID;
+  if (!fakeArmSelected && !qwenArmSelected) throw analysisArmError("INVALID_ARM", "Only the fake local fixture arm and Qwen3 8B local arm are implemented.", "arm");
   const forbiddenKeys = new Set(contract.forbiddenSubmissionAndResultFields);
   const forbidden = collectObjectKeys(envelope).filter((key) => forbiddenKeys.has(key));
   if (forbidden.length) throw analysisArmError("FORBIDDEN_FIELD", `Analysis envelope contains forbidden fields: ${[...new Set(forbidden)].join(", ")}`, forbidden[0]);
@@ -1245,18 +1286,24 @@ async function submitFakeAnalysisBatch({ storageRoot, dbPath, envelope = {} }) {
       validated.push({ chunk, extraction, text: physicalText });
     }
     const maxCandidates = Math.min(Number(envelope.analysisOptions?.maxCandidates) || 100, contract.maximums.candidatesPerResultPage);
-    const rawCandidates = validated.slice(0, maxCandidates).map((item, index) => fakeIdeaCandidateFromChunk({ ...item, envelope, index }));
+    const rawCandidates = qwenArmSelected
+      ? await generateQwenIdeaCandidates({ validated, envelope, ideaContract, maxCandidates })
+      : validated.slice(0, maxCandidates).map((item, index) => fakeIdeaCandidateFromChunk({ ...item, envelope, index }));
     for (const candidate of rawCandidates) {
       if (!ideaContract.objects.IdeaCandidate.candidateTypes.includes(candidate.candidateType) || !candidate.evidence.length) throw analysisArmError("PROVIDER_RESPONSE_INVALID", "Fake provider generated an invalid candidate.");
     }
     const completedAt = nowIso();
     const candidateRecords = rawCandidates.map((candidate) => ({ ...candidate, id: makeId("idea_candidate"), schemaVersion: "0.1", analysisRunId, discoveryCaseId, createdBy: armId, createdByType: "tool", createdAt: completedAt, method: "ai" }));
-    const result = { contractVersion: "0.1", requestId, idempotencyKey, externalJobId: `fake_job_${requestId}`, status: "complete", completedAt, resolvedProvider: { providerId, modelId: "deterministic_fake_v0.1", resolvedModelVersion: "0.1.0" }, coverage: { receivedChunks: validated.map(({ chunk }) => ({ discoveryChunkId: chunk.id, chunkTextSha256: chunk.textSha256 })), analyzedChunkIds: validated.map(({ chunk }) => chunk.id), skippedChunks: [], failedChunks: [], coverageStatus: "complete", continuationCursor: null }, candidates: rawCandidates, usage: { inputTokens: Math.ceil(validated.reduce((sum, item) => sum + item.text.length, 0) / 4), outputTokens: Math.ceil(JSON.stringify(rawCandidates).length / 4), providerRequestCount: 0, durationMs: 0, cost: { amount: 0, currency: "USD", estimated: false } }, retention: { policyId: "local_fixture_no_external_transmission", declaredRetention: "Project State test storage only", deletionAt: null } };
+    const modelId = qwenArmSelected ? QWEN3_8B_MODEL_ID : "deterministic_fake_v0.1";
+    const retention = qwenArmSelected
+      ? { policyId: "local_ollama_machine_only", declaredRetention: "Local model runtime on this machine; no cloud transmission by Project State.", deletionAt: null }
+      : { policyId: "local_fixture_no_external_transmission", declaredRetention: "Project State test storage only", deletionAt: null };
+    const result = { contractVersion: "0.1", requestId, idempotencyKey, externalJobId: qwenArmSelected ? `local_ollama_${requestId}` : `fake_job_${requestId}`, status: "complete", completedAt, resolvedProvider: { providerId, modelId, resolvedModelVersion: modelId }, coverage: { receivedChunks: validated.map(({ chunk }) => ({ discoveryChunkId: chunk.id, chunkTextSha256: chunk.textSha256 })), analyzedChunkIds: validated.map(({ chunk }) => chunk.id), skippedChunks: [], failedChunks: [], coverageStatus: "complete", continuationCursor: null }, candidates: rawCandidates, usage: { inputTokens: Math.ceil(validated.reduce((sum, item) => sum + item.text.length, 0) / 4), outputTokens: Math.ceil(JSON.stringify(rawCandidates).length / 4), providerRequestCount: qwenArmSelected ? 1 : 0, durationMs: 0, cost: { amount: 0, currency: "USD", estimated: false } }, retention };
     const receipt = { contractVersion: "0.1", requestId, idempotencyKey, analysisRunId, resultPage: 0, candidateMappings: candidateRecords.map((candidate) => ({ clientCandidateId: candidate.clientCandidateId, ideaCandidateId: candidate.id })), receivedAt: completedAt, boundary: contract.receiptBoundary };
     const transmissionReceipt = { id: makeId("idea_transmission"), discoveryCaseId, analysisRunId, authorizationId, providerId, purpose: envelope.purpose, transmittedAt: completedAt, executionLocation: "local", externalTransmission: false, chunkScopes: validated.map(({ chunk }) => ({ discoveryChunkId: chunk.id, chunkTextSha256: chunk.textSha256, redactionState: "original" })) };
     const job = { id: requestId, analysisRunId, discoveryCaseId, armId, providerId, idempotencyKey, payloadChecksum: canonicalChecksum, status: "complete", submittedAt: envelope.submittedAt, updatedAt: completedAt, batch: cloneJson(envelope.batch), privacyAuthorizationId: authorizationId, transmissionReceiptId: transmissionReceipt.id, result };
     const nextCoverage = { expectedChunkCount: validated.length, analyzedChunkIds: validated.map(({ chunk }) => chunk.id), skippedChunkIds: [], blockedChunkIds: [], failedChunkIds: [], coverageRatio: 1 };
-    const nextRun = { ...run, status: "complete", completedAt, coverage: nextCoverage, candidateIds: candidateRecords.map((candidate) => candidate.id), provenance: { ...run.provenance, providerId, modelId: "deterministic_fake_v0.1", requestId } };
+    const nextRun = { ...run, status: "complete", completedAt, coverage: nextCoverage, candidateIds: candidateRecords.map((candidate) => candidate.id), provenance: { ...run.provenance, providerId, modelId, requestId } };
     db.exec("BEGIN IMMEDIATE TRANSACTION");
     try {
       insertStrict(db, "ai_analysis_jobs", { id: requestId, analysis_run_id: analysisRunId, discovery_case_id: discoveryCaseId, arm_id: armId, provider_id: providerId, idempotency_key: idempotencyKey, payload_checksum: canonicalChecksum, status: "complete", submitted_at: envelope.submittedAt, updated_at: completedAt, record_json: JSON.stringify(job) });
@@ -1368,7 +1415,7 @@ async function stageTrustedDiscoveryFile({ storageRoot, dbPath, payload = {} }) 
   const sourcePath = path.resolve(requiredDiscoveryText(payload.path || payload.localPath, "Selected file path"));
   if (!fs.existsSync(sourcePath) || !fs.statSync(sourcePath).isFile()) throw new Error("Selected file does not exist or is not a file.");
   const stat = fs.statSync(sourcePath);
-  if (stat.size > MAX_IMPORT_FILE_BYTES) throw new Error("Selected file exceeds the configured import size limit.");
+  if (stat.size > MAX_IMPORT_FILE_BYTES) throw new Error(`Selected file exceeds the configured ${formatBytesForLog(MAX_IMPORT_FILE_BYTES)} archive import size limit.`);
   const extension = path.extname(sourcePath).toLowerCase();
   if (!IMPORT_FILE_EXTENSIONS.has(extension)) throw new Error("Selected file type is not supported for Discovery.");
   const timestamp = requiredDiscoveryTimestamp(payload.timestamp || nowIso(), "Staging timestamp");
@@ -1421,8 +1468,16 @@ async function extractDiscoveryFileVersion({ storageRoot, dbPath, payload = {} }
   let error = null;
   try {
     if ([".txt", ".md", ".csv", ".json", ".pdf", ".docx"].includes(extension)) {
+      if ((version.byteSize || 0) > MAX_TEXT_EXTRACTION_BYTES) {
+        status = "large_file_pending";
+        error = {
+          name: "LargeFileDeferred",
+          message: `File was staged safely, but immediate text extraction is deferred above ${formatBytesForLog(MAX_TEXT_EXTRACTION_BYTES)}.`
+        };
+      } else {
       text = cleanExtractedText(await extractText(resolveManagedPath(storageRoot, version.managedPath)) || "");
       status = text ? "complete" : "partial";
+      }
     } else if ([".png", ".jpg", ".jpeg", ".webp", ".gif"].includes(extension)) status = "metadata_only";
   } catch (caught) {
     status = "failed";
@@ -3483,11 +3538,34 @@ async function readAsDataUrl(file) {
 async function extractText(file) {
   const fileName = pathFromFileLike(file) || file?.name || "";
   const extension = path.extname(fileName).slice(1).toLowerCase();
-  if (extension === "txt" || extension === "md") return cleanExtractedText(await readAsText(file));
+  if (extension === "txt" || extension === "md" || extension === "csv") return cleanExtractedText(await readAsText(file));
+  if (extension === "json") return jsonToDiscoveryText(await readAsText(file), fileName);
   const bytes = new Uint8Array(await readAsArrayBuffer(file));
   if (extension === "docx") return extractDocxText(bytes);
   if (extension === "pdf") return extractPdfText(bytes);
   return null;
+}
+
+function jsonToDiscoveryText(raw = "", fileName = "") {
+  const sourceLabel = path.basename(String(fileName || "JSON file"));
+  try {
+    const parsed = JSON.parse(raw);
+    const topLevel = parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? Object.keys(parsed).slice(0, 100)
+      : [];
+    return cleanExtractedText([
+      `JSON file: ${sourceLabel}`,
+      topLevel.length ? `Top-level keys: ${topLevel.join(", ")}` : "",
+      "",
+      stableStringify(parsed)
+    ].join("\n"));
+  } catch {
+    return cleanExtractedText([
+      `JSON-like text file: ${sourceLabel}`,
+      "",
+      raw
+    ].join("\n"));
+  }
 }
 
 async function saveTextFile({ storageRoot, fileName = "project-state-export.txt", text = "", type = "text/plain" }) {
@@ -3610,6 +3688,17 @@ function mimeFromFileName(fileName = "") {
 
 function checksumText(text = "") {
   return crypto.createHash("sha256").update(String(text)).digest("hex");
+}
+
+function formatBytesForLog(bytes = 0) {
+  const units = ["bytes", "KB", "MB", "GB"];
+  let size = Number(bytes) || 0;
+  let index = 0;
+  while (size >= 1024 && index < units.length - 1) {
+    size /= 1024;
+    index += 1;
+  }
+  return `${size >= 10 || index === 0 ? Math.round(size) : size.toFixed(1)} ${units[index]}`;
 }
 
 function relativeManagedPath(storageRoot, filePath) {

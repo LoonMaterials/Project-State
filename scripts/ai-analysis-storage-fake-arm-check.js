@@ -69,9 +69,9 @@ async function main() {
     const restored = await bridge.analysisArms.readState({ discoveryCaseId: staged.discoveryCaseId });
     assert(restored.candidates.length === chunks.length && restored.reviewDecisions.length === 1 && restored.confirmedIdeaUnits.length === 1, "Backup/restore lost Idea Analysis records.", restored);
     const capabilities = await bridge.analysisArms.describeCapabilities();
-    assert(capabilities.realProviderInstalled === false && capabilities.arm.executionLocation === "local", "Fake arm capabilities imply a real provider.", capabilities);
+    assert(capabilities.arm.executionLocation === "local" && Array.isArray(capabilities.localProviders), "Analysis capabilities no longer expose a local-only provider boundary.", capabilities);
     console.log("AI Analysis Storage and Fake Arm Check");
-    console.log(JSON.stringify({ newTables: 8, stableChunks: chunks.length, privacyMachineBlocked: true, privacyClassEnforced: true, exactEvidenceValidated: true, candidates: result.candidates.length, exactRetryDeduplicated: true, idempotencyConflictRejected: true, tamperedChunkRejected: true, machineReviewBlocked: true, humanReviewRecorded: true, confirmedUnitsNonCore: true, appendOnly: true, credentialsExcluded: true, backupRestoreRoundTrip: true, realProviderInstalled: false }, null, 2));
+    console.log(JSON.stringify({ newTables: 8, stableChunks: chunks.length, privacyMachineBlocked: true, privacyClassEnforced: true, exactEvidenceValidated: true, candidates: result.candidates.length, exactRetryDeduplicated: true, idempotencyConflictRejected: true, tamperedChunkRejected: true, machineReviewBlocked: true, humanReviewRecorded: true, confirmedUnitsNonCore: true, appendOnly: true, credentialsExcluded: true, backupRestoreRoundTrip: true, optionalLocalProviderSupported: true }, null, 2));
     console.log("AI Analysis storage/fake arm: ok");
   } finally {
     await fsp.rm(tempRoot, { recursive: true, force: true });

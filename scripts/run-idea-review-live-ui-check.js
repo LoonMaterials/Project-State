@@ -21,7 +21,7 @@ async function main() {
     await client.evaluate(`document.querySelector('.modal button[type="submit"]').click(); true`);
     await waitFor(client.evaluate, `document.querySelector('.modal-title')?.textContent === 'Review Discovery'`, 30000);
     const before = await client.evaluate(`(() => ({button:document.querySelector('[data-run-idea-analysis]')?.textContent,notice:document.querySelector('[data-idea-analysis-panel]')?.innerText,workingLabel:document.querySelector('[name="proposedProjectName"]')?.previousElementSibling?.textContent}))()`);
-    assert(before.button === "Run local test idea analysis" && before.notice.includes("sends nothing outside Project State"), "Idea analysis boundary was not visible before running.", before);
+    assert(before.button === "Run local AI idea analysis" && before.notice.includes("sends nothing to cloud"), "Idea analysis boundary was not visible before running.", before);
     assert(before.workingLabel.includes("Working file-based name"), "File-derived name was not demoted from project authority.", before);
     await client.evaluate(`document.querySelector('[data-run-idea-analysis]').click(); true`);
     await waitFor(client.evaluate, `document.querySelectorAll('[data-idea-candidate-index]').length > 0`, 30000);

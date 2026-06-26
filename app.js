@@ -3315,6 +3315,9 @@ let activeObjectDetail = null;
 let postModalAction = null;
 let pendingFlowReturnContext = null;
 const flowDrafts = new Map();
+let fileImportDialogInProgress = false;
+let fileImportFlowState = { status: "idle", kind: "", message: "", updatedAt: "" };
+let pendingFileImportReviewSelection = null;
 let auditWorkSession = { actorName: "", reason: "", updatedAt: "" };
 let searchQuery = "";
 let armTransportStatus = {
@@ -7670,10 +7673,11 @@ function renderFilesLibrary() {
         <p class="view-subtitle">${escapeHtml(t("filesLibrarySubtitle"))}</p>
       </div>
       <div class="button-row">
-        <button class="btn" data-action="import-files">Add files</button>
-        <button class="btn secondary" data-action="import-folder">Add folder</button>
+        <button class="btn" type="button" data-action="import-files">Add files</button>
+        <button class="btn secondary" type="button" data-action="import-folder">Add folder</button>
       </div>
     </section>
+    ${fileImportFlowState.message ? `<section class="panel"><p class="item-meta"><strong>File picker status:</strong> ${escapeDisplay(fileImportFlowState.message, DISPLAY_META_LIMIT)}${fileImportFlowState.updatedAt ? ` · ${escapeHtml(formatDate(fileImportFlowState.updatedAt))}` : ""}</p>${pendingFileImportReviewSelection?.candidates?.length ? `<div class="item-actions"><button class="btn secondary compact" data-action="reopen-pending-file-import-review">Open pending Discovery review (${pendingFileImportReviewSelection.candidates.length})</button></div>` : ""}</section>` : ""}
     <section class="panel strong">
       <div class="panel-head"><h2 class="panel-title">External security responsibility</h2></div>
       <p>Project State does not scan files for malware. Only add files you trust and have already checked using your own security tools.</p>
@@ -7695,6 +7699,12 @@ function renderFilesLibrary() {
       </article>
     </section>
   `);
+}
+
+function setFileImportFlowState(status, message, kind = fileImportFlowState.kind || "") {
+  fileImportFlowState = { status, kind, message, updatedAt: nowIso() };
+  const statusNode = document.querySelector("[data-file-import-status]");
+  if (statusNode) statusNode.textContent = message;
 }
 
 function renderDiscoveryCaseSummary(discoveryCase) {
@@ -7750,27 +7760,62 @@ function renderApprovedManagedFile({ project, source }) {
 }
 
 async function beginFileImport(kind = "files") {
+  if (fileImportDialogInProgress) {
+    setFileImportFlowState("busy", "File picker is already waiting for Windows to respond.", kind);
+    if (activeRootView === "files") render();
+    return;
+  }
   if (!platformAdapter.dialogs?.available) {
+    setFileImportFlowState("unavailable", "Windows file picker is unavailable in this runtime.", kind);
+    if (activeRootView === "files") render();
     window.alert(t("fileImportFailed"));
     return;
   }
-  let paths = [];
-  if (kind === "folder") {
-    const folder = await platformAdapter.dialogs.pickFolder({ title: t("importFolder") });
-    if (folder?.localPath) paths = [folder.localPath];
-  } else {
-    const files = await platformAdapter.dialogs.pickFiles({ title: t("importFiles") });
-    paths = files.map((file) => file.localPath).filter(Boolean);
+  fileImportDialogInProgress = true;
+  setFileImportFlowState("opening", `Opening Windows ${kind === "folder" ? "folder" : "file"} picker…`, kind);
+  if (activeRootView === "files") render();
+  try {
+    let paths = [];
+    if (kind === "folder") {
+      setFileImportFlowState("native_dialog_requested", "Project State asked Windows to show the folder picker.", kind);
+      const folder = await platformAdapter.dialogs.pickFolder({ title: t("importFolder") });
+      if (folder?.localPath) paths = [folder.localPath];
+    } else {
+      setFileImportFlowState("native_dialog_requested", "Project State asked Windows to show the file picker.", kind);
+      const files = await platformAdapter.dialogs.pickFiles({ title: t("importFiles") });
+      paths = files.map((file) => file.localPath).filter(Boolean);
+    }
+    if (!paths.length) {
+      setFileImportFlowState("cancelled", "Windows picker returned no selected files or folders.", kind);
+      if (activeRootView === "files") render();
+      return;
+    }
+    setFileImportFlowState("inspecting", `Windows picker returned ${paths.length} selected ${paths.length === 1 ? "path" : "paths"}. Inspecting supported files…`, kind);
+    if (activeRootView === "files") render();
+    const selection = await platformAdapter.files.inspectImportSelection({ paths });
+    if (!selection.candidates?.length) {
+      setFileImportFlowState("no_supported_files", "No supported files were found in that selection.", kind);
+      if (activeRootView === "files") render();
+      window.alert(t("fileImportFailed"));
+      return;
+    }
+    setFileImportFlowState("reviewing", `Found ${selection.candidates.length} supported ${selection.candidates.length === 1 ? "file" : "files"} for Discovery review.`, kind);
+    selection.importKind = kind;
+    selection.rootPath = kind === "folder" ? paths[0] : "";
+    pendingFileImportReviewSelection = selection;
+    openFileImportReviewModal(selection);
+    if (!document.querySelector(".modal-backdrop")) {
+      setFileImportFlowState("review_waiting", `Found ${selection.candidates.length} supported files. Use Open pending Discovery review to continue.`, kind);
+      if (activeRootView === "files") render();
+    }
+  } catch (error) {
+    console.error("Project State file import failed.", error);
+    setFileImportFlowState("failed", error.message || t("fileImportFailed"), kind);
+    if (activeRootView === "files") render();
+    window.alert(error.message || t("fileImportFailed"));
+  } finally {
+    fileImportDialogInProgress = false;
   }
-  if (!paths.length) return;
-  const selection = await platformAdapter.files.inspectImportSelection({ paths });
-  if (!selection.candidates?.length) {
-    window.alert(t("fileImportFailed"));
-    return;
-  }
-  selection.importKind = kind;
-  selection.rootPath = kind === "folder" ? paths[0] : "";
-  openFileImportReviewModal(selection);
 }
 
 function folderRelativeGroup(localPath = "", rootPath = "") {
@@ -7802,9 +7847,20 @@ function partitionDiscoveryCandidates(candidates = [], mode = "folder_groups", r
 function openFileImportReviewModal(selection) {
   const isFolderImport = selection.importKind === "folder";
   const suggestedFolderGroups = isFolderImport ? partitionDiscoveryCandidates(selection.candidates, "folder_groups", selection.rootPath) : [];
+  const updateImportReviewSelectionStatus = () => {
+    const reviewModal = document.querySelector(".modal-backdrop");
+    const selectedCount = reviewModal ? reviewModal.querySelectorAll("[data-import-path]:checked").length : selection.candidates.length;
+    const groupingMode = isFolderImport ? reviewModal?.querySelector("#folderGroupingMode")?.selectedOptions?.[0]?.textContent || "folder groups" : "one Discovery case";
+    setFileImportFlowState(
+      "review_modal_open",
+      `Discovery review open: ${selectedCount} of ${selection.candidates.length} files selected · ${groupingMode}.`,
+      selection.importKind || ""
+    );
+  };
   showModal({
     title: "Add to Discovery",
     submitText: "Read and review",
+    forceReplace: true,
     body: `
       <p class="notice">Project State does not scan files for malware. Only add files you trust and have already checked using your own security tools.</p>
       <p class="notice">You do not need to choose a project yet. Original files remain untouched.</p>
@@ -7855,10 +7911,19 @@ function openFileImportReviewModal(selection) {
         discoveryReviews.push({ discoveryCaseId, analysis, extractions, actor, reason: String(data.reason || "").trim(), groupLabel: candidateGroup.label });
       }
       if (!discoveryReviews.length) { window.alert(t("fileImportFailed")); return false; }
+      pendingFileImportReviewSelection = null;
+      setFileImportFlowState("review_started", "Discovery review opened.", selection.importKind || "");
       queuePostModalAction(() => openDiscoveryReviewSequence(discoveryReviews));
       return true;
     }
   });
+  const reviewModal = document.querySelector(".modal-backdrop");
+  if (reviewModal) {
+    updateImportReviewSelectionStatus();
+    reviewModal.addEventListener("change", (event) => {
+      if (event.target.closest("[data-import-path], #folderGroupingMode, #privacyClass")) updateImportReviewSelectionStatus();
+    });
+  }
 }
 
 function openDiscoveryReviewSequence(reviews = [], index = 0) {
@@ -7921,7 +7986,7 @@ function renderIdeaCandidateReview(candidates = [], actor = currentActor()) {
 async function runFakeIdeaAnalysis(discoveryCaseId, actor, reason = "") {
   const caseView = await platformAdapter.discovery.getCase({ discoveryCaseId });
   const capabilities = await platformAdapter.analysis.describeCapabilities();
-  if (capabilities.realProviderInstalled !== false || capabilities.arm?.executionLocation !== "local") throw new Error("Only the fake local analysis arm is allowed in this foundation flow.");
+  if (capabilities.arm?.executionLocation !== "local") throw new Error("Only local AI analysis arms are allowed in this flow.");
   const chunks = caseView.chunks || [];
   if (!chunks.length) throw new Error("No extracted text chunks are available for idea analysis.");
   const extractionById = new Map((caseView.extractions || []).map((extraction) => [extraction.id, extraction]));
@@ -7938,10 +8003,12 @@ async function runFakeIdeaAnalysis(discoveryCaseId, actor, reason = "") {
     sourceScopeMap.get(extraction.fileVersionId).expectedChunkIds.push(chunk.id);
   }
   const analysisRunId = uid("idea_run");
-  await platformAdapter.analysis.createRun({ id: analysisRunId, discoveryCaseId, actorId: capabilities.arm.armId, actorType: "tool", method: "ai", status: "running", sourceScope: [...sourceScopeMap.values()], provenance: { providerId: capabilities.arm.providerId, modelId: "deterministic_fake_v0.1" } });
+  const modelId = capabilities.realProviderInstalled ? "qwen3:8b" : "deterministic_fake_v0.1";
+  const analysisStrategy = capabilities.realProviderInstalled ? "local_ai_qwen3_8b" : "fake_local_contract_test";
+  await platformAdapter.analysis.createRun({ id: analysisRunId, discoveryCaseId, actorId: capabilities.arm.armId, actorType: "tool", method: "ai", status: "running", sourceScope: [...sourceScopeMap.values()], provenance: { providerId: capabilities.arm.providerId, modelId } });
   const chunkScopes = chunks.map((chunk) => ({ discoveryChunkId: chunk.id, chunkTextSha256: chunk.textSha256 }));
   const authorizationRecordId = uid("idea_privacy");
-  const authorization = await platformAdapter.analysis.authorizeTransmission({ id: authorizationRecordId, discoveryCaseId, actorId: actor.id, actorType: "human", providerId: capabilities.arm.providerId, purpose: "idea_candidate_discovery", privacyClass, chunkScopes, redactionMode: "none", reason: reason || "Authorized exact chunks for local test idea analysis." });
+  const authorization = await platformAdapter.analysis.authorizeTransmission({ id: authorizationRecordId, discoveryCaseId, actorId: actor.id, actorType: "human", providerId: capabilities.arm.providerId, purpose: "idea_candidate_discovery", privacyClass, chunkScopes, redactionMode: "none", reason: reason || "Authorized exact chunks for local AI idea analysis." });
   const inputChunks = [];
   for (const chunk of chunks) {
     const read = await platformAdapter.discovery.readChunkText({ discoveryChunkId: chunk.id });
@@ -7950,7 +8017,7 @@ async function runFakeIdeaAnalysis(discoveryCaseId, actor, reason = "") {
     inputChunks.push({ discoveryChunkId: chunk.id, discoveryExtractionId: extraction.id, fileVersionId: version.id, sourceSha256: extraction.sourceSha256, chunkTextSha256: chunk.textSha256, content: { type: "text", text: read.text }, redactionState: "original" });
   }
   const requestId = uid("analysis_request");
-  const result = await platformAdapter.analysis.submitAnalysisBatch({ contractVersion: "0.1", requestId, idempotencyKey: uid("analysis_idempotency"), submittedAt: nowIso(), arm: capabilities.arm, analysisRunId, discoveryCaseId, purpose: "idea_candidate_discovery", privacyAuthorization: { authorizationRecordId: authorization.authorization.id, authorizedBy: actor.id, authorizedAt: authorization.authorization.authorizedAt, providerId: capabilities.arm.providerId, purpose: "idea_candidate_discovery", privacyClass, chunkScopes, redactionMode: "none" }, batch: { batchId: uid("analysis_batch"), batchIndex: 0, isFinalBatch: true }, input: { chunks: inputChunks }, analysisOptions: { language: currentLanguage(), candidateTypes: capabilities.supportedCandidateTypes, maxCandidates: capabilities.limits.candidatesPerResultPage, includeRelationships: false, includeClarificationQuestions: true }, provenance: { projectStateContract: "ai-analysis-arm-v0.1", ideaCandidateSchema: "0.1", analysisStrategy: "fake_local_contract_test" } });
+  const result = await platformAdapter.analysis.submitAnalysisBatch({ contractVersion: "0.1", requestId, idempotencyKey: uid("analysis_idempotency"), submittedAt: nowIso(), arm: capabilities.arm, analysisRunId, discoveryCaseId, purpose: "idea_candidate_discovery", privacyAuthorization: { authorizationRecordId: authorization.authorization.id, authorizedBy: actor.id, authorizedAt: authorization.authorization.authorizedAt, providerId: capabilities.arm.providerId, purpose: "idea_candidate_discovery", privacyClass, chunkScopes, redactionMode: "none" }, batch: { batchId: uid("analysis_batch"), batchIndex: 0, isFinalBatch: true }, input: { chunks: inputChunks }, analysisOptions: { language: currentLanguage(), candidateTypes: capabilities.supportedCandidateTypes, maxCandidates: capabilities.limits.candidatesPerResultPage, includeRelationships: Boolean(capabilities.realProviderInstalled), includeClarificationQuestions: true }, provenance: { projectStateContract: "ai-analysis-arm-v0.1", ideaCandidateSchema: "0.1", analysisStrategy } });
   return result;
 }
 
@@ -7978,6 +8045,8 @@ function openDiscoveryReviewModal({ discoveryCaseId, analysis, extractions = [],
                 ? "Partially read"
                 : extraction.status === "metadata_only"
                   ? "Metadata recorded; this file type has no local text extraction"
+                  : extraction.status === "large_file_pending"
+                    ? `Large file staged; immediate text extraction deferred${extraction.error?.message ? `: ${extraction.error.message}` : ""}`
                   : extraction.status === "unsupported"
                     ? "This file type is stored but local text extraction is not supported"
                     : `Read failed${extraction.error?.message ? `: ${extraction.error.message}` : ""}`;
@@ -7997,7 +8066,7 @@ function openDiscoveryReviewModal({ discoveryCaseId, analysis, extractions = [],
       <div data-single-discovery-route>
         <div class="field"><label>Working file-based name, only if treated as one item</label><input name="proposedProjectName" value="${escapeHtml(bestName)}"></div>
       </div>
-      ${platformAdapter.analysis?.available ? `<section class="panel" data-idea-analysis-panel><p class="meta-label">Idea analysis</p><p class="notice">For long documents, review content-backed ideas before project naming. The installed arm is a local deterministic test fixture: it sends nothing outside Project State and creates no authority.</p><button class="btn secondary" type="button" data-run-idea-analysis>Run local test idea analysis</button><div data-idea-analysis-output></div></section>` : ""}
+      ${platformAdapter.analysis?.available ? `<section class="panel" data-idea-analysis-panel><p class="meta-label">Idea analysis</p><p class="notice">For long documents, review content-backed ideas before project naming. If Qwen3 8B is installed, analysis runs locally through Ollama. Otherwise Project State uses the local deterministic fixture. Either way, it sends nothing to cloud and creates no Core authority.</p><button class="btn secondary" type="button" data-run-idea-analysis>Run local AI idea analysis</button><div data-idea-analysis-output></div></section>` : ""}
       <div data-multiple-discovery-routes>
         <p class="notice">Each included unit will receive its own route and pending Intake proposal. Suggested boundaries are editable and do not alter the original file.</p>
         <div class="list">${unitSlots.map((unit, index) => renderDiscoveryUnitEditor(unit, index, { included: index < suggestedUnits.length })).join("")}</div>
@@ -8059,7 +8128,7 @@ function openDiscoveryReviewModal({ discoveryCaseId, analysis, extractions = [],
     const runButton = event.target.closest("[data-run-idea-analysis]");
     if (runButton) {
       runButton.disabled = true;
-      runButton.textContent = "Analyzing exact chunks…";
+      runButton.textContent = "Analyzing exact chunks locally…";
       try {
         const result = await runFakeIdeaAnalysis(discoveryCaseId, actor, reason);
         currentIdeaCandidates = result.candidates || [];
@@ -8072,7 +8141,7 @@ function openDiscoveryReviewModal({ discoveryCaseId, analysis, extractions = [],
         console.error("Local idea analysis failed.", error);
         ideaOutput.innerHTML = `<p class="notice danger">Idea analysis could not continue: ${escapeDisplay(error.message || "Unknown error", DISPLAY_META_LIMIT)}</p>`;
         runButton.disabled = false;
-        runButton.textContent = "Retry local test idea analysis";
+        runButton.textContent = "Retry local AI idea analysis";
       }
       return;
     }
@@ -10346,11 +10415,16 @@ function renderOverviewList(items, renderer, emptyMessage) {
   `;
 }
 
-function showModal({ title, body, submitText, onSubmit, draftKey = "", flowStep = 0 }) {
+function showModal({ title, body, submitText, onSubmit, draftKey = "", flowStep = 0, forceReplace = false }) {
   const existingModal = document.querySelector(".modal-backdrop");
   if (existingModal) {
+    if (forceReplace) {
+      existingModal.remove();
+      postModalAction = null;
+    } else {
     existingModal.querySelector("[data-close-modal]")?.click();
     if (existingModal.isConnected) return;
+    }
   }
   const returnContext = pendingFlowReturnContext ? { ...pendingFlowReturnContext } : null;
   pendingFlowReturnContext = null;
@@ -10474,9 +10548,28 @@ function showModal({ title, body, submitText, onSubmit, draftKey = "", flowStep 
       draftGuard.hidden = false;
       return;
     }
+    postModalAction = null;
     if (discard) flowDrafts.delete(resolvedDraftKey);
     if (keepDraft && changed) saveDraft();
     modal.remove();
+    if (title === "Add to Discovery" && pendingFileImportReviewSelection?.candidates?.length) {
+      const pendingCount = pendingFileImportReviewSelection.candidates.length;
+      const pendingKind = pendingFileImportReviewSelection.importKind || fileImportFlowState.kind || "";
+      if (discard) {
+        pendingFileImportReviewSelection = null;
+        setFileImportFlowState(
+          "discarded",
+          `Discarded Discovery review for ${pendingCount} selected ${pendingCount === 1 ? "file" : "files"}. Choose files or a folder again when ready.`,
+          pendingKind
+        );
+      } else {
+        setFileImportFlowState(
+          "review_waiting",
+          `Discovery review was closed. Use Open pending Discovery review (${pendingCount}) or choose files again.`,
+          pendingKind
+        );
+      }
+    }
     if (returnContext?.projectId && activeProjectId === returnContext.projectId && getProject(returnContext.projectId)) activeObjectDetail = returnContext;
     render();
   };
@@ -14291,8 +14384,26 @@ app.addEventListener("click", (event) => {
       if (activeRootView === "settings") render();
     });
   }
-  if (action === "import-files") beginFileImport("files");
-  if (action === "import-folder") beginFileImport("folder");
+  if (action === "import-files") {
+    setFileImportFlowState("click_received", "Add files clicked. Asking Windows for the file picker…", "files");
+    if (activeRootView === "files") render();
+    beginFileImport("files");
+    return;
+  }
+  if (action === "import-folder") {
+    setFileImportFlowState("click_received", "Add folder clicked. Asking Windows for the folder picker…", "folder");
+    if (activeRootView === "files") render();
+    beginFileImport("folder");
+    return;
+  }
+  if (action === "reopen-pending-file-import-review") {
+    if (pendingFileImportReviewSelection?.candidates?.length) openFileImportReviewModal(pendingFileImportReviewSelection);
+    else {
+      setFileImportFlowState("idle", "No pending Discovery review is available.");
+      if (activeRootView === "files") render();
+    }
+    return;
+  }
   if (action === "open-file-source") {
     openProjectNow(button.dataset.projectId, "dashboard");
     activeObjectDetail = { projectId: button.dataset.projectId, objectType: "Source", objectId: button.dataset.sourceId };
