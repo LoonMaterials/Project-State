@@ -3276,6 +3276,7 @@ const defaultSettings = () => ({
   lastRestoreBy: "",
   lastRestoreReason: "",
   lastRestoreSourceFile: "",
+  archivedDeletionLog: [],
   uiState: {
     recentProjectIds: [],
     lastProjectId: "",
@@ -4519,6 +4520,7 @@ function normalizeSettings(settings = {}) {
     lastRestoreBy: settings.lastRestoreBy || "",
     lastRestoreReason: settings.lastRestoreReason || "",
     lastRestoreSourceFile: settings.lastRestoreSourceFile || "",
+    archivedDeletionLog: Array.isArray(settings.archivedDeletionLog) ? settings.archivedDeletionLog : [],
     uiState: normalizeUiState(settings.uiState),
     historyPolicyVersion: settings.historyPolicyVersion || defaults.historyPolicyVersion,
     mandatoryHistory: settings.mandatoryHistory !== false,
@@ -4533,6 +4535,7 @@ function normalizeSettings(settings = {}) {
     settings.recoveryWarnings !== normalized.recoveryWarnings ||
     settings.storageSystem !== normalized.storageSystem ||
     settings.backupSystem !== normalized.backupSystem ||
+    !Array.isArray(settings.archivedDeletionLog) ||
     settings.historyPolicyVersion !== normalized.historyPolicyVersion ||
     settings.mandatoryHistory !== normalized.mandatoryHistory ||
     !Array.isArray(settings.mandatoryHistoryFields) ||
@@ -5674,7 +5677,7 @@ function currentActorCan(permission, project = getProject()) {
 }
 
 function actionPermission(action = "") {
-  if (["create-project", "add-decision", "add-fact", "add-conflict", "add-source", "add-relationship", "add-question", "add-action", "add-extract", "read-file-extract", "suggest-extract", "create-draft-project", "import-files", "import-folder"].includes(action)) return "create";
+  if (["create-project", "add-decision", "add-fact", "add-conflict", "add-source", "add-relationship", "add-question", "add-action", "add-extract", "read-file-extract", "suggest-extract", "create-draft-project", "import-files", "import-folder", "import-project-files", "import-project-folder"].includes(action)) return "create";
   if (["edit-status", "edit-object", "assign-object", "mark-complete", "attach-source", "attach-image", "archive-object", "unarchive-project", "manage-project-roles", "review-source-freshness", "verify-source-file", "verify-all-source-files", "archive-ai-work-order", "edit-file-source", "archive-file-source"].includes(action)) return "edit";
   if (["approve-intake", "approve-extract", "approve-draft-project"].includes(action)) return "approve";
   if (["export-project", "export-handoff", "context-pack", "view-object-history", "show-history", "view-history", "show-changes-since", "history-file-source", "refresh-storage"].includes(action)) return "audit";
@@ -5689,7 +5692,7 @@ function actionAllowedForCurrentActor(action = "", project = getProject()) {
   if (["review-intake-queue", "batch-triage", "reject-intake", "archive-intake", "comment-object", "comment-ai-work-order"].includes(action)) {
     return ["owner", "admin", "project_lead", "approver", "editor", "contributor", "reviewer", "auditor"].includes(role);
   }
-  if (action === "delete-project") return role === "owner";
+  if (["delete-project", "delete-archived-project", "delete-all-archived-projects"].includes(action)) return role === "owner";
   const permission = actionPermission(action);
   if (role === "ai_tool" && permission === "create") return false;
   return permission ? currentActorCan(permission, project) : true;
@@ -6696,6 +6699,12 @@ function renderArchivedProjectList() {
         <h1 class="view-title">${escapeHtml(t("archivedProjects"))}</h1>
         <p class="view-subtitle">${escapeHtml(t("archivedProjectsNotice"))}</p>
       </div>
+      ${projects.length ? `
+        <div class="button-row">
+          <button class="btn secondary" data-action="show-projects">${escapeHtml(t("backToProjects"))}</button>
+          <button class="btn danger" data-action="delete-all-archived-projects">Delete all archived</button>
+        </div>
+      ` : ""}
     </section>
     ${projects.length ? `<section class="project-grid">${projects.map(renderProjectCard).join("")}</section>` : `
       <section class="empty-state">
@@ -7528,6 +7537,40 @@ function archivedProjectCount() {
   return store.projects.filter((project) => project.archived).length;
 }
 
+function archivedDeletionSummary(project = {}) {
+  const sourceCount = (project.sources || []).length;
+  const historyCount = (project.changes || []).length;
+  const imageCount = countProjectImages(project);
+  return {
+    projectId: project.id || "",
+    projectName: project.name || "",
+    archivedAt: project.archivedAt || "",
+    deletionStatus: project.deletionStatus || "",
+    sourceCount,
+    historyCount,
+    imageCount
+  };
+}
+
+function appendArchivedDeletionAudit(projects = [], actor, reason = "") {
+  store.settings = normalizeSettings(store.settings || {});
+  const timestamp = nowIso();
+  const entries = projects.map((project) => ({
+    id: uid("archived_delete"),
+    deletedAt: timestamp,
+    deletedBy: actor?.id || "",
+    deletedByName: actor?.name || "",
+    reason: String(reason || "").trim(),
+    summary: archivedDeletionSummary(project)
+  }));
+  store.settings.archivedDeletionLog = [
+    ...entries,
+    ...(store.settings.archivedDeletionLog || [])
+  ].slice(0, 500);
+  stampSettingsUpdate(actor?.id || store.settings.primaryActorId, reason);
+  return entries;
+}
+
 function renderProjectCard(project) {
   return `
     <div class="project-card">
@@ -7545,7 +7588,9 @@ function renderProjectCard(project) {
       ${renderObjectActions("Project", project.id, project.archived)}
       <div class="item-actions">
         ${project.archived ? `<button class="btn secondary compact" data-action="unarchive-project" data-project-id="${project.id}">${escapeHtml(t("unarchiveProject"))}</button>` : ""}
-        <button class="btn secondary compact" data-action="delete-project" data-project-id="${project.id}" ${project.deletionStatus ? "disabled" : ""}>${escapeHtml(t("deleteProject"))}</button>
+        ${project.archived
+          ? `<button class="btn danger compact" data-action="delete-archived-project" data-project-id="${project.id}">Delete archived</button>`
+          : `<button class="btn secondary compact" data-action="delete-project" data-project-id="${project.id}" ${project.deletionStatus ? "disabled" : ""}>${escapeHtml(t("deleteProject"))}</button>`}
       </div>
     </div>
   `;
@@ -7673,11 +7718,13 @@ function renderFilesLibrary() {
         <p class="view-subtitle">${escapeHtml(t("filesLibrarySubtitle"))}</p>
       </div>
       <div class="button-row">
-        <button class="btn" type="button" data-action="import-files">Add files</button>
-        <button class="btn secondary" type="button" data-action="import-folder">Add folder</button>
+        <button class="btn" type="button" data-action="import-project-files">Add files to project</button>
+        <button class="btn" type="button" data-action="import-project-folder">Add project folder</button>
+        <button class="btn secondary" type="button" data-action="import-files">Add files to Discovery</button>
+        <button class="btn secondary" type="button" data-action="import-folder">Scan folder for Discovery</button>
       </div>
     </section>
-    ${fileImportFlowState.message ? `<section class="panel"><p class="item-meta"><strong>File picker status:</strong> ${escapeDisplay(fileImportFlowState.message, DISPLAY_META_LIMIT)}${fileImportFlowState.updatedAt ? ` · ${escapeHtml(formatDate(fileImportFlowState.updatedAt))}` : ""}</p>${pendingFileImportReviewSelection?.candidates?.length ? `<div class="item-actions"><button class="btn secondary compact" data-action="reopen-pending-file-import-review">Open pending Discovery review (${pendingFileImportReviewSelection.candidates.length})</button></div>` : ""}</section>` : ""}
+    ${fileImportFlowState.message ? `<section class="panel"><p class="item-meta"><strong>File picker status:</strong> ${escapeDisplay(fileImportFlowState.message, DISPLAY_META_LIMIT)}${fileImportFlowState.updatedAt ? ` · ${escapeHtml(formatDate(fileImportFlowState.updatedAt))}` : ""}</p>${pendingFileImportReviewSelection?.candidates?.length ? `<div class="item-actions"><button class="btn secondary compact" data-action="reopen-pending-file-import-review">${["project_files", "project_folder"].includes(pendingFileImportReviewSelection.importKind) ? "Open pending project file import" : "Open pending Discovery review"} (${pendingFileImportReviewSelection.candidates.length})</button></div>` : ""}</section>` : ""}
     <section class="panel strong">
       <div class="panel-head"><h2 class="panel-title">External security responsibility</h2></div>
       <p>Project State does not scan files for malware. Only add files you trust and have already checked using your own security tools.</p>
@@ -7760,6 +7807,8 @@ function renderApprovedManagedFile({ project, source }) {
 }
 
 async function beginFileImport(kind = "files") {
+  const isFolderPicker = kind === "folder" || kind === "project_folder";
+  const isKnownProjectImport = kind === "project_files" || kind === "project_folder";
   if (fileImportDialogInProgress) {
     setFileImportFlowState("busy", "File picker is already waiting for Windows to respond.", kind);
     if (activeRootView === "files") render();
@@ -7772,17 +7821,17 @@ async function beginFileImport(kind = "files") {
     return;
   }
   fileImportDialogInProgress = true;
-  setFileImportFlowState("opening", `Opening Windows ${kind === "folder" ? "folder" : "file"} picker…`, kind);
+  setFileImportFlowState("opening", `Opening Windows ${isFolderPicker ? "folder" : "file"} picker…`, kind);
   if (activeRootView === "files") render();
   try {
     let paths = [];
-    if (kind === "folder") {
+    if (isFolderPicker) {
       setFileImportFlowState("native_dialog_requested", "Project State asked Windows to show the folder picker.", kind);
-      const folder = await platformAdapter.dialogs.pickFolder({ title: t("importFolder") });
+      const folder = await platformAdapter.dialogs.pickFolder({ title: isKnownProjectImport ? "Add Project Folder" : t("importFolder") });
       if (folder?.localPath) paths = [folder.localPath];
     } else {
       setFileImportFlowState("native_dialog_requested", "Project State asked Windows to show the file picker.", kind);
-      const files = await platformAdapter.dialogs.pickFiles({ title: t("importFiles") });
+      const files = await platformAdapter.dialogs.pickFiles({ title: isKnownProjectImport ? "Add Files to Project" : t("importFiles") });
       paths = files.map((file) => file.localPath).filter(Boolean);
     }
     if (!paths.length) {
@@ -7799,13 +7848,14 @@ async function beginFileImport(kind = "files") {
       window.alert(t("fileImportFailed"));
       return;
     }
-    setFileImportFlowState("reviewing", `Found ${selection.candidates.length} supported ${selection.candidates.length === 1 ? "file" : "files"} for Discovery review.`, kind);
+    setFileImportFlowState("reviewing", `Found ${selection.candidates.length} supported ${selection.candidates.length === 1 ? "file" : "files"} for ${isKnownProjectImport ? "project import" : "Discovery review"}.`, kind);
     selection.importKind = kind;
-    selection.rootPath = kind === "folder" ? paths[0] : "";
+    selection.rootPath = isFolderPicker ? paths[0] : "";
     pendingFileImportReviewSelection = selection;
-    openFileImportReviewModal(selection);
+    if (isKnownProjectImport) openProjectFileImportModal(selection);
+    else openFileImportReviewModal(selection);
     if (!document.querySelector(".modal-backdrop")) {
-      setFileImportFlowState("review_waiting", `Found ${selection.candidates.length} supported files. Use Open pending Discovery review to continue.`, kind);
+      setFileImportFlowState("review_waiting", `Found ${selection.candidates.length} supported files. Use the pending ${isKnownProjectImport ? "project file import" : "Discovery review"} button to continue.`, kind);
       if (activeRootView === "files") render();
     }
   } catch (error) {
@@ -7842,6 +7892,238 @@ function partitionDiscoveryCandidates(candidates = [], mode = "folder_groups", r
     }
   }
   return groups;
+}
+
+function pathFileName(localPath = "") {
+  return String(localPath || "").replaceAll("\\", "/").split("/").filter(Boolean).pop() || "";
+}
+
+function pathFolderName(localPath = "") {
+  const parts = String(localPath || "").replaceAll("\\", "/").split("/").filter(Boolean);
+  return parts.length ? parts[parts.length - 1] : "";
+}
+
+function fileExtension(fileName = "") {
+  const match = String(fileName || "").toLowerCase().match(/\.([^.]+)$/);
+  return match ? match[1] : "";
+}
+
+function titleFromFileName(fileName = "") {
+  const name = pathFileName(fileName);
+  return name.replace(/\.[^.]+$/, "").replace(/[-_]+/g, " ").replace(/\s+/g, " ").trim() || name || t("untitledSource");
+}
+
+function sourceTypeForProjectFile(file = {}) {
+  const extension = fileExtension(file.name || file.localPath);
+  if (["png", "jpg", "jpeg", "webp", "gif"].includes(extension)) return "Image / sketch";
+  if (["pdf", "docx"].includes(extension)) return "Document";
+  if (["md", "txt"].includes(extension)) return "Notes";
+  if (["json", "csv"].includes(extension)) return "Data";
+  return "Project file";
+}
+
+function projectFileImportCategorySummary(candidates = []) {
+  const counts = new Map();
+  for (const file of candidates) {
+    const label = sourceTypeForProjectFile(file);
+    counts.set(label, (counts.get(label) || 0) + 1);
+  }
+  return [...counts.entries()].map(([label, count]) => `${label}: ${count}`).join(" · ") || "No selected files";
+}
+
+function openProjectFileImportModal(selection) {
+  const isFolderImport = selection.importKind === "project_folder";
+  const folderName = pathFolderName(selection.rootPath) || "New Project";
+  const defaultProjectName = isFolderImport ? folderName : titleFromFileName(selection.candidates?.[0]?.name || "");
+  const selectedSummary = projectFileImportCategorySummary(selection.candidates);
+  const activeProjects = store.projects.filter((project) => !project.archived);
+  showModal({
+    title: isFolderImport ? "Add project folder" : "Add files to project",
+    submitText: "Add to project",
+    forceReplace: true,
+    body: `
+      <p class="notice">Use this when you already know these files belong under one project. Project State will copy the files into managed storage and add them as project Sources without creating separate Discovery project candidates.</p>
+      <p class="notice">For unknown folders where you want Project State to discover what is inside first, use <strong>Scan folder for Discovery</strong> instead.</p>
+      <div class="two-col">
+        <div class="field">
+          <label for="projectImportMode">Project</label>
+          <select id="projectImportMode" name="projectImportMode">
+            <option value="new">Create a new project</option>
+            <option value="existing"${activeProjects.length ? "" : " disabled"}>Use an existing project</option>
+          </select>
+        </div>
+        <div class="field" data-existing-project-import hidden>
+          <label for="projectId">Existing project</label>
+          <select id="projectId" name="projectId"><option value="">Choose project</option>${projectOptions()}</select>
+        </div>
+      </div>
+      <div data-new-project-import>
+        <div class="field"><label for="projectName">Project name</label><input id="projectName" name="projectName" value="${escapeHtml(defaultProjectName)}" required></div>
+        <div class="field"><label for="currentStatus">${escapeHtml(t("currentStatus"))}</label><input id="currentStatus" name="currentStatus" value="Active · materials imported for review" required></div>
+        <div class="field"><label for="currentSummary">${escapeHtml(t("currentSummary"))}</label><textarea id="currentSummary" name="currentSummary" rows="3">${escapeHtml(isFolderImport ? `Project created from folder: ${folderName}.` : `Project created from selected files.`)}</textarea></div>
+      </div>
+      <div class="field">
+        <label>${escapeHtml(t("selectedFiles"))} (${selection.candidates.length})</label>
+        <p class="item-meta">${escapeHtml(selectedSummary)}</p>
+        <div class="list import-file-list">
+          ${selection.candidates.map((file) => `
+            <label class="check-field">
+              <input type="checkbox" data-import-path="${escapeHtml(file.localPath)}" checked>
+              <span><strong>${escapeDisplay(file.name, DISPLAY_META_LIMIT)}</strong><br>${escapeDisplay(file.localPath, DISPLAY_META_LIMIT)} · ${escapeHtml(formatBytes(file.size))} · ${escapeHtml(sourceTypeForProjectFile(file))}</span>
+            </label>
+          `).join("")}
+        </div>
+      </div>
+      <div class="two-col">
+        <div class="field">
+          <label for="trustLevel">${escapeHtml(t("sourceTrustLevel"))}</label>
+          <select id="trustLevel" name="trustLevel">${sourceTrustOptions("unverified")}</select>
+        </div>
+        <div class="field">
+          <label for="tags">${escapeHtml(t("tags"))}</label>
+          <input id="tags" name="tags" value="project-folder-import">
+        </div>
+      </div>
+      <div class="field">
+        <label for="sourceSummary">Folder/file note for each Source</label>
+        <textarea id="sourceSummary" name="sourceSummary" rows="3">${escapeHtml(isFolderImport ? `Imported from project folder: ${selection.rootPath}` : "Imported from known project file selection.")}</textarea>
+      </div>
+      ${confirmationField("externalSecurityAcknowledged", "I understand Project State does not scan files. I trust these files and accept responsibility for checking them with my own security tools.")}
+      ${selection.skipped?.length ? `<p class="notice">${escapeHtml(t("unsupportedFilesSkipped"))}: ${selection.skipped.length}</p>` : ""}
+      ${auditFields({ reasonLabel: "Why are these files being added?" })}
+    `,
+    async onSubmit(data, form) {
+      const selectedPaths = [...form.querySelectorAll("[data-import-path]:checked")].map((field) => field.dataset.importPath);
+      const candidates = selection.candidates.filter((file) => selectedPaths.includes(file.localPath));
+      if (!candidates.length) { window.alert("Select at least one file to add."); return false; }
+      const actor = getOrCreateActor(data.actorName, "Human");
+      const useExisting = data.projectImportMode === "existing";
+      let project = useExisting ? getProject(data.projectId) : null;
+      if (useExisting && !project) { window.alert("Choose an existing project or create a new one."); return false; }
+      if (!validateActorPermission(actor, "create", project)) return false;
+      const reason = String(data.reason || "").trim();
+      const timestamp = nowIso();
+      if (!project) {
+        project = {
+          id: uid("project"),
+          name: String(data.projectName || defaultProjectName).trim(),
+          currentStatus: String(data.currentStatus || "Active · materials imported for review").trim(),
+          currentSummary: String(data.currentSummary || "").trim(),
+          healthFlag: "active",
+          archived: false,
+          deletionStatus: "",
+          createdAt: timestamp,
+          updatedAt: timestamp,
+          updatedBy: actor.id,
+          sourceLinks: [],
+          imageLinks: [],
+          decisions: [],
+          facts: [],
+          conflicts: [],
+          sources: [],
+          draftProjects: [],
+          relationships: [],
+          openQuestions: [],
+          nextActions: [],
+          changes: []
+        };
+        recordChange(project, actor, reason, "Project created from known file import", {
+          objectType: "Project",
+          objectId: project.id,
+          objectText: project.name,
+          fields: {
+            status: project.currentStatus,
+            summary: project.currentSummary,
+            importedFiles: candidates.length,
+            importKind: selection.importKind
+          }
+        });
+        store.projects.unshift(project);
+      }
+      const filesToStage = candidates.map((candidate) => ({ intakeId: uid("intake"), localPath: candidate.localPath }));
+      const stagedResult = await platformAdapter.files.stageManagedFiles({ files: filesToStage });
+      if (stagedResult.errors?.length) {
+        console.warn("Some project files could not be staged.", stagedResult.errors);
+      }
+      if (!stagedResult.staged?.length) {
+        window.alert(stagedResult.errors?.[0]?.message || t("fileImportFailed"));
+        return false;
+      }
+      const candidateByPath = new Map(candidates.map((candidate) => [String(candidate.localPath || ""), candidate]));
+      const sharedTags = tagsFromText(data.tags || "project-folder-import");
+      for (const staged of stagedResult.staged) {
+        const candidate = candidateByPath.get(staged.originalPath) || { name: staged.fileName, localPath: staged.originalPath, size: staged.size };
+        const source = {
+          id: uid("source"),
+          projectId: project.id,
+          title: titleFromFileName(staged.fileName || candidate.name),
+          sourceType: sourceTypeForProjectFile(candidate),
+          trustLevel: normalizeSourceTrustLevel(data.trustLevel),
+          lastReviewedAt: "",
+          reviewDueAt: "",
+          reviewedBy: "",
+          dateAdded: timestamp,
+          actorId: actor.id,
+          location: staged.managedPath || staged.originalPath || staged.fileName,
+          managedPath: staged.managedPath || "",
+          checksum: staged.sha256 || "",
+          localFile: {
+            name: staged.fileName || candidate.name || pathFileName(staged.originalPath),
+            type: staged.contentType || "",
+            size: Number(staged.size || candidate.size || 0),
+            lastModified: staged.lastModified || candidate.lastModified || "",
+            localPath: staged.originalPath || candidate.localPath || ""
+          },
+          fileVerification: {
+            status: "verified",
+            exists: true,
+            checkedAt: timestamp,
+            reason: "Checksum recorded during known project file import."
+          },
+          summary: String(data.sourceSummary || "").trim(),
+          tags: sharedTags,
+          linkedActorIds: [],
+          extracts: [],
+          status: "active"
+        };
+        project.sources.unshift(source);
+        recordChange(project, actor, reason, "Source added from known project files", {
+          objectType: "Source",
+          objectId: source.id,
+          objectText: source.title,
+          fields: {
+            project: project.name,
+            type: source.sourceType,
+            trustLevel: sourceTrustLabel(source.trustLevel),
+            managedFile: source.localFile.name,
+            managedPath: source.managedPath,
+            checksum: source.checksum,
+            originalLocation: source.localFile.localPath,
+            importKind: selection.importKind
+          }
+        });
+      }
+      pendingFileImportReviewSelection = null;
+      setFileImportFlowState("project_import_complete", `Added ${stagedResult.staged.length} ${stagedResult.staged.length === 1 ? "file" : "files"} to ${project.name}.`, selection.importKind || "");
+      activeRootView = "projects";
+      openProjectNow(project.id, "dashboard");
+      saveStore();
+      return true;
+    }
+  });
+  const modal = document.querySelector(".modal");
+  const modeField = modal?.querySelector("#projectImportMode");
+  const syncProjectImportMode = () => {
+    const useExisting = modeField?.value === "existing";
+    modal?.querySelectorAll("[data-existing-project-import]").forEach((node) => { node.hidden = !useExisting; });
+    modal?.querySelectorAll("[data-new-project-import]").forEach((node) => { node.hidden = useExisting; });
+    const projectName = modal?.querySelector("[name='projectName']");
+    const currentStatus = modal?.querySelector("[name='currentStatus']");
+    if (projectName) projectName.required = !useExisting;
+    if (currentStatus) currentStatus.required = !useExisting;
+  };
+  modeField?.addEventListener("change", syncProjectImportMode);
+  syncProjectImportMode();
 }
 
 function openFileImportReviewModal(selection) {
@@ -10877,6 +11159,16 @@ function confirmationField(name, label) {
   `;
 }
 
+function typedConfirmationField(name, label, expectedValue) {
+  return `
+    <div class="field">
+      <label for="${name}">${escapeHtml(label)}</label>
+      <input id="${name}" name="${name}" placeholder="${escapeHtml(expectedValue)}" autocomplete="off" required>
+      <p class="item-meta">Type exactly: ${escapeHtml(expectedValue)}</p>
+    </div>
+  `;
+}
+
 function armTypeOptions(selected = "manual") {
   return ARM_TYPES
     .map((type) => `<option value="${type}" ${selected === type ? "selected" : ""}>${escapeHtml(armTypeLabel(type))}</option>`)
@@ -11960,6 +12252,10 @@ function openDeleteProjectModal(projectId) {
   activeProjectId = projectId;
   const project = getProject(projectId);
   if (!project) return;
+  if (project.archived) {
+    openDeleteArchivedProjectModal(projectId);
+    return;
+  }
 
   showModal({
     title: t("deleteProject"),
@@ -11995,6 +12291,90 @@ function openDeleteProjectModal(projectId) {
       activeProjectId = null;
       activeRootView = "projects";
       saveStore();
+    }
+  });
+}
+
+function validateTypedConfirmation(form, data, fieldName, expectedValue) {
+  const field = form.querySelector(`[name="${fieldName}"]`);
+  if (String(data[fieldName] || "").trim() === expectedValue) return true;
+  field?.setCustomValidity(`Type exactly: ${expectedValue}`);
+  field?.reportValidity();
+  field?.setCustomValidity("");
+  return false;
+}
+
+function openDeleteArchivedProjectModal(projectId) {
+  activeProjectId = projectId;
+  const project = getProject(projectId);
+  if (!project || !project.archived) return;
+
+  showModal({
+    title: "Delete archived project",
+    submitText: "Delete archived project",
+    body: `
+      <p class="notice">This permanently removes the archived project record from Project State. It removes the project from active and archived lists. Managed source-file cleanup is separate.</p>
+      <div class="meta-grid">
+        <div>
+          <p class="meta-label">Project</p>
+          <p>${escapeDisplay(project.name, DISPLAY_META_LIMIT)}</p>
+        </div>
+        <div>
+          <p class="meta-label">Sources</p>
+          <p>${escapeHtml(String((project.sources || []).length))}</p>
+        </div>
+        <div>
+          <p class="meta-label">History records</p>
+          <p>${escapeHtml(String((project.changes || []).length))}</p>
+        </div>
+      </div>
+      ${confirmationField("confirmPermanentArchiveDelete", "I understand this archived project record will be removed from Project State.")}
+      ${typedConfirmationField("deleteArchiveConfirmation", "Confirm deletion", "DELETE ARCHIVE")}
+      ${auditFields({ actorLabel: t("changedBy"), reasonLabel: t("reason") })}
+    `,
+    onSubmit(data, form) {
+      if (!validateTypedConfirmation(form, data, "deleteArchiveConfirmation", "DELETE ARCHIVE")) return false;
+      const actor = getOrCreateActor(data.actorName, "Human");
+      if (!validateActorPermission(actor, "admin", null)) return false;
+      appendArchivedDeletionAudit([project], actor, data.reason);
+      store.projects = store.projects.filter((item) => item.id !== project.id);
+      if (activeProjectId === project.id) activeProjectId = null;
+      activeRootView = "archived";
+      saveStore({ allowWithoutCoreApproval: true, reason: "archived-project-delete" });
+    }
+  });
+}
+
+function openDeleteAllArchivedProjectsModal() {
+  const projects = sortNewest(store.projects.filter((project) => project.archived), "updatedAt");
+  if (!projects.length) return;
+
+  showModal({
+    title: "Delete all archived projects",
+    submitText: "Delete all archived",
+    body: `
+      <p class="notice">This permanently removes ${escapeHtml(String(projects.length))} archived project record${projects.length === 1 ? "" : "s"} from Project State. Managed source-file cleanup is separate.</p>
+      <div class="item">
+        <p class="meta-label">Archived records to remove</p>
+        <ul>
+          ${projects.slice(0, 20).map((project) => `<li>${escapeDisplay(project.name, DISPLAY_META_LIMIT)}</li>`).join("")}
+          ${projects.length > 20 ? `<li>…and ${escapeHtml(String(projects.length - 20))} more</li>` : ""}
+        </ul>
+      </div>
+      ${confirmationField("confirmPermanentAllArchiveDelete", "I understand all archived project records will be removed from Project State.")}
+      ${typedConfirmationField("deleteAllArchivesConfirmation", "Confirm deletion", "DELETE ALL ARCHIVED")}
+      ${auditFields({ actorLabel: t("changedBy"), reasonLabel: t("reason") })}
+    `,
+    onSubmit(data, form) {
+      if (!validateTypedConfirmation(form, data, "deleteAllArchivesConfirmation", "DELETE ALL ARCHIVED")) return false;
+      const actor = getOrCreateActor(data.actorName, "Human");
+      if (!validateActorPermission(actor, "admin", null)) return false;
+      const archivedIds = new Set(projects.map((project) => project.id));
+      appendArchivedDeletionAudit(projects, actor, data.reason);
+      store.projects = store.projects.filter((project) => !archivedIds.has(project.id));
+      if (activeProjectId && archivedIds.has(activeProjectId)) activeProjectId = null;
+      activeRootView = "archived";
+      saveStore({ allowWithoutCoreApproval: true, reason: "all-archived-projects-delete" });
     }
   });
 }
@@ -14385,19 +14765,34 @@ app.addEventListener("click", (event) => {
     });
   }
   if (action === "import-files") {
-    setFileImportFlowState("click_received", "Add files clicked. Asking Windows for the file picker…", "files");
+    setFileImportFlowState("click_received", "Add files to Discovery clicked. Asking Windows for the file picker…", "files");
     if (activeRootView === "files") render();
     beginFileImport("files");
     return;
   }
   if (action === "import-folder") {
-    setFileImportFlowState("click_received", "Add folder clicked. Asking Windows for the folder picker…", "folder");
+    setFileImportFlowState("click_received", "Scan folder for Discovery clicked. Asking Windows for the folder picker…", "folder");
     if (activeRootView === "files") render();
     beginFileImport("folder");
     return;
   }
+  if (action === "import-project-files") {
+    setFileImportFlowState("click_received", "Add files to project clicked. Asking Windows for the file picker…", "project_files");
+    if (activeRootView === "files") render();
+    beginFileImport("project_files");
+    return;
+  }
+  if (action === "import-project-folder") {
+    setFileImportFlowState("click_received", "Add project folder clicked. Asking Windows for the folder picker…", "project_folder");
+    if (activeRootView === "files") render();
+    beginFileImport("project_folder");
+    return;
+  }
   if (action === "reopen-pending-file-import-review") {
-    if (pendingFileImportReviewSelection?.candidates?.length) openFileImportReviewModal(pendingFileImportReviewSelection);
+    if (pendingFileImportReviewSelection?.candidates?.length) {
+      if (["project_files", "project_folder"].includes(pendingFileImportReviewSelection.importKind)) openProjectFileImportModal(pendingFileImportReviewSelection);
+      else openFileImportReviewModal(pendingFileImportReviewSelection);
+    }
     else {
       setFileImportFlowState("idle", "No pending Discovery review is available.");
       if (activeRootView === "files") render();
@@ -14580,6 +14975,8 @@ app.addEventListener("click", (event) => {
     openImageViewer(button.dataset.objectType, button.dataset.objectId, button.dataset.imageId);
   }
   if (action === "delete-project") openDeleteProjectModal(button.dataset.projectId);
+  if (action === "delete-archived-project") openDeleteArchivedProjectModal(button.dataset.projectId);
+  if (action === "delete-all-archived-projects") openDeleteAllArchivedProjectsModal();
   if (action === "unarchive-project") openUnarchiveProjectModal(button.dataset.projectId);
   if (action === "add-decision") openDecisionModal();
   if (action === "add-fact") openFactModal();
