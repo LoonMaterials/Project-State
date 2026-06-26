@@ -8256,11 +8256,16 @@ function discoveryDestinationOptions(selected = "proposed_new_project") {
 function renderDiscoveryUnitEditor(unit, index, { included = false } = {}) {
   const title = unit?.title || "";
   const summary = unit?.summary || "";
+  const supportingFiles = (unit?.evidence || [])
+    .filter((item) => item?.role === "supporting_file_without_text")
+    .map((item) => item.fileName || "Supporting file")
+    .filter(Boolean);
   return `
     <article class="item discovery-unit-editor" data-discovery-unit-index="${index}">
       <label class="check-field"><input type="checkbox" name="unit_include_${index}" ${included ? "checked" : ""}><span><strong>${included ? "Include this suggested unit" : "Add another idea"}</strong></span></label>
       <div class="field"><label for="unit_title_${index}">Idea or section name</label><input id="unit_title_${index}" name="unit_title_${index}" value="${escapeHtml(title)}" placeholder="Name this idea"></div>
       <div class="field"><label for="unit_summary_${index}">What this unit contains</label><textarea id="unit_summary_${index}" name="unit_summary_${index}" rows="3" placeholder="Optional plain-language summary">${escapeHtml(summary)}</textarea></div>
+      ${supportingFiles.length ? `<p class="notice"><strong>Supporting files attached:</strong> ${supportingFiles.map((name) => escapeDisplay(name, DISPLAY_META_LIMIT)).join(", ")}</p>` : ""}
       <div class="field"><label for="unit_destination_${index}">Where should this unit go?</label><select id="unit_destination_${index}" name="unit_destination_${index}">${discoveryDestinationOptions("proposed_new_project")}</select></div>
       <div class="field"><label for="unit_project_${index}">Existing project, if selected</label><select id="unit_project_${index}" name="unit_project_${index}"><option value="">None</option>${projectOptions()}</select></div>
     </article>

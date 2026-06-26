@@ -1721,6 +1721,22 @@ function detectDiscoveryDocumentUnits({ versions = [], extractionTexts = [] } = 
       units.push({ id: `unit_${units.length + 1}`, title: path.basename(fileName, path.extname(fileName)) || fileName, summary: String(text || "").replace(/\s+/g, " ").trim().slice(0, 600), fileVersionIds: [extraction.fileVersionId], evidence: [{ fileVersionId: extraction.fileVersionId, extractionId: extraction.id, fileName }], suggested: true });
     }
   }
+  const assignedVersionIds = new Set(units.flatMap((unit) => unit.fileVersionIds || []));
+  const supportingVersions = versions.filter((version) => !assignedVersionIds.has(version.id));
+  if (units.length && supportingVersions.length) {
+    const firstUnit = units[0];
+    firstUnit.fileVersionIds = [...new Set([...(firstUnit.fileVersionIds || []), ...supportingVersions.map((version) => version.id)])];
+    firstUnit.evidence = [
+      ...(firstUnit.evidence || []),
+      ...supportingVersions.map((version) => ({
+        fileVersionId: version.id,
+        fileName: version.originalName || "Supporting file",
+        role: "supporting_file_without_text",
+        note: "Metadata-only file from the same Discovery folder attached so it is not left unassigned."
+      }))
+    ];
+    firstUnit.supportingFileCount = supportingVersions.length;
+  }
   return units.slice(0, 8);
 }
 
@@ -1753,10 +1769,26 @@ async function promoteDiscoveryToIntake({ storageRoot, dbPath, payload = {} }) {
     const routeVersions = caseView.fileVersions.filter((version) => routeVersionIds.has(version.id));
     const targetProjectIds = [...new Set([route.projectId, ...(route.additionalProjectIds || [])].filter(Boolean))];
     for (const version of routeVersions) {
-      const extraction = (caseView.extractions || []).find((item) => item.fileVersionId === version.id && item.textPath) || null;
+      const extraction = (caseView.extractions || []).find((item) => item.fileVersionId === version.id) || null;
+      const routeEvidenceForVersion = (route.evidence || []).filter((item) => item.fileVersionId === version.id);
+      const supportingFileEvidence = routeEvidenceForVersion.find((item) => item.role === "supporting_file_without_text") || null;
+      const isSupportingFile = Boolean(supportingFileEvidence);
       let extractedText = "";
-      if (extraction) extractedText = (await readDiscoveryExtractionText({ storageRoot, dbPath, payload: { extractionId: extraction.id } })).text || "";
+      if (extraction?.textPath) extractedText = (await readDiscoveryExtractionText({ storageRoot, dbPath, payload: { extractionId: extraction.id } })).text || "";
       const sourceTitle = path.basename(version.originalName || "Discovery source", path.extname(version.originalName || "")) || version.originalName || "Discovery source";
+      const itemTitle = isSupportingFile
+        ? `Add supporting file: ${sourceTitle}`
+        : routes.length > 1
+          ? `Add source unit: ${route.title}`
+          : `Add source: ${version.originalName || sourceTitle}`;
+      const proposedText = isSupportingFile
+        ? sourceTitle
+        : routes.length > 1
+          ? route.title
+          : sourceTitle;
+      const supportingSummary = supportingFileEvidence
+        ? `Supporting file for "${route.title || sourceTitle}". ${supportingFileEvidence.note || "Metadata-only file from the same Discovery case."}`
+        : "";
       for (const projectId of (targetProjectIds.length ? targetProjectIds : [null])) intakeItems.push({
       id: makeId("intake_item"),
       intakeBatchId,
@@ -1765,15 +1797,15 @@ async function promoteDiscoveryToIntake({ storageRoot, dbPath, payload = {} }) {
       reviewState: "needs_review",
       queueState: "new",
       queueNotes: "",
-      title: routes.length > 1 ? `Add source unit: ${route.title}` : `Add source: ${version.originalName || sourceTitle}`,
+      title: itemTitle,
       createdAt: promotedAt,
       createdBy: actorId,
       sourceLabel: `Discovery: ${version.originalName || sourceTitle}`,
       armType: "discovery",
       proposedObjectType: "Source",
       proposedChange: {
-        text: routes.length > 1 ? route.title : sourceTitle,
-        summary: String(route.summary || extractedText).slice(0, 2000),
+        text: proposedText,
+        summary: String(isSupportingFile ? supportingSummary : route.summary || extractedText).slice(0, 2000),
         extractionStatus: extraction?.status || "metadata_only"
       },
       evidence: {
@@ -1782,6 +1814,9 @@ async function promoteDiscoveryToIntake({ storageRoot, dbPath, payload = {} }) {
         fileVersionId: version.id,
         sourceSha256: version.sha256,
         extractionId: extraction?.id || "",
+        supportRole: isSupportingFile ? "supporting_file_without_text" : "primary_source",
+        supportsDiscoveryUnitId: route.id || "unit_1",
+        supportsDiscoveryUnitTitle: route.title || sourceTitle,
         discoveryUnit: { id: route.id || "unit_1", title: route.title || sourceTitle, summary: route.summary || "", evidence: cloneJson(route.evidence || []) },
         managedFile: {
           fileName: version.originalName || sourceTitle,
