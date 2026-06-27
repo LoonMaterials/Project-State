@@ -2,12 +2,18 @@ const QWEN3_8B_PROVIDER_ID = "ollama_qwen3_8b_local";
 const QWEN3_8B_ARM_ID = "project_state_ollama_qwen3_8b";
 const QWEN3_8B_MODEL_ID = "qwen3:8b";
 const OLLAMA_BASE_URL = process.env.PROJECT_STATE_OLLAMA_BASE_URL || "http://127.0.0.1:11434";
+const OLLAMA_GENERATE_TIMEOUT_MS = positiveInteger(process.env.PROJECT_STATE_LOCAL_AI_TIMEOUT_MS, 300000);
 
 function localAiError(code, message, fieldPath = "") {
   const error = new Error(message);
   error.code = code;
   error.fieldPath = fieldPath;
   return error;
+}
+
+function positiveInteger(value, fallback) {
+  const parsed = Number.parseInt(String(value || ""), 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
 async function fetchJson(url, options = {}, timeoutMs = 2500) {
@@ -124,14 +130,15 @@ async function callOllamaGenerate(prompt) {
     format: "json",
     options: {
       temperature: 0.2,
-      top_p: 0.9
+      top_p: 0.9,
+      num_predict: 1200
     }
   };
   return fetchJson(`${OLLAMA_BASE_URL}/api/generate`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(payload)
-  }, 120000);
+  }, OLLAMA_GENERATE_TIMEOUT_MS);
 }
 
 async function generateQwenIdeaCandidates({ validated, envelope, ideaContract, maxCandidates }) {

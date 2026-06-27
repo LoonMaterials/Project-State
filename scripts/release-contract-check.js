@@ -28,9 +28,12 @@ function main() {
   assert(packageJson.build?.win?.target?.some((target) => target.target === "nsis"), "NSIS target is missing.");
   assert(packageJson.build?.nsis?.perMachine === false, "Installer must default to per-user scope.");
   assert(packageJson.build?.nsis?.deleteAppDataOnUninstall === false, "Installer must preserve user data on uninstall.");
+  assert(packageJson.scripts?.["check:release"]?.includes("storage-root-safety-check.js"), "Release checks must include the storage-root safety gate.");
   assert(contract.storage.insideInstallDirectory === false, "Storage cannot live in the install directory.");
   assert(contract.storage.deleteOnUninstall === false, "Uninstall cannot delete storage.");
   assert(contract.storage.overwriteOnUpgrade === false, "Upgrade cannot overwrite storage.");
+  assert(bridgeSource.includes("function assertStorageRootOutsideApp"), "Desktop bridge must reject storage inside the app/install folder.");
+  assert(bridgeSource.includes("Unsafe Project State storage root"), "Unsafe storage-root error message is missing.");
   assert(mainSource.includes("contextIsolation: true"), "Context isolation is not enabled.");
   assert(mainSource.includes("nodeIntegration: false"), "Renderer Node integration is not disabled.");
   assert(mainSource.includes("loadFile(INDEX_HTML)"), "Desktop entry must load bundled index.html.");
@@ -42,6 +45,7 @@ function main() {
     "must not silently delete",
     "%USERPROFILE%\\Project State Storage",
     "ordinary uninstall",
+    "reject a storage root",
     "code-signed",
     "real-time testing"
   ];

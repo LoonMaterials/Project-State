@@ -726,6 +726,7 @@ const LANGUAGES = {
     source: "Source",
     title: "Title",
     type: "Type",
+    capitalizationDoesNotMatter: "Capitalization does not matter.",
     unknown: "Unknown",
     dateAdded: "Date Added",
     actor: "Actor",
@@ -1473,6 +1474,7 @@ const LANGUAGES = {
     source: "Source",
     title: "Titre",
     type: "Type",
+    capitalizationDoesNotMatter: "Les majuscules et minuscules n’ont pas d’importance.",
     unknown: "Inconnu",
     dateAdded: "Date ajoutée",
     actor: "Acteur",
@@ -2220,6 +2222,7 @@ const LANGUAGES = {
     source: "Quelle",
     title: "Titel",
     type: "Typ",
+    capitalizationDoesNotMatter: "Groß- und Kleinschreibung spielt keine Rolle.",
     unknown: "Unbekannt",
     dateAdded: "Hinzugefügt am",
     actor: "Akteur",
@@ -2967,6 +2970,7 @@ const LANGUAGES = {
     source: "Fuente",
     title: "Título",
     type: "Tipo",
+    capitalizationDoesNotMatter: "No importa si usas mayúsculas o minúsculas.",
     unknown: "Desconocido",
     dateAdded: "Fecha agregada",
     actor: "Actor",
@@ -11202,7 +11206,7 @@ function typedConfirmationField(name, label, expectedValue) {
     <div class="field">
       <label for="${name}">${escapeHtml(label)}</label>
       <input id="${name}" name="${name}" placeholder="${escapeHtml(expectedValue)}" autocomplete="off" required>
-      <p class="item-meta">Type: ${escapeHtml(expectedValue)}. Capitalization does not matter.</p>
+      <p class="item-meta">${escapeHtml(t("type"))}: ${escapeHtml(expectedValue)}. ${escapeHtml(t("capitalizationDoesNotMatter"))}</p>
     </div>
   `;
 }

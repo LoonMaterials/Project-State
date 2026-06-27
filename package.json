@@ -27,7 +27,7 @@
     "arm:submit": "node scripts/api-arm-submit.js",
     "arm:submit-file": "node scripts/api-arm-submit-file.js",
     "arm:submit-folder": "node scripts/api-arm-submit-folder.js",
-    "check:release": "node scripts/release-contract-check.js && node scripts/run-electron-runtime-smoke.js",
+    "check:release": "node scripts/release-contract-check.js && node scripts/storage-root-safety-check.js && node scripts/run-electron-runtime-smoke.js",
     "check:artifact": "node scripts/release-artifact-check.js",
     "check:installer": "node scripts/release-installer-check.js",
     "release:dir": "electron-builder --dir --win",
@@ -36,12 +36,6 @@
   "devDependencies": {
     "electron": "42.4.1",
     "electron-builder": "26.15.3"
-  },
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "electron",
-      "electron-winstaller"
-    ]
   },
   "build": {
     "appId": "com.projectstate.desktop",

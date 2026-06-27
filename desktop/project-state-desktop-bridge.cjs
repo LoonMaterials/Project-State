@@ -70,6 +70,7 @@ const REQUIRED_TABLES = [
 
 function createProjectStateDesktopBridge(options = {}) {
   const storageRoot = path.resolve(options.storageRoot || process.env.PROJECT_STATE_STORAGE_ROOT || DEFAULT_STORAGE_ROOT);
+  assertStorageRootOutsideApp(storageRoot);
   const dbPath = path.join(storageRoot, DATABASE_FILE);
 
   return {
@@ -675,6 +676,15 @@ function openDatabase(dbPath) {
   migrateFileVersionsManagedPathConstraint(db);
   db.exec(schema);
   return db;
+}
+
+function assertStorageRootOutsideApp(storageRoot) {
+  const resolvedStorage = path.resolve(storageRoot);
+  const resolvedAppRoot = path.resolve(ROOT);
+  const relative = path.relative(resolvedAppRoot, resolvedStorage);
+  const insideAppRoot = relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
+  if (!insideAppRoot) return;
+  throw new Error(`Unsafe Project State storage root: ${resolvedStorage}. Choose a folder outside the Project State app/install folder so uninstall or reinstall cannot remove live data.`);
 }
 
 function migrateFileVersionsManagedPathConstraint(db) {

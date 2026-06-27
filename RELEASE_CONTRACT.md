@@ -42,6 +42,8 @@ The authoritative storage root remains outside the installed application directo
 
 `PROJECT_STATE_STORAGE_ROOT` may override this location for controlled tests or deliberate deployments.
 
+At runtime Project State must reject a storage root that resolves to the application directory or any folder inside it. This guard is required so repeated uninstall/reinstall testing cannot accidentally use removable application files as live project storage.
+
 Installer and updater behavior must obey these rules:
 
 - never bundle an existing `project-state.db` or a user's managed folders;
@@ -58,10 +60,11 @@ Before a release candidate reaches real-time testing:
 1. JavaScript syntax checks pass.
 2. Storage, migration, workflow, bridge, backup, restore, API-arm contract, and API-arm implementation checks pass.
 3. The pinned Electron runtime loads `node:sqlite` and completes a temporary SQLite write/read/delete smoke test.
-4. The release contract check passes.
-5. The unpacked Windows application is produced successfully.
-6. The unpacked artifact contains the expected executable and resources and contains no Project State user database.
-7. The NSIS installer is produced successfully.
+4. The storage-root safety check rejects app-folder storage and permits the default external user storage root.
+5. The release contract check passes.
+6. The unpacked Windows application is produced successfully.
+7. The unpacked artifact contains the expected executable and resources and contains no Project State user database.
+8. The NSIS installer is produced successfully.
 
 Real-time testing then verifies first launch, an existing-data launch, Intake submission through the local transport, upgrade behavior, backup/restore, and uninstall data preservation on an actual desktop session.
 
