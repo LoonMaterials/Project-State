@@ -109,8 +109,8 @@ async function main() {
     const appSource = fs.readFileSync(path.join(__dirname, "..", "app.js"), "utf8");
     assert(appSource.includes("data-corpus-index-required"), "Large corpus review UI should show that indexing is required before local AI.");
     assert(appSource.includes("data-index-corpus"), "Large corpus review UI should expose indexing before normal local AI.");
-    assert(appSource.includes("Index corpus for local AI"), "Large corpus review UI should make the indexing action explicit.");
-    assert(appSource.includes("Build a corpus index before running local AI idea analysis."), "Chunkless corpus AI path should explain the required next step.");
+    assert(appSource.includes("Index large file for local AI"), "Large-file review UI should make the indexing action explicit.");
+    assert(appSource.includes("Build a large-file index before running local AI idea analysis."), "Chunkless large-file AI path should explain the required next step.");
 
     console.log("Large Corpus Intake Flow Check");
     console.log(JSON.stringify({

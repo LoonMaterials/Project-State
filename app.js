@@ -3285,7 +3285,8 @@ const defaultSettings = () => ({
     recentProjectIds: [],
     lastProjectId: "",
     lastProjectView: "dashboard",
-    projectScrollPositions: {}
+    projectScrollPositions: {},
+    lastImportFolders: {}
   },
   historyPolicyVersion: HISTORY_POLICY_VERSION,
   mandatoryHistory: true,
@@ -3766,7 +3767,7 @@ const ProjectStateStorage = {
       store: raw ? null : emptyStore()
     };
   },
-  async save(nextStore) {
+  async save(nextStore, options = {}) {
     const snapshot = JSON.stringify(nextStore);
     const manifest = buildStorageSpineManifest(nextStore, snapshot);
     storageSnapshotText = snapshot;
@@ -3776,7 +3777,8 @@ const ProjectStateStorage = {
         store: nextStore,
         manifest,
         split: splitStoreRecords(nextStore, manifest),
-        snapshot
+        snapshot,
+        preserveConcurrentApiIntake: options.preserveConcurrentApiIntake
       });
       storageMode = "desktop-spine";
       return;
@@ -4554,12 +4556,22 @@ function normalizeUiState(uiState = {}) {
   const scrollPositions = uiState.projectScrollPositions && typeof uiState.projectScrollPositions === "object"
     ? Object.fromEntries(Object.entries(uiState.projectScrollPositions).filter(([, value]) => Number.isFinite(Number(value))).map(([key, value]) => [key, Math.max(0, Number(value))]))
     : {};
+  const lastImportFolders = normalizeLastImportFolders(uiState.lastImportFolders);
   return {
     recentProjectIds: Array.isArray(uiState.recentProjectIds) ? [...new Set(uiState.recentProjectIds.map(String).filter(Boolean))].slice(0, RECENT_PROJECT_LIMIT) : [],
     lastProjectId: String(uiState.lastProjectId || ""),
     lastProjectView: allowedViews.includes(uiState.lastProjectView) ? uiState.lastProjectView : "dashboard",
-    projectScrollPositions: scrollPositions
+    projectScrollPositions: scrollPositions,
+    lastImportFolders
   };
+}
+
+function normalizeLastImportFolders(lastImportFolders = {}) {
+  const allowed = new Set(["discovery_files", "discovery_folder", "project_files", "project_folder", "backup"]);
+  if (!lastImportFolders || typeof lastImportFolders !== "object") return {};
+  return Object.fromEntries(Object.entries(lastImportFolders)
+    .filter(([key, value]) => allowed.has(key) && String(value || "").trim())
+    .map(([key, value]) => [key, String(value || "").trim()]));
 }
 
 function safeStringify(value) {
@@ -5218,7 +5230,7 @@ function saveStore(options = {}) {
   const storeSnapshot = cloneRecord(store);
   saveQueue = saveQueue
     .catch(() => {})
-    .then(() => ProjectStateStorage.save(storeSnapshot))
+    .then(() => ProjectStateStorage.save(storeSnapshot, { preserveConcurrentApiIntake: options.preserveConcurrentApiIntake }))
     .then(() => {
       setSaveStatus("saved", tFormat("savedAt", { time: formatDate(nowIso()) }));
       renderStorageWarning();
@@ -7744,6 +7756,8 @@ function renderFilesLibrary() {
   const intakeFiles = sortNewest(managedFileIntakeItems(), "createdAt");
   const pending = intakeFiles.filter((item) => item.status !== "approved" && !item.archived);
   const approved = managedSourceFiles();
+  const rememberedFolders = normalizeLastImportFolders(store.settings?.uiState?.lastImportFolders);
+  const rememberedFolderText = Object.entries(rememberedFolders).map(([key, value]) => `${key.replaceAll("_", " ")}: ${value}`).join(" · ");
   shell(`
     <section class="view-head">
       <div>
@@ -7757,7 +7771,7 @@ function renderFilesLibrary() {
         <button class="btn secondary" type="button" data-action="import-folder">Scan folder for Discovery</button>
       </div>
     </section>
-    ${fileImportFlowState.message ? `<section class="panel"><p class="item-meta"><strong>File picker status:</strong> ${escapeDisplay(fileImportFlowState.message, DISPLAY_META_LIMIT)}${fileImportFlowState.updatedAt ? ` · ${escapeHtml(formatDate(fileImportFlowState.updatedAt))}` : ""}</p>${pendingFileImportReviewSelection?.candidates?.length ? `<div class="item-actions"><button class="btn secondary compact" data-action="reopen-pending-file-import-review">${["project_files", "project_folder"].includes(pendingFileImportReviewSelection.importKind) ? "Open pending project file import" : "Open pending Discovery review"} (${pendingFileImportReviewSelection.candidates.length})</button></div>` : ""}</section>` : ""}
+    ${fileImportFlowState.message || rememberedFolderText ? `<section class="panel">${fileImportFlowState.message ? `<p class="item-meta"><strong>File picker status:</strong> ${escapeDisplay(fileImportFlowState.message, DISPLAY_META_LIMIT)}${fileImportFlowState.updatedAt ? ` · ${escapeHtml(formatDate(fileImportFlowState.updatedAt))}` : ""}</p>` : ""}${rememberedFolderText ? `<p class="item-meta"><strong>Remembered folders:</strong> ${escapeDisplay(rememberedFolderText, 1200)}</p>` : ""}${pendingFileImportReviewSelection?.candidates?.length ? `<div class="item-actions"><button class="btn secondary compact" data-action="reopen-pending-file-import-review">${["project_files", "project_folder"].includes(pendingFileImportReviewSelection.importKind) ? "Open pending project file import" : "Open pending Discovery review"} (${pendingFileImportReviewSelection.candidates.length})</button></div>` : ""}</section>` : ""}
     <section class="panel strong">
       <div class="panel-head"><h2 class="panel-title">External security responsibility</h2></div>
       <p>Project State does not scan files for malware. Only add files you trust and have already checked using your own security tools.</p>
@@ -7860,11 +7874,11 @@ async function beginFileImport(kind = "files") {
     let paths = [];
     if (isFolderPicker) {
       setFileImportFlowState("native_dialog_requested", "Project State asked Windows to show the folder picker.", kind);
-      const folder = await platformAdapter.dialogs.pickFolder({ title: isKnownProjectImport ? "Add Project Folder" : t("importFolder") });
+      const folder = await platformAdapter.dialogs.pickFolder({ title: isKnownProjectImport ? "Add Project Folder" : t("importFolder"), defaultPath: rememberedImportFolder(kind) });
       if (folder?.localPath) paths = [folder.localPath];
     } else {
       setFileImportFlowState("native_dialog_requested", "Project State asked Windows to show the file picker.", kind);
-      const files = await platformAdapter.dialogs.pickFiles({ title: isKnownProjectImport ? "Add Files to Project" : t("importFiles") });
+      const files = await platformAdapter.dialogs.pickFiles({ title: isKnownProjectImport ? "Add Files to Project" : t("importFiles"), defaultPath: rememberedImportFolder(kind) });
       paths = files.map((file) => file.localPath).filter(Boolean);
     }
     if (!paths.length) {
@@ -7873,6 +7887,7 @@ async function beginFileImport(kind = "files") {
       return;
     }
     setFileImportFlowState("inspecting", `Windows picker returned ${paths.length} selected ${paths.length === 1 ? "path" : "paths"}. Inspecting supported files…`, kind);
+    if (rememberImportFolder(kind, paths)) await saveStore({ allowWithoutCoreApproval: true, reason: "remember-import-folder" });
     if (activeRootView === "files") render();
     const selection = await platformAdapter.files.inspectImportSelection({ paths });
     if (!selection.candidates?.length) {
@@ -7931,9 +7946,47 @@ function pathFileName(localPath = "") {
   return String(localPath || "").replaceAll("\\", "/").split("/").filter(Boolean).pop() || "";
 }
 
+function pathParentFolder(localPath = "") {
+  const text = String(localPath || "").trim();
+  if (!text) return "";
+  const normalized = text.replaceAll("\\", "/").replace(/\/+$/, "");
+  const index = normalized.lastIndexOf("/");
+  if (index <= 0) return "";
+  return text.includes("\\") ? normalized.slice(0, index).replaceAll("/", "\\") : normalized.slice(0, index);
+}
+
 function pathFolderName(localPath = "") {
   const parts = String(localPath || "").replaceAll("\\", "/").split("/").filter(Boolean);
   return parts.length ? parts[parts.length - 1] : "";
+}
+
+function importFolderMemoryKey(kind = "files") {
+  if (kind === "backup") return "backup";
+  if (kind === "folder") return "discovery_folder";
+  if (kind === "project_files") return "project_files";
+  if (kind === "project_folder") return "project_folder";
+  return "discovery_files";
+}
+
+function rememberedImportFolder(kind = "files") {
+  const folders = normalizeLastImportFolders(store.settings?.uiState?.lastImportFolders);
+  return folders[importFolderMemoryKey(kind)] || "";
+}
+
+function rememberImportFolder(kind = "files", paths = []) {
+  const selectedPaths = Array.isArray(paths) ? paths.filter(Boolean) : [];
+  if (!selectedPaths.length) return "";
+  const isFolderPicker = kind === "folder" || kind === "project_folder";
+  const folder = isFolderPicker ? selectedPaths[0] : pathParentFolder(selectedPaths[0]);
+  if (!folder) return "";
+  store.settings = normalizeSettings(store.settings || {});
+  const uiState = normalizeUiState(store.settings.uiState);
+  uiState.lastImportFolders = {
+    ...normalizeLastImportFolders(uiState.lastImportFolders),
+    [importFolderMemoryKey(kind)]: folder
+  };
+  store.settings.uiState = uiState;
+  return folder;
 }
 
 function fileExtension(fileName = "") {
@@ -8223,7 +8276,7 @@ function openFileImportReviewModal(selection) {
           extractions.push({ fileVersionId: staged.fileVersionId, originalName: staged.originalName, deduplicated: staged.deduplicated === true, status: result.extraction?.status || "failed", text, textBytes: result.extraction?.textBytes || 0, chunkCount: result.extraction?.chunkCount || 0, error: result.extraction?.error || null });
         }
         const analysis = await platformAdapter.discovery.analyzeCase({ discoveryCaseId, actorId: "project_state_deterministic" });
-        discoveryReviews.push({ discoveryCaseId, analysis, extractions, actor, reason: String(data.reason || "").trim(), groupLabel: candidateGroup.label });
+        discoveryReviews.push({ discoveryCaseId, analysis, extractions, actor, reason: String(data.reason || "").trim(), groupLabel: candidateGroup.label, privacyClass: data.privacyClass || "local_only" });
       }
       if (!discoveryReviews.length) { window.alert(t("fileImportFailed")); return false; }
       pendingFileImportReviewSelection = null;
@@ -8258,6 +8311,82 @@ function discoveryDestinationOptions(selected = "proposed_new_project") {
   ].map(([value, label]) => `<option value="${value}"${value === selected ? " selected" : ""}>${label}</option>`).join("");
 }
 
+function discoveryQuestionOptions(question = {}, { privacyClass = "local_only" } = {}) {
+  const id = String(question.id || "");
+  const base = [["", "Choose an answer"]];
+  if (id === "privacy_confirmation") {
+    return [
+      ...base,
+      ["Keep local only", "Keep local only"],
+      ["Configured provider may receive selected content later", "Allow configured provider later"],
+      ["Not sure", "Not sure"]
+    ];
+  }
+  if (id === "routing_new_or_unassigned") {
+    return [
+      ...base,
+      ["Propose a new project", "Propose a new project"],
+      ["General reference", "General reference"],
+      ["Orphaned idea", "Orphaned idea"],
+      ["Leave unassigned for now", "Leave unassigned for now"],
+      ["Not sure", "Not sure"]
+    ];
+  }
+  if (id === "grouping_confirmation") {
+    return [
+      ...base,
+      ["Yes, keep together", "Yes, keep together"],
+      ["No, split into separate ideas", "No, split into separate ideas"],
+      ["Not sure", "Not sure"]
+    ];
+  }
+  if (id === "large_corpus_intake_mode") {
+    return [
+      ...base,
+      ["Index first before project candidates", "Index first before project candidates"],
+      ["Treat as one large document for now", "Treat as one large document for now"],
+      ["Not sure", "Not sure"]
+    ];
+  }
+  if (id === "routing_existing_project") {
+    return [
+      ...base,
+      ["Yes, use the suggested existing project", "Yes"],
+      ["No, propose a new project", "No, propose new project"],
+      ["Not sure", "Not sure"]
+    ];
+  }
+  return [
+    ...base,
+    ["Yes", "Yes"],
+    ["No", "No"],
+    ["Not sure", "Not sure"]
+  ];
+}
+
+function renderDiscoveryQuestionSelect(question = {}, context = {}) {
+  const options = discoveryQuestionOptions(question, context)
+    .map(([value, label]) => `<option value="${escapeHtml(value)}">${escapeHtml(label)}</option>`)
+    .join("");
+  return `<div class="field"><label for="answer_${escapeHtml(question.id)}">${escapeHtml(question.text)}</label><select id="answer_${escapeHtml(question.id)}" name="answer_${escapeHtml(question.id)}" required>${options}</select></div>`;
+}
+
+function discoverySuggestedProjectNames(analysis = {}, units = []) {
+  const names = [];
+  for (const item of analysis.suggestedProjectNames || []) if (item?.name) names.push(item.name);
+  for (const unit of units || []) if (unit?.title) names.push(unit.title);
+  return [...new Set(names.map((name) => String(name || "").trim()).filter(Boolean))].slice(0, 12);
+}
+
+function suggestedProjectNameOptions(names = [], selected = "") {
+  const all = [...new Set([selected, ...names].map((name) => String(name || "").trim()).filter(Boolean))];
+  return [
+    `<option value="">Choose a suggested project name</option>`,
+    ...all.map((name) => `<option value="${escapeHtml(name)}"${name === selected ? " selected" : ""}>${escapeHtml(name)}</option>`),
+    `<option value="__custom__">Other / custom name</option>`
+  ].join("");
+}
+
 function renderDiscoveryUnitEditor(unit, index, { included = false } = {}) {
   const title = unit?.title || "";
   const summary = unit?.summary || "";
@@ -8273,7 +8402,7 @@ function renderDiscoveryUnitEditor(unit, index, { included = false } = {}) {
       <div class="field"><label for="unit_title_${index}">Idea or section name</label><input id="unit_title_${index}" name="unit_title_${index}" value="${escapeHtml(title)}" placeholder="Name this idea"></div>
       <div class="field"><label for="unit_summary_${index}">What this unit contains</label><textarea id="unit_summary_${index}" name="unit_summary_${index}" rows="3" placeholder="Optional plain-language summary">${escapeHtml(summary)}</textarea></div>
       ${supportingFiles.length ? `<p class="notice"><strong>Supporting files attached:</strong> ${supportingFiles.map((name) => escapeDisplay(name, DISPLAY_META_LIMIT)).join(", ")}</p>` : ""}
-      ${corpusEvidence ? `<p class="notice"><strong>Large corpus:</strong> ${escapeDisplay(corpusEvidence.fileName || "Selected file", DISPLAY_META_LIMIT)}${corpusEvidence.estimatedWords ? ` · estimated ${Number(corpusEvidence.estimatedWords).toLocaleString()} words` : ""}${corpusEvidence.corpusKind ? ` · ${escapeDisplay(corpusEvidence.corpusKind, DISPLAY_META_LIMIT)}` : ""}. Index before splitting into project candidates.</p>` : ""}
+      ${corpusEvidence ? `<p class="notice"><strong>Large file:</strong> ${escapeDisplay(corpusEvidence.fileName || "Selected file", DISPLAY_META_LIMIT)}${corpusEvidence.estimatedWords ? ` · estimated ${Number(corpusEvidence.estimatedWords).toLocaleString()} words` : ""}${corpusEvidence.corpusKind ? ` · ${escapeDisplay(corpusEvidence.corpusKind, DISPLAY_META_LIMIT)}` : ""}. Index before splitting into project candidates.</p>` : ""}
       ${corpusPreflight.reasons?.length ? `<p class="item-meta">${corpusPreflight.reasons.map((item) => escapeDisplay(item, DISPLAY_META_LIMIT)).join(" ")}</p>` : ""}
       <div class="field"><label for="unit_destination_${index}">Where should this unit go?</label><select id="unit_destination_${index}" name="unit_destination_${index}">${discoveryDestinationOptions("proposed_new_project")}</select></div>
       <div class="field"><label for="unit_project_${index}">Existing project, if selected</label><select id="unit_project_${index}" name="unit_project_${index}"><option value="">None</option>${projectOptions()}</select></div>
@@ -8313,7 +8442,7 @@ async function runFakeIdeaAnalysis(discoveryCaseId, actor, reason = "") {
   if (capabilities.arm?.executionLocation !== "local") throw new Error("Only local AI analysis arms are allowed in this flow.");
   const chunks = caseView.chunks || [];
   const hasPendingCorpus = (caseView.extractions || []).some((extraction) => extraction.status === "large_corpus_pending");
-  if (!chunks.length && hasPendingCorpus) throw new Error("Large corpus has been staged but not indexed yet. Build a corpus index before running local AI idea analysis.");
+  if (!chunks.length && hasPendingCorpus) throw new Error("Large file has been staged but not indexed yet. Build a large-file index before running local AI idea analysis.");
   if (!chunks.length) throw new Error("No extracted text chunks are available for idea analysis.");
   const extractionById = new Map((caseView.extractions || []).map((extraction) => [extraction.id, extraction]));
   const versionById = new Map((caseView.fileVersions || []).map((version) => [version.id, version]));
@@ -8347,9 +8476,12 @@ async function runFakeIdeaAnalysis(discoveryCaseId, actor, reason = "") {
   return result;
 }
 
-function openDiscoveryReviewModal({ discoveryCaseId, analysis, extractions = [], actor, reason, groupLabel = "", sequencePosition = null, onConfirmed = null }) {
+function openDiscoveryReviewModal({ discoveryCaseId, analysis, extractions = [], actor, reason, groupLabel = "", privacyClass = "local_only", sequencePosition = null, onConfirmed = null }) {
   const bestName = analysis.suggestedProjectNames?.[0]?.name || "";
   const suggestedUnits = (analysis.documentUnits || []).slice(0, 8);
+  const visibleQuestions = (analysis.questions || []).filter((question) => !(privacyClass === "local_only" && question.id === "privacy_confirmation"));
+  const automaticQuestionAnswers = privacyClass === "local_only" ? { privacy_confirmation: "Keep local only" } : {};
+  const suggestedProjectNames = discoverySuggestedProjectNames(analysis, suggestedUnits);
   const slotCount = Math.min(8, Math.max(3, suggestedUnits.length + 2));
   let unitSlots = Array.from({ length: slotCount }, (_, index) => suggestedUnits[index] || { id: `manual_unit_${index + 1}`, title: "", summary: "", fileVersionIds: [], evidence: [], suggested: false });
   const suggestedMode = analysis.unitModeSuggestion === "multiple_units" ? "multiple_units" : "one_item";
@@ -8357,15 +8489,15 @@ function openDiscoveryReviewModal({ discoveryCaseId, analysis, extractions = [],
   let corpusReadyForAi = false;
   const ideaAnalysisPanel = platformAdapter.analysis?.available
     ? corpusIntake
-      ? `<section class="panel" data-idea-analysis-panel data-corpus-index-required><p class="meta-label">Idea analysis</p><p class="notice">This corpus was staged and preflighted, but no readable index chunks exist yet. Local AI needs indexed chunks with exact evidence before it can suggest Idea Candidates.</p><button class="btn secondary" type="button" data-index-corpus>Index corpus for local AI</button><div data-idea-analysis-output><p class="item-meta">This first indexing pass creates bounded local chunks and keeps Core unchanged.</p></div></section>`
+      ? `<section class="panel" data-idea-analysis-panel data-corpus-index-required><p class="meta-label">Idea analysis</p><p class="notice">This large file was staged and preflighted, but no readable index chunks exist yet. Local AI needs indexed chunks with exact evidence before it can suggest Idea Candidates.</p><button class="btn secondary" type="button" data-index-corpus>Index large file for local AI</button><div data-idea-analysis-output><p class="item-meta">This first indexing pass creates bounded local chunks and keeps Core unchanged.</p></div></section>`
       : `<section class="panel" data-idea-analysis-panel><p class="meta-label">Idea analysis</p><p class="notice">For long documents, review content-backed ideas before project naming. If Qwen3 8B is installed, analysis runs locally through Ollama. Otherwise Project State uses the local deterministic fixture. Either way, it sends nothing to cloud and creates no Core authority.</p><button class="btn secondary" type="button" data-run-idea-analysis>Run local AI idea analysis</button><div data-idea-analysis-output></div></section>`
     : "";
   showModal({
     title: sequencePosition ? `Review Discovery (${sequencePosition.index} of ${sequencePosition.total})` : "Review Discovery",
     submitText: "Confirm",
     body: `
-      <p class="notice"><strong>${corpusIntake ? "Corpus staged." : "Read complete."}</strong> Project State copied the selected file into managed staging, verified its exact bytes, and ${corpusIntake ? "identified material that needs indexed corpus processing before project candidates are reliable." : "completed the supported local extraction shown below."}</p>
-      ${corpusIntake ? `<p class="notice"><strong>Large-corpus lane:</strong> ${Number(corpusIntake.totalEstimatedWords || 0).toLocaleString()} estimated words across ${corpusIntake.pendingFiles} file${corpusIntake.pendingFiles === 1 ? "" : "s"}. Suggested type: ${escapeDisplay((corpusIntake.corpusKinds || []).join(", ") || "large corpus", DISPLAY_META_LIMIT)}. Next step: ${escapeDisplay(corpusIntake.nextStep || "Index before promotion.", DISPLAY_META_LIMIT)}</p>` : ""}
+      <p class="notice"><strong>${corpusIntake ? "Large file staged." : "Read complete."}</strong> Project State copied the selected file into managed staging, verified its exact bytes, and ${corpusIntake ? "identified material that needs indexed large-file processing before project candidates are reliable." : "completed the supported local extraction shown below."}</p>
+      ${corpusIntake ? `<p class="notice"><strong>Large-file lane:</strong> ${Number(corpusIntake.totalEstimatedWords || 0).toLocaleString()} estimated words across ${corpusIntake.pendingFiles} file${corpusIntake.pendingFiles === 1 ? "" : "s"}. Suggested type: ${escapeDisplay((corpusIntake.corpusKinds || []).join(", ") || "large document", DISPLAY_META_LIMIT)}. Next step: ${escapeDisplay(corpusIntake.nextStep || "Index before promotion.", DISPLAY_META_LIMIT)}</p>` : ""}
       ${groupLabel ? `<p class="notice"><strong>Suggested group:</strong> ${escapeDisplay(groupLabel, DISPLAY_META_LIMIT)}</p>` : ""}
       <div class="field">
         <label>File reading result</label>
@@ -8382,7 +8514,7 @@ function openDiscoveryReviewModal({ discoveryCaseId, analysis, extractions = [],
                   : extraction.status === "large_file_pending"
                     ? `Large file staged; immediate text extraction deferred${extraction.error?.message ? `: ${extraction.error.message}` : ""}`
                   : extraction.status === "large_corpus_pending"
-                    ? `Large corpus staged for indexed processing${extraction.preflight?.estimatedWords ? ` · estimated ${Number(extraction.preflight.estimatedWords).toLocaleString()} words` : ""}${extraction.preflight?.corpusKind ? ` · ${extraction.preflight.corpusKind}` : ""}`
+                    ? `Large file staged for indexed processing${extraction.preflight?.estimatedWords ? ` · estimated ${Number(extraction.preflight.estimatedWords).toLocaleString()} words` : ""}${extraction.preflight?.corpusKind ? ` · ${extraction.preflight.corpusKind}` : ""}`
                   : extraction.status === "unsupported"
                     ? "This file type is stored but local text extraction is not supported"
                     : `Read failed${extraction.error?.message ? `: ${extraction.error.message}` : ""}`;
@@ -8400,6 +8532,7 @@ function openDiscoveryReviewModal({ discoveryCaseId, analysis, extractions = [],
       <p class="notice">Project State found a possible name and routing. These are suggestions, not decisions.</p>
       <div class="field"><label for="unitReviewMode">How should this material be reviewed?</label><select id="unitReviewMode" name="unitReviewMode"><option value="one_item"${suggestedMode === "one_item" ? " selected" : ""}>Treat it as one item</option><option value="multiple_units"${suggestedMode === "multiple_units" ? " selected" : ""}>Review several ideas separately</option></select></div>
       <div data-single-discovery-route>
+        <div class="field"><label for="suggestedProjectNameChoice">Suggested new project name</label><select id="suggestedProjectNameChoice" name="suggestedProjectNameChoice">${suggestedProjectNameOptions(suggestedProjectNames, bestName)}</select></div>
         <div class="field"><label>Working file-based name, only if treated as one item</label><input name="proposedProjectName" value="${escapeHtml(bestName)}"></div>
       </div>
       ${ideaAnalysisPanel}
@@ -8408,7 +8541,8 @@ function openDiscoveryReviewModal({ discoveryCaseId, analysis, extractions = [],
         <div class="list">${unitSlots.map((unit, index) => renderDiscoveryUnitEditor(unit, index, { included: index < suggestedUnits.length })).join("")}</div>
       </div>
       ${analysis.projectCandidates?.length ? `<div class="field"><label>Possible existing projects</label><div class="list">${analysis.projectCandidates.map((item) => `<p>${escapeDisplay(item.name, DISPLAY_META_LIMIT)} · ${Math.round(item.confidence * 100)}%</p>`).join("")}</div></div>` : ""}
-      ${(analysis.questions || []).map((question) => `<div class="field"><label for="answer_${escapeHtml(question.id)}">${escapeHtml(question.text)}</label><input id="answer_${escapeHtml(question.id)}" name="answer_${escapeHtml(question.id)}" placeholder="Not sure"></div>`).join("")}
+      ${privacyClass === "local_only" && (analysis.questions || []).some((question) => question.id === "privacy_confirmation") ? `<p class="notice">Privacy question answered from the previous page: <strong>Keep local only</strong>.</p>` : ""}
+      ${visibleQuestions.map((question) => renderDiscoveryQuestionSelect(question, { privacyClass })).join("")}
       <div data-single-discovery-route>
         <div class="field"><label for="destination">Where should this go?</label><select id="destination" name="destination" required>${discoveryDestinationOptions("proposed_new_project")}</select></div>
         <div class="field"><label for="projectId">Existing project, if selected</label><select id="projectId" name="projectId"><option value="">None</option>${projectOptions()}</select></div>
@@ -8416,7 +8550,11 @@ function openDiscoveryReviewModal({ discoveryCaseId, analysis, extractions = [],
       <p class="notice">Confirming creates Intake proposals only. Core still requires separate human approval.</p>
     `,
     async onSubmit(data) {
-      for (const question of analysis.questions || []) await platformAdapter.discovery.recordAnswer({ discoveryCaseId, actorId: actor.id, questionId: question.id, answer: data[`answer_${question.id}`] || "Not sure" });
+      for (const question of visibleQuestions) {
+        const answer = String(data[`answer_${question.id}`] || "").trim();
+        if (!answer) { window.alert("Answer each Discovery question before continuing."); return false; }
+      }
+      for (const question of analysis.questions || []) await platformAdapter.discovery.recordAnswer({ discoveryCaseId, actorId: actor.id, questionId: question.id, answer: automaticQuestionAnswers[question.id] || data[`answer_${question.id}`] || "Not sure" });
       let routing;
       if (data.unitReviewMode === "multiple_units") {
         const routes = unitSlots.map((unit, index) => ({
@@ -8435,6 +8573,7 @@ function openDiscoveryReviewModal({ discoveryCaseId, analysis, extractions = [],
         routing = await platformAdapter.discovery.confirmRouting({ discoveryCaseId, actorId: actor.id, routes });
       } else {
         if (data.destination === "existing_project" && !data.projectId) { window.alert("Choose an existing project or select a different destination."); return false; }
+        if (data.destination === "proposed_new_project" && !String(data.proposedProjectName || bestName).trim()) { window.alert("Choose or enter a proposed project name before continuing."); return false; }
         routing = await platformAdapter.discovery.confirmRouting({ discoveryCaseId, actorId: actor.id, destination: data.destination, projectId: data.projectId || null, proposedProjectName: data.proposedProjectName || bestName });
       }
       const confirmedRoutes = routing.routing.routes?.length ? routing.routing.routes : [routing.routing];
@@ -8450,12 +8589,22 @@ function openDiscoveryReviewModal({ discoveryCaseId, analysis, extractions = [],
   });
   const reviewModal = document.querySelector(".modal");
   const modeField = reviewModal?.querySelector("#unitReviewMode");
+  const suggestedProjectNameChoice = reviewModal?.querySelector("#suggestedProjectNameChoice");
+  const proposedProjectNameField = reviewModal?.querySelector('[name="proposedProjectName"]');
   const syncDiscoveryUnitMode = () => {
     const multiple = modeField?.value === "multiple_units";
     reviewModal?.querySelectorAll("[data-single-discovery-route]").forEach((node) => { node.hidden = multiple; });
     reviewModal?.querySelectorAll("[data-multiple-discovery-routes]").forEach((node) => { node.hidden = !multiple; });
   };
   modeField?.addEventListener("change", syncDiscoveryUnitMode);
+  suggestedProjectNameChoice?.addEventListener("change", () => {
+    if (!proposedProjectNameField) return;
+    if (suggestedProjectNameChoice.value === "__custom__") {
+      proposedProjectNameField.focus();
+      return;
+    }
+    if (suggestedProjectNameChoice.value) proposedProjectNameField.value = suggestedProjectNameChoice.value;
+  });
   syncDiscoveryUnitMode();
   const ideaPanel = reviewModal?.querySelector("[data-idea-analysis-panel]");
   const ideaOutput = ideaPanel?.querySelector("[data-idea-analysis-output]");
@@ -8464,30 +8613,30 @@ function openDiscoveryReviewModal({ discoveryCaseId, analysis, extractions = [],
     const indexButton = event.target.closest("[data-index-corpus]");
     if (indexButton) {
       indexButton.disabled = true;
-      indexButton.textContent = "Indexing corpus locally…";
+      indexButton.textContent = "Indexing large file locally…";
       try {
         const caseView = await platformAdapter.discovery.getCase({ discoveryCaseId });
         const extraction = (caseView.extractions || []).find((item) => item.status === "large_corpus_pending");
-        if (!extraction) throw new Error("No pending corpus extraction was found for this Discovery case.");
+        if (!extraction) throw new Error("No pending large-file extraction was found for this Discovery case.");
         const result = await platformAdapter.discovery.indexCorpus({ discoveryCaseId, extractionId: extraction.id, actorId: "project_state_deterministic", maxChunks: 120, chunkCharacters: 12000 });
         corpusReadyForAi = true;
-        ideaOutput.innerHTML = `<p class="notice"><strong>Corpus index ready.</strong> Created ${result.chunks?.length || 0} local evidence chunks${result.indexed?.truncated ? ` from the first ${result.indexed.maxChunks} chunks; later passes can continue indexing.` : "."}</p>`;
+        ideaOutput.innerHTML = `<p class="notice"><strong>Large file index ready.</strong> Created ${result.chunks?.length || 0} local evidence chunks${result.indexed?.truncated ? ` from the first ${result.indexed.maxChunks} chunks; later passes can continue indexing.` : "."}</p>`;
         indexButton.textContent = "Run local AI idea analysis";
         indexButton.removeAttribute("data-index-corpus");
         indexButton.setAttribute("data-run-idea-analysis", "true");
         indexButton.disabled = false;
       } catch (error) {
         console.error("Corpus indexing failed.", error);
-        ideaOutput.innerHTML = `<p class="notice danger">Corpus indexing could not continue: ${escapeDisplay(error.message || "Unknown error", DISPLAY_META_LIMIT)}</p>`;
+        ideaOutput.innerHTML = `<p class="notice danger">Large-file indexing could not continue: ${escapeDisplay(error.message || "Unknown error", DISPLAY_META_LIMIT)}</p>`;
         indexButton.disabled = false;
-        indexButton.textContent = "Retry corpus indexing";
+        indexButton.textContent = "Retry large-file indexing";
       }
       return;
     }
     const runButton = event.target.closest("[data-run-idea-analysis]");
     if (runButton) {
       if (corpusIntake && !corpusReadyForAi) {
-        ideaOutput.innerHTML = `<p class="notice danger">Large corpus has been staged but not indexed yet. Build a corpus index before running local AI idea analysis.</p>`;
+        ideaOutput.innerHTML = `<p class="notice danger">Large file has been staged but not indexed yet. Build a large-file index before running local AI idea analysis.</p>`;
         return;
       }
       runButton.disabled = true;
@@ -11150,8 +11299,9 @@ function wireLocalFilePickers(form) {
   }
   for (const button of form.querySelectorAll("[data-native-folder-picker]")) {
     button.addEventListener("click", async () => {
-      const folder = await platformAdapter.dialogs.pickFolder({ title: t("backupLocation") });
+      const folder = await platformAdapter.dialogs.pickFolder({ title: t("backupLocation"), defaultPath: rememberedImportFolder("backup") });
       if (!folder?.localPath) return;
+      rememberImportFolder("backup", [folder.localPath]);
       const locationField = form.querySelector(`[name="${button.dataset.locationTarget}"]`);
       if (locationField) locationField.value = folder.localPath;
     });
@@ -12431,7 +12581,7 @@ function openDeleteArchivedProjectModal(projectId) {
       store.projects = store.projects.filter((item) => item.id !== project.id);
       if (activeProjectId === project.id) activeProjectId = null;
       activeRootView = "archived";
-      saveStore({ allowWithoutCoreApproval: true, reason: "archived-project-delete" });
+      saveStore({ allowWithoutCoreApproval: true, preserveConcurrentApiIntake: false, reason: "archived-project-delete" });
     }
   });
 }
@@ -12483,7 +12633,7 @@ function openDeleteAllArchivedProjectsModal() {
       store.projects = store.projects.filter((project) => !archivedIds.has(project.id));
       if (activeProjectId && archivedIds.has(activeProjectId)) activeProjectId = null;
       activeRootView = "archived";
-      saveStore({ allowWithoutCoreApproval: true, reason: "all-archived-projects-delete" });
+      saveStore({ allowWithoutCoreApproval: true, preserveConcurrentApiIntake: false, reason: "all-archived-projects-delete" });
     }
   });
 }

@@ -91,13 +91,19 @@ async function showNativeOpenDialog(options) {
 }
 
 function registerNativeDialogIpc() {
+  const defaultPathFromPayload = (payload = {}) => {
+    const value = String(payload.defaultPath || "").trim();
+    return value ? path.resolve(value) : undefined;
+  };
+
   ipcMain.handle("native-dialog:pick-file", async (event, payload = {}) => {
     if (!trustedRenderer(event)) throw new Error("Untrusted renderer request.");
     const filters = Array.isArray(payload.filters) ? payload.filters : [];
     const options = {
       title: String(payload.title || "Choose a file"),
       properties: ["openFile"],
-      filters
+      filters,
+      defaultPath: defaultPathFromPayload(payload)
     };
     const result = await showNativeOpenDialog(options);
     if (result.canceled || !result.filePaths[0]) return null;
@@ -109,7 +115,8 @@ function registerNativeDialogIpc() {
     if (!trustedRenderer(event)) throw new Error("Untrusted renderer request.");
     const options = {
       title: String(payload.title || "Choose a folder"),
-      properties: ["openDirectory", "createDirectory"]
+      properties: ["openDirectory", "createDirectory"],
+      defaultPath: defaultPathFromPayload(payload)
     };
     const result = await showNativeOpenDialog(options);
     if (result.canceled || !result.filePaths[0]) return null;
@@ -122,7 +129,8 @@ function registerNativeDialogIpc() {
     const options = {
       title: String(payload.title || "Choose files"),
       properties: ["openFile", "multiSelections"],
-      filters
+      filters,
+      defaultPath: defaultPathFromPayload(payload)
     };
     const result = await showNativeOpenDialog(options);
     if (result.canceled) return [];

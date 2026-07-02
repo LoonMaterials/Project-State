@@ -1825,7 +1825,7 @@ async function analyzeDiscoveryCase({ storageRoot, dbPath, payload = {} }) {
       pendingFiles: corpusExtractions.length,
       totalEstimatedWords: corpusExtractions.reduce((total, extraction) => total + Number(extraction.preflight?.estimatedWords || 0), 0),
       corpusKinds: [...new Set(corpusExtractions.map((extraction) => extraction.preflight?.corpusKind).filter(Boolean))],
-      nextStep: "Index the corpus in resumable passes before promoting project candidates."
+      nextStep: "Index the large file in resumable passes before promoting project candidates."
     }
     : { recommended: false };
   const suggestion = { suggestedProjectNames: [{ name: suggestedName, confidence: baseNames.length === 1 ? 0.65 : 0.55, evidence: baseNames }], projectCandidates, questions, documentUnits, unitModeSuggestion: documentUnits.length > 1 ? "multiple_units" : "one_item", corpusIntake, deterministic: true, provider: "project_state_local_rules_v0.1" };

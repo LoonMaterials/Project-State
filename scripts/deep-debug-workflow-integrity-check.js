@@ -64,7 +64,7 @@ function workflowChecks() {
 function uiStateChecks() {
   const normalizeUiState = new Function(
     "RECENT_PROJECT_LIMIT",
-    `${functionText("normalizeUiState")}; return normalizeUiState;`
+    `${functionText("normalizeLastImportFolders")}; ${functionText("normalizeUiState")}; return normalizeUiState;`
   )(5);
   const normalized = normalizeUiState({
     recentProjectIds: ["p1", "p1", "p2", "p3", "p4", "p5", "p6"],
@@ -76,6 +76,7 @@ function uiStateChecks() {
   assert(normalized.projectScrollPositions.p1 === 42, "Valid scroll position was lost.", normalized);
   assert(normalized.projectScrollPositions.p2 === 0, "Negative scroll position was not clamped.", normalized);
   assert(!Object.hasOwn(normalized.projectScrollPositions, "invalid"), "Invalid scroll position was retained.", normalized);
+  assert(normalized.lastImportFolders && typeof normalized.lastImportFolders === "object", "Last import folder state was not normalized.", normalized);
   return normalized;
 }
 

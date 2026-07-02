@@ -17,6 +17,7 @@ function main() {
   assert(app.includes("Discovery review was closed. Use Open pending Discovery review"), "Closing the Discovery review does not leave a visible recovery path.");
   assert(app.includes("pendingFileImportReviewSelection = null;") && app.includes("Discarded Discovery review for"), "Discarding the Discovery review does not clear the pending folder/file selection.");
   assert(app.includes("Discovery review open:") && app.includes("[data-import-path]:checked"), "Discovery review selection changes do not update visible status.");
+  assert(app.includes("lastImportFolders") && app.includes("rememberedImportFolder") && app.includes("defaultPath: rememberedImportFolder(kind)"), "File import flow does not remember the last selected folder.");
   assert(/const closeModal = \(\{ discard = false, keepDraft = false \} = \{\}\) => \{[\s\S]+?postModalAction = null;[\s\S]+?modal\.remove\(\);/.test(app), "Closing or discarding a modal does not clear queued modal actions before rendering.");
   assert(/if \(action === "import-files"\) \{[\s\S]+?beginFileImport\("files"\);[\s\S]+?return;[\s\S]+?\}/.test(app), "Import-files action does not return immediately.");
   assert(/if \(action === "import-folder"\) \{[\s\S]+?beginFileImport\("folder"\);[\s\S]+?return;[\s\S]+?\}/.test(app), "Import-folder action does not return immediately.");
@@ -29,6 +30,7 @@ function main() {
     discardRecoveryVisible: true,
     discardClearsPendingSelection: true,
     reviewSelectionStatusVisible: true,
+    remembersLastFolder: true,
     importActionsReturn: true
   }, null, 2));
   console.log("File import flow reset: ok");
