@@ -28,6 +28,8 @@ async function main() {
     assert(providerSource.includes("127.0.0.1:11434"), "Qwen/Ollama provider must target loopback only.");
     assert(providerSource.includes("PROJECT_STATE_LOCAL_AI_TIMEOUT_MS"), "Local AI generation timeout must be configurable for offline models.");
     assert(providerSource.includes("num_predict: 1200"), "Local AI generation should keep responses bounded for smoke/offline use.");
+    assert(providerSource.includes("callQwenForJson"), "Local AI provider must retry malformed JSON locally before failing.");
+    assert(providerSource.includes("responseAttempts"), "Local AI candidate provenance should record JSON retry attempts.");
     assert(providerSource.includes("Do not create project names"), "Local AI prompt must keep project naming out of the provider.");
     assert(appSource.includes("creates no Core authority"), "UI does not explain local AI authority boundary.");
 

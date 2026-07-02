@@ -76,6 +76,7 @@ window.ProjectStateDesktop = {
     async readFoundationState(payload) {},
     async stageTrustedFile(payload) {},
     async extractFileVersion(payload) {},
+    async indexCorpus(payload) {},
     async readExtractionText(payload) {},
     async readChunkText(payload) {},
     async analyzeCase(payload) {},
@@ -146,7 +147,7 @@ The bridge currently uses Node's built-in SQLite support. If the final packaging
 
 Discovery implementation:
 
-The `discoveryStorage` methods stage user-trusted files as project-independent File Assets and append-only File Versions, then create Discovery Cases, deterministic extractions, chunks, Interactions, and Discovery Events. Project State does not scan files for malware and does not claim that a file is clean or safe. Staging requires the user to acknowledge that they have handled security with their own tools. File Arm/API uploads retained in managed `sources/` storage may also be linked into Discovery as exact File Versions, so Discovery can read Project State's managed copy without needing the outside original file path again. Folder connectors can preserve relative paths, group files into Discovery Cases, extract readable files, and trigger deterministic document-unit detection after the final file in a group. Every later read rechecks the managed file size and SHA-256 so changed bytes fail closed.
+The `discoveryStorage` methods stage user-trusted files as project-independent File Assets and append-only File Versions, then create Discovery Cases, deterministic extractions, chunks, Interactions, and Discovery Events. Project State does not scan files for malware and does not claim that a file is clean or safe. Staging requires the user to acknowledge that they have handled security with their own tools. File Arm/API uploads retained in managed `sources/` storage may also be linked into Discovery as exact File Versions, so Discovery can read Project State's managed copy without needing the outside original file path again. Folder connectors can preserve relative paths, group files into Discovery Cases, extract readable files, and trigger deterministic document-unit detection after the final file in a group. Very large text-like archives are first marked `large_corpus_pending`; `indexCorpus` creates bounded local evidence chunks before local AI analysis is allowed. Every later read rechecks the managed file size and SHA-256 so changed bytes fail closed.
 
 The `analysisArms` methods implement the provider-neutral Idea Candidate boundary. The deterministic fake local contract-test arm remains available for fallback validation. An optional Qwen3 8B local provider can run through Ollama on `127.0.0.1:11434` when installed. Both paths accept only exact human-authorized chunks, validate checksums and idempotency, create non-authoritative candidates and receipts, block machine review decisions, and record human-confirmed non-Core Idea Units. The Qwen path records `externalTransmission: false`, stores no provider credential, and cannot approve Intake or write Core.
 

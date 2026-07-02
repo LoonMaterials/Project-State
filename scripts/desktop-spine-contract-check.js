@@ -63,7 +63,7 @@ const REQUIRED_SAFETY_PHRASES = [
 ];
 const REQUIRED_BRIDGE_METHODS = {
   storage: ["loadStore", "saveStore", "saveMeta", "preserveRecoveryRecord", "verifyIntegrity", "importBrowserExport", "createBackupPackage", "restoreBackupPackage", "reset"],
-  discoveryStorage: ["initialize", "registerFileVersion", "createCase", "attachFileVersion", "appendInteraction", "appendSecurityReceipt", "appendEvent", "readFoundationState", "stageTrustedFile", "extractFileVersion", "readExtractionText", "readChunkText", "analyzeCase", "recordAnswer", "confirmRouting", "getCase", "promoteToIntake"],
+  discoveryStorage: ["initialize", "registerFileVersion", "createCase", "attachFileVersion", "appendInteraction", "appendSecurityReceipt", "appendEvent", "readFoundationState", "stageTrustedFile", "extractFileVersion", "indexCorpus", "readExtractionText", "readChunkText", "analyzeCase", "recordAnswer", "confirmRouting", "getCase", "promoteToIntake"],
   analysisArms: ["describeCapabilities", "createRun", "authorizeTransmission", "submitAnalysisBatch", "getAnalysisStatus", "getResultPage", "cancelAnalysis", "getReceipt", "recordReviewDecision", "readState"],
   securityArms: ["authorizeContentAccess"],
   files: ["metadata", "localPath", "readAsDataUrl", "readAsText", "readAsArrayBuffer", "extractText", "inflateRaw"],

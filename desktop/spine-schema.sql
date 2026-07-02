@@ -277,7 +277,7 @@ CREATE TABLE IF NOT EXISTS discovery_extractions (
   file_asset_id TEXT NOT NULL,
   file_version_id TEXT NOT NULL,
   source_sha256 TEXT NOT NULL CHECK(length(source_sha256) = 64),
-  status TEXT NOT NULL CHECK(status IN ('complete', 'partial', 'metadata_only', 'unsupported', 'failed')),
+  status TEXT NOT NULL CHECK(status IN ('complete', 'partial', 'metadata_only', 'large_file_pending', 'large_corpus_pending', 'unsupported', 'failed')),
   extractor_id TEXT NOT NULL,
   text_path TEXT,
   text_sha256 TEXT,

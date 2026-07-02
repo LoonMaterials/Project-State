@@ -1,0 +1,139 @@
+const fs = require("node:fs");
+const fsp = require("node:fs/promises");
+const os = require("node:os");
+const path = require("node:path");
+const { DatabaseSync } = require("node:sqlite");
+const { createProjectStateDesktopBridge } = require("../desktop/project-state-desktop-bridge.cjs");
+
+function assert(condition, message, details = {}) {
+  if (!condition) {
+    const error = new Error(message);
+    error.details = details;
+    throw error;
+  }
+}
+
+async function removeTempRoot(root) {
+  for (let attempt = 0; attempt < 12; attempt += 1) {
+    try {
+      await fsp.rm(root, { recursive: true, force: true });
+      return;
+    } catch (error) {
+      if (!["EBUSY", "EPERM"].includes(error.code) || attempt === 11) return;
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    }
+  }
+}
+
+async function main() {
+  const tempRoot = await fsp.mkdtemp(path.join(os.tmpdir(), "project-state-large-corpus-"));
+  const storageRoot = path.join(tempRoot, "storage");
+  const inputRoot = path.join(tempRoot, "input");
+  try {
+    await fsp.mkdir(inputRoot, { recursive: true });
+    const corpusPath = path.join(inputRoot, "raw-chatgpt-archive.txt");
+    const turn = [
+      "User: We need to capture ideas for Aether, Project State, and long-term memory.",
+      "Assistant: This archive contains repeated project design notes, questions, risks, and candidate tasks."
+    ].join("\n");
+    const repeated = Array.from({ length: 18000 }, (_, index) => `${turn}\nConversation index ${index + 1}: project idea discovery should be indexed before promotion.`).join("\n\n");
+    await fsp.writeFile(corpusPath, repeated, "utf8");
+
+    const bridge = createProjectStateDesktopBridge({ storageRoot });
+    const staged = await bridge.discoveryStorage.stageTrustedFile({
+      path: corpusPath,
+      actorId: "actor_owner",
+      reason: "Trusted large raw ChatGPT archive fixture.",
+      externalSecurityAcknowledged: true,
+      timestamp: "2026-07-02T09:00:00.000Z"
+    });
+    const extracted = await bridge.discoveryStorage.extractFileVersion({
+      discoveryCaseId: staged.discoveryCaseId,
+      fileVersionId: staged.fileVersionId,
+      actorId: "deterministic_extractor",
+      createdAt: "2026-07-02T09:01:00.000Z"
+    });
+    assert(extracted.extraction.status === "large_corpus_pending", "Large raw ChatGPT archive should defer to corpus intake.", extracted.extraction);
+    assert(extracted.chunks.length === 0, "Large corpus preflight should not explode into immediate chunks.", extracted);
+    assert(extracted.extraction.preflight?.recommendedLane === "corpus_intake", "Large corpus preflight did not choose the corpus lane.", extracted.extraction.preflight);
+    assert(extracted.extraction.preflight?.estimatedWords > 250000, "Large corpus word estimate was not high enough to trigger corpus mode.", extracted.extraction.preflight);
+    assert(extracted.extraction.preflight?.corpusKind === "raw_chatgpt_archive", "Raw ChatGPT archive was not detected.", extracted.extraction.preflight);
+
+    const analysis = await bridge.discoveryStorage.analyzeCase({
+      discoveryCaseId: staged.discoveryCaseId,
+      actorId: "project_state_deterministic",
+      createdAt: "2026-07-02T09:02:00.000Z"
+    });
+    assert(analysis.corpusIntake?.recommended === true, "Analysis did not recommend corpus intake.", analysis);
+    assert(analysis.documentUnits.length === 1, "Large corpus should produce one reviewable corpus unit, not zero units or many guesses.", analysis.documentUnits);
+    assert(analysis.documentUnits[0].evidence?.[0]?.role === "large_corpus_pending", "Corpus unit lost its pending-corpus evidence.", analysis.documentUnits[0]);
+    const indexed = await bridge.discoveryStorage.indexCorpus({
+      discoveryCaseId: staged.discoveryCaseId,
+      extractionId: extracted.extraction.id,
+      actorId: "project_state_deterministic",
+      createdAt: "2026-07-02T09:02:30.000Z",
+      chunkCharacters: 12000,
+      maxChunks: 12
+    });
+    assert(indexed.chunks.length === 12, "Corpus index should create bounded chunks for local AI.", indexed);
+    const readChunk = await bridge.discoveryStorage.readChunkText({ discoveryChunkId: indexed.chunks[0].id });
+    assert(readChunk.text.includes("User:") && readChunk.text.includes("Assistant:"), "Indexed corpus chunk was not readable.", readChunk);
+    const indexedAgain = await bridge.discoveryStorage.indexCorpus({
+      discoveryCaseId: staged.discoveryCaseId,
+      extractionId: extracted.extraction.id,
+      actorId: "project_state_deterministic"
+    });
+    assert(indexedAgain.deduplicated === true && indexedAgain.chunks.length === indexed.chunks.length, "Corpus indexing should be idempotent.", indexedAgain);
+
+    await bridge.discoveryStorage.confirmRouting({
+      discoveryCaseId: staged.discoveryCaseId,
+      actorId: "actor_owner",
+      routes: [{ ...analysis.documentUnits[0], destination: "proposed_new_project", proposedProjectName: analysis.documentUnits[0].title }],
+      confirmedAt: "2026-07-02T09:03:00.000Z"
+    });
+    const promotion = await bridge.discoveryStorage.promoteToIntake({
+      discoveryCaseId: staged.discoveryCaseId,
+      actorId: "actor_owner",
+      promotedAt: "2026-07-02T09:04:00.000Z",
+      reason: "Route staged corpus as a pending project candidate."
+    });
+    assert(promotion.intakeItemIds.length === 1, "Large corpus should promote to one Intake proposal pending human approval.", promotion);
+    const db = new DatabaseSync(path.join(storageRoot, "project-state.db"));
+    const intake = db.prepare("SELECT record_json FROM intake_items ORDER BY rowid").all().map((row) => JSON.parse(row.record_json)).find((item) => item.discoveryCaseId === staged.discoveryCaseId);
+    const coreProjects = db.prepare("SELECT COUNT(*) AS count FROM projects").get().count;
+    db.close();
+    assert(intake?.proposedChange?.extractionStatus === "large_corpus_pending", "Intake proposal did not preserve large-corpus extraction status.", intake);
+    assert(intake.evidence?.discoveryUnit?.evidence?.[0]?.role === "large_corpus_pending", "Intake evidence lost corpus provenance.", intake.evidence);
+    assert(coreProjects === 0, "Large corpus Intake promotion must not create Core projects.", { coreProjects });
+
+    const appSource = fs.readFileSync(path.join(__dirname, "..", "app.js"), "utf8");
+    assert(appSource.includes("data-corpus-index-required"), "Large corpus review UI should show that indexing is required before local AI.");
+    assert(appSource.includes("data-index-corpus"), "Large corpus review UI should expose indexing before normal local AI.");
+    assert(appSource.includes("Index corpus for local AI"), "Large corpus review UI should make the indexing action explicit.");
+    assert(appSource.includes("Build a corpus index before running local AI idea analysis."), "Chunkless corpus AI path should explain the required next step.");
+
+    console.log("Large Corpus Intake Flow Check");
+    console.log(JSON.stringify({
+      status: extracted.extraction.status,
+      estimatedWords: extracted.extraction.preflight.estimatedWords,
+      corpusKind: extracted.extraction.preflight.corpusKind,
+      immediateChunks: extracted.chunks.length,
+      indexedChunks: indexed.chunks.length,
+      corpusUnit: analysis.documentUnits[0].title,
+      intakeProposals: promotion.intakeItemIds.length,
+      coreChanged: false
+    }, null, 2));
+    console.log("Large corpus intake flow: ok");
+  } finally {
+    await removeTempRoot(tempRoot);
+  }
+}
+
+if (require.main === module) {
+  main().catch((error) => {
+    console.error("Large corpus intake flow failed:");
+    console.error(error.message);
+    if (error.details) console.error(JSON.stringify(error.details, null, 2));
+    process.exitCode = 1;
+  });
+}

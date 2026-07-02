@@ -26,6 +26,8 @@ const BACKUP_MANAGED_FOLDERS = ["sources", "extracts", "attachments", "quarantin
 const IMPORT_FILE_EXTENSIONS = new Set([".pdf", ".docx", ".txt", ".md", ".csv", ".json", ".png", ".jpg", ".jpeg", ".webp", ".gif"]);
 const MAX_IMPORT_FILE_BYTES = 2147483648;
 const MAX_TEXT_EXTRACTION_BYTES = 104857600;
+const MAX_IMMEDIATE_DISCOVERY_WORDS = 250000;
+const CORPUS_PREFLIGHT_SAMPLE_BYTES = 524288;
 const MAX_IMPORT_FILES = 500;
 const REQUIRED_TABLES = [
   "meta",
@@ -149,6 +151,9 @@ function createProjectStateDesktopBridge(options = {}) {
       },
       async extractFileVersion(payload = {}) {
         return extractDiscoveryFileVersion({ storageRoot, dbPath, payload });
+      },
+      async indexCorpus(payload = {}) {
+        return indexDiscoveryCorpus({ storageRoot, dbPath, payload });
       },
       async readExtractionText(payload = {}) {
         return readDiscoveryExtractionText({ storageRoot, dbPath, payload });
@@ -674,6 +679,7 @@ function openDatabase(dbPath) {
   const schema = fs.readFileSync(SCHEMA_FILE, "utf8");
   db.exec(schema);
   migrateFileVersionsManagedPathConstraint(db);
+  migrateDiscoveryExtractionStatusConstraint(db);
   db.exec(schema);
   return db;
 }
@@ -685,6 +691,49 @@ function assertStorageRootOutsideApp(storageRoot) {
   const insideAppRoot = relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
   if (!insideAppRoot) return;
   throw new Error(`Unsafe Project State storage root: ${resolvedStorage}. Choose a folder outside the Project State app/install folder so uninstall or reinstall cannot remove live data.`);
+}
+
+function migrateDiscoveryExtractionStatusConstraint(db) {
+  const row = db.prepare("SELECT sql FROM sqlite_schema WHERE type = 'table' AND name = 'discovery_extractions'").get();
+  const createSql = String(row?.sql || "");
+  if (!createSql || createSql.includes("large_corpus_pending")) return;
+  db.exec("PRAGMA foreign_keys = OFF;");
+  try {
+    db.exec("BEGIN IMMEDIATE TRANSACTION;");
+    db.exec(`
+      DROP TRIGGER IF EXISTS discovery_extractions_append_only_update;
+      DROP TRIGGER IF EXISTS discovery_extractions_append_only_delete;
+      DROP TABLE IF EXISTS discovery_extractions_new;
+      CREATE TABLE discovery_extractions_new (
+        id TEXT PRIMARY KEY,
+        discovery_case_id TEXT NOT NULL,
+        file_asset_id TEXT NOT NULL,
+        file_version_id TEXT NOT NULL,
+        source_sha256 TEXT NOT NULL CHECK(length(source_sha256) = 64),
+        status TEXT NOT NULL CHECK(status IN ('complete', 'partial', 'metadata_only', 'large_file_pending', 'large_corpus_pending', 'unsupported', 'failed')),
+        extractor_id TEXT NOT NULL,
+        text_path TEXT,
+        text_sha256 TEXT,
+        text_bytes INTEGER NOT NULL DEFAULT 0 CHECK(text_bytes >= 0),
+        created_at TEXT NOT NULL,
+        record_json TEXT NOT NULL,
+        FOREIGN KEY(discovery_case_id) REFERENCES discovery_cases(id) ON UPDATE RESTRICT ON DELETE RESTRICT,
+        FOREIGN KEY(file_version_id, file_asset_id, source_sha256) REFERENCES file_versions(id, file_asset_id, sha256) ON UPDATE RESTRICT ON DELETE RESTRICT
+      );
+      INSERT INTO discovery_extractions_new (id, discovery_case_id, file_asset_id, file_version_id, source_sha256, status, extractor_id, text_path, text_sha256, text_bytes, created_at, record_json)
+      SELECT id, discovery_case_id, file_asset_id, file_version_id, source_sha256, status, extractor_id, text_path, text_sha256, text_bytes, created_at, record_json FROM discovery_extractions;
+      DROP TABLE discovery_extractions;
+      ALTER TABLE discovery_extractions_new RENAME TO discovery_extractions;
+      INSERT OR REPLACE INTO meta (key, value_json, updated_at)
+      VALUES ('discovery_extraction_status_constraint', '{"version":"0.1","statuses":["complete","partial","metadata_only","large_file_pending","large_corpus_pending","unsupported","failed"]}', '2026-07-02T00:00:00.000Z');
+    `);
+    db.exec("COMMIT;");
+  } catch (error) {
+    try { db.exec("ROLLBACK;"); } catch {}
+    throw error;
+  } finally {
+    db.exec("PRAGMA foreign_keys = ON;");
+  }
 }
 
 function migrateFileVersionsManagedPathConstraint(db) {
@@ -1457,6 +1506,88 @@ async function stageTrustedDiscoveryFile({ storageRoot, dbPath, payload = {} }) 
   return { ok: true, discoveryCaseId, caseCreated, fileAssetId: actualAsset.id, fileVersionId: actualVersion.id, sha256: actualVersion.sha256, deduplicated: registration.deduplicated, securityMode: "external_user_responsibility" };
 }
 
+function immediateTextExtractionExtension(extension) {
+  return [".txt", ".md", ".csv", ".json", ".pdf", ".docx"].includes(extension);
+}
+
+function sampleableCorpusExtension(extension) {
+  return [".txt", ".md", ".csv", ".json"].includes(extension);
+}
+
+async function readDiscoveryFileSample(filePath, byteSize, sampleBytes = CORPUS_PREFLIGHT_SAMPLE_BYTES) {
+  const bytesToRead = Math.min(Math.max(4096, sampleBytes), Math.max(0, Number(byteSize) || 0));
+  if (!bytesToRead) return { text: "", sampledBytes: 0, headBytes: 0, tailBytes: 0 };
+  const handle = await fsp.open(filePath, "r");
+  try {
+    const headBuffer = Buffer.alloc(bytesToRead);
+    const headRead = await handle.read(headBuffer, 0, bytesToRead, 0);
+    let tailBuffer = Buffer.alloc(0);
+    let tailRead = { bytesRead: 0 };
+    if (byteSize > bytesToRead * 2) {
+      tailBuffer = Buffer.alloc(bytesToRead);
+      tailRead = await handle.read(tailBuffer, 0, bytesToRead, Math.max(0, byteSize - bytesToRead));
+    }
+    const sampledBytes = headRead.bytesRead + tailRead.bytesRead;
+    return {
+      text: `${headBuffer.subarray(0, headRead.bytesRead).toString("utf8")}\n${tailBuffer.subarray(0, tailRead.bytesRead).toString("utf8")}`,
+      sampledBytes,
+      headBytes: headRead.bytesRead,
+      tailBytes: tailRead.bytesRead
+    };
+  } finally {
+    await handle.close();
+  }
+}
+
+function countApproxWords(text = "") {
+  const matches = String(text || "").match(/[A-Za-z0-9_’'-]+/g);
+  return matches ? matches.length : 0;
+}
+
+function estimateWordsFromSample(text, sampledBytes, totalBytes) {
+  const sampleWords = countApproxWords(text);
+  if (!sampleWords || !sampledBytes || !totalBytes) return sampleWords;
+  return Math.max(sampleWords, Math.round(sampleWords * (Number(totalBytes) / Number(sampledBytes))));
+}
+
+function detectCorpusKind(sampleText = "", originalName = "") {
+  const text = String(sampleText || "").slice(0, 200000);
+  const lower = `${String(originalName || "").toLowerCase()}\n${text.toLowerCase()}`;
+  const jsonChatMarkers = /"role"\s*:\s*"(user|assistant|system)"/i.test(text) || /"mapping"\s*:/.test(text) || /"conversations?"\s*:/.test(text);
+  const transcriptMarkers = /\b(user|assistant|chatgpt|system)\s*:/i.test(text) || /\bprompt\b[\s\S]{0,200}\bresponse\b/i.test(text);
+  if (lower.includes("chatgpt") || jsonChatMarkers || transcriptMarkers) return "raw_chatgpt_archive";
+  if (/\bmeeting\b|\btranscript\b|\bconversation\b/i.test(text)) return "transcript_archive";
+  return "large_document_corpus";
+}
+
+async function buildDiscoveryPreflight({ filePath, version, extension }) {
+  const byteSize = Number(version.byteSize || 0);
+  const sample = sampleableCorpusExtension(extension) ? await readDiscoveryFileSample(filePath, byteSize) : { text: "", sampledBytes: 0, headBytes: 0, tailBytes: 0 };
+  const estimatedWords = sample.text ? estimateWordsFromSample(sample.text, sample.sampledBytes, byteSize) : 0;
+  const corpusKind = sample.text ? detectCorpusKind(sample.text, version.originalName || "") : "";
+  const reasons = [];
+  if (byteSize > MAX_TEXT_EXTRACTION_BYTES) reasons.push(`File is above the ${formatBytesForLog(MAX_TEXT_EXTRACTION_BYTES)} immediate extraction threshold.`);
+  if (estimatedWords > MAX_IMMEDIATE_DISCOVERY_WORDS) reasons.push(`Estimated word count is above the ${MAX_IMMEDIATE_DISCOVERY_WORDS.toLocaleString()} word immediate Discovery threshold.`);
+  if (corpusKind === "raw_chatgpt_archive") reasons.push("Preflight sample looks like a raw ChatGPT/chat archive.");
+  const mode = reasons.length ? "large_corpus" : "standard_document";
+  return {
+    mode,
+    corpusKind: mode === "large_corpus" ? corpusKind || "large_document_corpus" : corpusKind || "",
+    byteSize,
+    byteLimit: MAX_TEXT_EXTRACTION_BYTES,
+    estimatedWords,
+    wordLimit: MAX_IMMEDIATE_DISCOVERY_WORDS,
+    sampledBytes: sample.sampledBytes,
+    sampleStrategy: sample.tailBytes ? "head_and_tail" : sample.headBytes ? "head" : "metadata_only",
+    immediateExtractionAllowed: mode !== "large_corpus",
+    recommendedLane: mode === "large_corpus" ? "corpus_intake" : "standard_discovery",
+    reasons,
+    nextStep: mode === "large_corpus"
+      ? "Stage and index this as a large corpus before asking the user to promote project candidates."
+      : "Proceed with standard local extraction and Discovery review."
+  };
+}
+
 async function extractDiscoveryFileVersion({ storageRoot, dbPath, payload = {} }) {
   await ensureSpine(storageRoot);
   const discoveryCaseId = requiredDiscoveryId(payload.discoveryCaseId, "Discovery Case ID");
@@ -1472,21 +1603,27 @@ async function extractDiscoveryFileVersion({ storageRoot, dbPath, payload = {} }
   } finally { db.close(); }
   await authorizeDiscoveryContentAccess({ storageRoot, dbPath, reference: { managedPath: version.managedPath } });
   const extension = path.extname(version.originalName || "").toLowerCase();
+  const physicalPath = resolveManagedPath(storageRoot, version.managedPath);
   const extractionId = payload.id || makeId("discovery_extraction");
   let status = "unsupported";
   let text = "";
   let error = null;
+  let preflight = null;
   try {
-    if ([".txt", ".md", ".csv", ".json", ".pdf", ".docx"].includes(extension)) {
-      if ((version.byteSize || 0) > MAX_TEXT_EXTRACTION_BYTES) {
-        status = "large_file_pending";
+    if (immediateTextExtractionExtension(extension)) {
+      preflight = await buildDiscoveryPreflight({ filePath: physicalPath, version, extension });
+      if (preflight.mode === "large_corpus") {
+        status = "large_corpus_pending";
         error = {
-          name: "LargeFileDeferred",
-          message: `File was staged safely, but immediate text extraction is deferred above ${formatBytesForLog(MAX_TEXT_EXTRACTION_BYTES)}.`
+          name: "LargeCorpusDeferred",
+          message: `File was staged safely as a large corpus. ${preflight.reasons.join(" ")}`
         };
+      } else if ((version.byteSize || 0) > MAX_TEXT_EXTRACTION_BYTES) {
+        status = "large_file_pending";
+        error = { name: "LargeFileDeferred", message: `File was staged safely, but immediate text extraction is deferred above ${formatBytesForLog(MAX_TEXT_EXTRACTION_BYTES)}.` };
       } else {
-      text = cleanExtractedText(await extractText(resolveManagedPath(storageRoot, version.managedPath)) || "");
-      status = text ? "complete" : "partial";
+        text = cleanExtractedText(await extractText(physicalPath) || "");
+        status = text ? "complete" : "partial";
       }
     } else if ([".png", ".jpg", ".jpeg", ".webp", ".gif"].includes(extension)) status = "metadata_only";
   } catch (caught) {
@@ -1515,7 +1652,7 @@ async function extractDiscoveryFileVersion({ storageRoot, dbPath, payload = {} }
       chunks.push({ id: chunkId, discoveryExtractionId: extractionId, chunkIndex: index, textPath: relativeManagedPath(storageRoot, chunkPath), textSha256: checksumText(chunkText), textBytes: Buffer.byteLength(chunkText, "utf8") });
     }
   }
-  const record = { id: extractionId, discoveryCaseId, fileAssetId: version.fileAssetId, fileVersionId, sourceSha256: version.sha256, status, extractorId: "project_state_deterministic_v0.1", textPath, textSha256, textBytes, chunkCount: chunks.length, createdAt, error };
+  const record = { id: extractionId, discoveryCaseId, fileAssetId: version.fileAssetId, fileVersionId, sourceSha256: version.sha256, status, extractorId: "project_state_deterministic_v0.1", textPath, textSha256, textBytes, chunkCount: chunks.length, createdAt, error, preflight };
   const writeDb = openDatabase(dbPath);
   try {
     writeDb.exec("BEGIN IMMEDIATE TRANSACTION");
@@ -1540,6 +1677,68 @@ async function readDiscoveryExtractionText({ storageRoot, dbPath, payload = {} }
   const text = await fsp.readFile(resolveManagedPath(storageRoot, extraction.textPath), "utf8");
   if (Buffer.byteLength(text, "utf8") !== extraction.textBytes || checksumText(text) !== extraction.textSha256) throw new Error("Discovery Extraction derivative integrity failed.");
   return { ok: true, status: extraction.status, text };
+}
+
+async function indexDiscoveryCorpus({ storageRoot, dbPath, payload = {} }) {
+  await ensureSpine(storageRoot);
+  const discoveryCaseId = requiredDiscoveryId(payload.discoveryCaseId, "Discovery Case ID");
+  const extractionId = requiredDiscoveryId(payload.extractionId, "Discovery Extraction ID");
+  const actorId = requiredDiscoveryId(payload.actorId, "Corpus indexing actor ID");
+  const createdAt = requiredDiscoveryTimestamp(payload.createdAt || nowIso(), "Corpus indexing timestamp");
+  const chunkCharacters = Math.max(2000, Math.min(20000, Number(payload.chunkCharacters) || 12000));
+  const maxChunks = Math.max(1, Math.min(500, Number(payload.maxChunks) || 120));
+  const db = openDatabase(dbPath);
+  let extraction;
+  let version;
+  try {
+    extraction = dbRecord(db, "discovery_extractions", extractionId);
+    if (!extraction || extraction.discoveryCaseId !== discoveryCaseId) throw new Error("Large corpus extraction was not found for this Discovery Case.");
+    if (extraction.status !== "large_corpus_pending") throw new Error("Only pending large-corpus extractions can be indexed by this operation.");
+    version = dbRecord(db, "file_versions", extraction.fileVersionId);
+    if (!version) throw new Error("Discovery File Version was not found.");
+    const existingChunks = db.prepare("SELECT COUNT(*) AS count FROM discovery_chunks WHERE discovery_extraction_id = ?").get(extractionId).count;
+    if (existingChunks > 0) {
+      const chunks = db.prepare("SELECT record_json FROM discovery_chunks WHERE discovery_extraction_id = ? ORDER BY chunk_index").all(extractionId).map(parseRecordRow);
+      return { ok: true, deduplicated: true, discoveryCaseId, extraction, chunks };
+    }
+  } finally { db.close(); }
+  await authorizeDiscoveryContentAccess({ storageRoot, dbPath, reference: { managedPath: version.managedPath } });
+  const extension = path.extname(version.originalName || "").toLowerCase();
+  if (!sampleableCorpusExtension(extension)) throw new Error("Corpus indexing currently supports text, markdown, CSV, and JSON archives.");
+  const physicalPath = resolveManagedPath(storageRoot, version.managedPath);
+  const rawText = cleanExtractedText(extension === ".json" ? jsonToDiscoveryText(await readAsText(physicalPath), version.originalName || "") : await readAsText(physicalPath));
+  if (!rawText) throw new Error("Corpus indexing found no readable text.");
+  const allPieces = chunkDeterministicText(rawText, chunkCharacters);
+  const pieces = allPieces.slice(0, maxChunks);
+  const extractionRoot = path.join(storageRoot, "discovery", discoveryCaseId, extraction.fileVersionId, extractionId, "corpus-index");
+  const chunks = [];
+  await fsp.mkdir(path.join(extractionRoot, "chunks"), { recursive: true });
+  for (let index = 0; index < pieces.length; index += 1) {
+    const chunkText = pieces[index];
+    const chunkId = `${extractionId}_corpus_chunk_${String(index).padStart(4, "0")}`;
+    const chunkPath = path.join(extractionRoot, "chunks", `${String(index).padStart(4, "0")}.txt`);
+    await fsp.writeFile(chunkPath, chunkText, "utf8");
+    chunks.push({
+      id: chunkId,
+      discoveryExtractionId: extractionId,
+      chunkIndex: index,
+      textPath: relativeManagedPath(storageRoot, chunkPath),
+      textSha256: checksumText(chunkText),
+      textBytes: Buffer.byteLength(chunkText, "utf8"),
+      corpusIndex: true,
+      sourceStatus: extraction.status,
+      indexedAt: createdAt
+    });
+  }
+  const writeDb = openDatabase(dbPath);
+  try {
+    writeDb.exec("BEGIN IMMEDIATE TRANSACTION");
+    for (const chunk of chunks) insertStrict(writeDb, "discovery_chunks", { id: chunk.id, discovery_extraction_id: extractionId, chunk_index: chunk.chunkIndex, text_path: chunk.textPath, text_sha256: chunk.textSha256, text_bytes: chunk.textBytes, record_json: JSON.stringify(chunk) });
+    writeDb.exec("COMMIT");
+  } catch (caught) { try { writeDb.exec("ROLLBACK"); } catch {} throw caught; }
+  finally { writeDb.close(); }
+  await appendDiscoveryEvent({ storageRoot, dbPath, payload: { id: makeId("discovery_event"), discoveryCaseId, eventType: "large_corpus_indexed", actorId, actorType: "tool", occurredAt: createdAt, fileVersionId: extraction.fileVersionId, extractionId, chunkCount: chunks.length, chunkCharacters, maxChunks } });
+  return { ok: true, discoveryCaseId, extraction, chunks, indexed: { chunkCount: chunks.length, chunkCharacters, maxChunks, truncated: allPieces.length > maxChunks, totalDetectedChunks: allPieces.length } };
 }
 
 async function readDiscoveryChunkText({ storageRoot, dbPath, payload = {} }) {
@@ -1617,8 +1816,19 @@ async function analyzeDiscoveryCase({ storageRoot, dbPath, payload = {} }) {
       extractionTexts.push({ extraction, text: "" });
     }
   }
-  const documentUnits = detectDiscoveryDocumentUnits({ versions, extractionTexts });
-  const suggestion = { suggestedProjectNames: [{ name: suggestedName, confidence: baseNames.length === 1 ? 0.65 : 0.55, evidence: baseNames }], projectCandidates, questions, documentUnits, unitModeSuggestion: documentUnits.length > 1 ? "multiple_units" : "one_item", deterministic: true, provider: "project_state_local_rules_v0.1" };
+  const corpusExtractions = extractions.filter((item) => item.status === "large_corpus_pending");
+  if (corpusExtractions.length) questions.unshift({ id: "large_corpus_intake_mode", text: "This looks like a large corpus. Should Project State index it first before creating project candidates?", affects: "processing", allowNotSure: true });
+  const documentUnits = detectDiscoveryDocumentUnits({ versions, extractionTexts, extractions });
+  const corpusIntake = corpusExtractions.length
+    ? {
+      recommended: true,
+      pendingFiles: corpusExtractions.length,
+      totalEstimatedWords: corpusExtractions.reduce((total, extraction) => total + Number(extraction.preflight?.estimatedWords || 0), 0),
+      corpusKinds: [...new Set(corpusExtractions.map((extraction) => extraction.preflight?.corpusKind).filter(Boolean))],
+      nextStep: "Index the corpus in resumable passes before promoting project candidates."
+    }
+    : { recommended: false };
+  const suggestion = { suggestedProjectNames: [{ name: suggestedName, confidence: baseNames.length === 1 ? 0.65 : 0.55, evidence: baseNames }], projectCandidates, questions, documentUnits, unitModeSuggestion: documentUnits.length > 1 ? "multiple_units" : "one_item", corpusIntake, deterministic: true, provider: "project_state_local_rules_v0.1" };
   await appendDiscoveryInteraction({ storageRoot, dbPath, payload: { id: makeId("interaction"), discoveryCaseId, actorId, actorType: "tool", interactionType: "machine_suggestion", createdAt, content: suggestion, evidence: versions.map((version) => ({ fileVersionId: version.id, sha256: version.sha256 })) } });
   for (const question of questions) await appendDiscoveryInteraction({ storageRoot, dbPath, payload: { id: makeId("interaction"), discoveryCaseId, actorId, actorType: "tool", interactionType: "system_question", createdAt, content: question } });
   await updateDiscoveryCaseRecord({ dbPath, discoveryCaseId, changes: { stage: "questions", status: "questioning", updatedAt: createdAt, suggestedName } });
@@ -1703,7 +1913,7 @@ function suggestDiscoveryName(baseNames) {
   return titleFromTokens(common.length ? common.join(" ") : baseNames[0]);
 }
 
-function detectDiscoveryDocumentUnits({ versions = [], extractionTexts = [] } = {}) {
+function detectDiscoveryDocumentUnits({ versions = [], extractionTexts = [], extractions = [] } = {}) {
   const units = [];
   const versionById = new Map(versions.map((version) => [version.id, version]));
   for (const { extraction, text } of extractionTexts) {
@@ -1731,8 +1941,38 @@ function detectDiscoveryDocumentUnits({ versions = [], extractionTexts = [] } = 
       units.push({ id: `unit_${units.length + 1}`, title: path.basename(fileName, path.extname(fileName)) || fileName, summary: String(text || "").replace(/\s+/g, " ").trim().slice(0, 600), fileVersionIds: [extraction.fileVersionId], evidence: [{ fileVersionId: extraction.fileVersionId, extractionId: extraction.id, fileName }], suggested: true });
     }
   }
+  for (const extraction of extractions.filter((item) => item.status === "large_corpus_pending")) {
+    if (units.some((unit) => (unit.fileVersionIds || []).includes(extraction.fileVersionId))) continue;
+    const version = versionById.get(extraction.fileVersionId) || {};
+    const fileName = version.originalName || "Large corpus";
+    const sourceTitle = path.basename(fileName, path.extname(fileName)) || fileName;
+    const preflight = extraction.preflight || {};
+    units.push({
+      id: `unit_${units.length + 1}`,
+      title: titleFromTokens(sourceTitle),
+      summary: [
+        "Large corpus staged safely for indexed Discovery.",
+        preflight.estimatedWords ? `Estimated words: ${Number(preflight.estimatedWords).toLocaleString()}.` : "",
+        preflight.corpusKind ? `Detected type: ${preflight.corpusKind}.` : "",
+        preflight.nextStep || ""
+      ].filter(Boolean).join(" ").slice(0, 800),
+      fileVersionIds: [extraction.fileVersionId],
+      evidence: [{
+        fileVersionId: extraction.fileVersionId,
+        extractionId: extraction.id,
+        fileName,
+        role: "large_corpus_pending",
+        corpusKind: preflight.corpusKind || "large_document_corpus",
+        estimatedWords: preflight.estimatedWords || 0,
+        note: "Large corpus is staged and needs indexed processing before confident project splitting."
+      }],
+      corpusPreflight: cloneJson(preflight),
+      suggested: true
+    });
+  }
   const assignedVersionIds = new Set(units.flatMap((unit) => unit.fileVersionIds || []));
-  const supportingVersions = versions.filter((version) => !assignedVersionIds.has(version.id));
+  const corpusVersionIds = new Set(extractions.filter((item) => item.status === "large_corpus_pending").map((item) => item.fileVersionId));
+  const supportingVersions = versions.filter((version) => !assignedVersionIds.has(version.id) && !corpusVersionIds.has(version.id));
   if (units.length && supportingVersions.length) {
     const firstUnit = units[0];
     firstUnit.fileVersionIds = [...new Set([...(firstUnit.fileVersionIds || []), ...supportingVersions.map((version) => version.id)])];

@@ -3513,6 +3513,7 @@ function createDesktopPlatformAdapter(bridge) {
       available: typeof discoveryStorage.stageTrustedFile === "function" && typeof discoveryStorage.getCase === "function",
       stageTrustedFile: (payload) => discoveryStorage.stageTrustedFile(payload),
       extractFileVersion: (payload) => discoveryStorage.extractFileVersion(payload),
+      indexCorpus: (payload) => discoveryStorage.indexCorpus(payload),
       readExtractionText: (payload) => discoveryStorage.readExtractionText(payload),
       readChunkText: (payload) => discoveryStorage.readChunkText(payload),
       analyzeCase: (payload) => discoveryStorage.analyzeCase(payload),
@@ -8264,12 +8265,16 @@ function renderDiscoveryUnitEditor(unit, index, { included = false } = {}) {
     .filter((item) => item?.role === "supporting_file_without_text")
     .map((item) => item.fileName || "Supporting file")
     .filter(Boolean);
+  const corpusEvidence = (unit?.evidence || []).find((item) => item?.role === "large_corpus_pending") || null;
+  const corpusPreflight = unit?.corpusPreflight || {};
   return `
     <article class="item discovery-unit-editor" data-discovery-unit-index="${index}">
       <label class="check-field"><input type="checkbox" name="unit_include_${index}" ${included ? "checked" : ""}><span><strong>${included ? "Include this suggested unit" : "Add another idea"}</strong></span></label>
       <div class="field"><label for="unit_title_${index}">Idea or section name</label><input id="unit_title_${index}" name="unit_title_${index}" value="${escapeHtml(title)}" placeholder="Name this idea"></div>
       <div class="field"><label for="unit_summary_${index}">What this unit contains</label><textarea id="unit_summary_${index}" name="unit_summary_${index}" rows="3" placeholder="Optional plain-language summary">${escapeHtml(summary)}</textarea></div>
       ${supportingFiles.length ? `<p class="notice"><strong>Supporting files attached:</strong> ${supportingFiles.map((name) => escapeDisplay(name, DISPLAY_META_LIMIT)).join(", ")}</p>` : ""}
+      ${corpusEvidence ? `<p class="notice"><strong>Large corpus:</strong> ${escapeDisplay(corpusEvidence.fileName || "Selected file", DISPLAY_META_LIMIT)}${corpusEvidence.estimatedWords ? ` · estimated ${Number(corpusEvidence.estimatedWords).toLocaleString()} words` : ""}${corpusEvidence.corpusKind ? ` · ${escapeDisplay(corpusEvidence.corpusKind, DISPLAY_META_LIMIT)}` : ""}. Index before splitting into project candidates.</p>` : ""}
+      ${corpusPreflight.reasons?.length ? `<p class="item-meta">${corpusPreflight.reasons.map((item) => escapeDisplay(item, DISPLAY_META_LIMIT)).join(" ")}</p>` : ""}
       <div class="field"><label for="unit_destination_${index}">Where should this unit go?</label><select id="unit_destination_${index}" name="unit_destination_${index}">${discoveryDestinationOptions("proposed_new_project")}</select></div>
       <div class="field"><label for="unit_project_${index}">Existing project, if selected</label><select id="unit_project_${index}" name="unit_project_${index}"><option value="">None</option>${projectOptions()}</select></div>
     </article>
@@ -8307,6 +8312,8 @@ async function runFakeIdeaAnalysis(discoveryCaseId, actor, reason = "") {
   const capabilities = await platformAdapter.analysis.describeCapabilities();
   if (capabilities.arm?.executionLocation !== "local") throw new Error("Only local AI analysis arms are allowed in this flow.");
   const chunks = caseView.chunks || [];
+  const hasPendingCorpus = (caseView.extractions || []).some((extraction) => extraction.status === "large_corpus_pending");
+  if (!chunks.length && hasPendingCorpus) throw new Error("Large corpus has been staged but not indexed yet. Build a corpus index before running local AI idea analysis.");
   if (!chunks.length) throw new Error("No extracted text chunks are available for idea analysis.");
   const extractionById = new Map((caseView.extractions || []).map((extraction) => [extraction.id, extraction]));
   const versionById = new Map((caseView.fileVersions || []).map((version) => [version.id, version]));
@@ -8346,11 +8353,19 @@ function openDiscoveryReviewModal({ discoveryCaseId, analysis, extractions = [],
   const slotCount = Math.min(8, Math.max(3, suggestedUnits.length + 2));
   let unitSlots = Array.from({ length: slotCount }, (_, index) => suggestedUnits[index] || { id: `manual_unit_${index + 1}`, title: "", summary: "", fileVersionIds: [], evidence: [], suggested: false });
   const suggestedMode = analysis.unitModeSuggestion === "multiple_units" ? "multiple_units" : "one_item";
+  const corpusIntake = analysis.corpusIntake?.recommended ? analysis.corpusIntake : null;
+  let corpusReadyForAi = false;
+  const ideaAnalysisPanel = platformAdapter.analysis?.available
+    ? corpusIntake
+      ? `<section class="panel" data-idea-analysis-panel data-corpus-index-required><p class="meta-label">Idea analysis</p><p class="notice">This corpus was staged and preflighted, but no readable index chunks exist yet. Local AI needs indexed chunks with exact evidence before it can suggest Idea Candidates.</p><button class="btn secondary" type="button" data-index-corpus>Index corpus for local AI</button><div data-idea-analysis-output><p class="item-meta">This first indexing pass creates bounded local chunks and keeps Core unchanged.</p></div></section>`
+      : `<section class="panel" data-idea-analysis-panel><p class="meta-label">Idea analysis</p><p class="notice">For long documents, review content-backed ideas before project naming. If Qwen3 8B is installed, analysis runs locally through Ollama. Otherwise Project State uses the local deterministic fixture. Either way, it sends nothing to cloud and creates no Core authority.</p><button class="btn secondary" type="button" data-run-idea-analysis>Run local AI idea analysis</button><div data-idea-analysis-output></div></section>`
+    : "";
   showModal({
     title: sequencePosition ? `Review Discovery (${sequencePosition.index} of ${sequencePosition.total})` : "Review Discovery",
     submitText: "Confirm",
     body: `
-      <p class="notice"><strong>Read complete.</strong> Project State copied the selected file into managed staging, verified its exact bytes, and completed the supported local extraction shown below.</p>
+      <p class="notice"><strong>${corpusIntake ? "Corpus staged." : "Read complete."}</strong> Project State copied the selected file into managed staging, verified its exact bytes, and ${corpusIntake ? "identified material that needs indexed corpus processing before project candidates are reliable." : "completed the supported local extraction shown below."}</p>
+      ${corpusIntake ? `<p class="notice"><strong>Large-corpus lane:</strong> ${Number(corpusIntake.totalEstimatedWords || 0).toLocaleString()} estimated words across ${corpusIntake.pendingFiles} file${corpusIntake.pendingFiles === 1 ? "" : "s"}. Suggested type: ${escapeDisplay((corpusIntake.corpusKinds || []).join(", ") || "large corpus", DISPLAY_META_LIMIT)}. Next step: ${escapeDisplay(corpusIntake.nextStep || "Index before promotion.", DISPLAY_META_LIMIT)}</p>` : ""}
       ${groupLabel ? `<p class="notice"><strong>Suggested group:</strong> ${escapeDisplay(groupLabel, DISPLAY_META_LIMIT)}</p>` : ""}
       <div class="field">
         <label>File reading result</label>
@@ -8366,6 +8381,8 @@ function openDiscoveryReviewModal({ discoveryCaseId, analysis, extractions = [],
                   ? "Metadata recorded; this file type has no local text extraction"
                   : extraction.status === "large_file_pending"
                     ? `Large file staged; immediate text extraction deferred${extraction.error?.message ? `: ${extraction.error.message}` : ""}`
+                  : extraction.status === "large_corpus_pending"
+                    ? `Large corpus staged for indexed processing${extraction.preflight?.estimatedWords ? ` · estimated ${Number(extraction.preflight.estimatedWords).toLocaleString()} words` : ""}${extraction.preflight?.corpusKind ? ` · ${extraction.preflight.corpusKind}` : ""}`
                   : extraction.status === "unsupported"
                     ? "This file type is stored but local text extraction is not supported"
                     : `Read failed${extraction.error?.message ? `: ${extraction.error.message}` : ""}`;
@@ -8385,7 +8402,7 @@ function openDiscoveryReviewModal({ discoveryCaseId, analysis, extractions = [],
       <div data-single-discovery-route>
         <div class="field"><label>Working file-based name, only if treated as one item</label><input name="proposedProjectName" value="${escapeHtml(bestName)}"></div>
       </div>
-      ${platformAdapter.analysis?.available ? `<section class="panel" data-idea-analysis-panel><p class="meta-label">Idea analysis</p><p class="notice">For long documents, review content-backed ideas before project naming. If Qwen3 8B is installed, analysis runs locally through Ollama. Otherwise Project State uses the local deterministic fixture. Either way, it sends nothing to cloud and creates no Core authority.</p><button class="btn secondary" type="button" data-run-idea-analysis>Run local AI idea analysis</button><div data-idea-analysis-output></div></section>` : ""}
+      ${ideaAnalysisPanel}
       <div data-multiple-discovery-routes>
         <p class="notice">Each included unit will receive its own route and pending Intake proposal. Suggested boundaries are editable and do not alter the original file.</p>
         <div class="list">${unitSlots.map((unit, index) => renderDiscoveryUnitEditor(unit, index, { included: index < suggestedUnits.length })).join("")}</div>
@@ -8444,8 +8461,35 @@ function openDiscoveryReviewModal({ discoveryCaseId, analysis, extractions = [],
   const ideaOutput = ideaPanel?.querySelector("[data-idea-analysis-output]");
   let currentIdeaCandidates = [];
   ideaPanel?.addEventListener("click", async (event) => {
+    const indexButton = event.target.closest("[data-index-corpus]");
+    if (indexButton) {
+      indexButton.disabled = true;
+      indexButton.textContent = "Indexing corpus locally…";
+      try {
+        const caseView = await platformAdapter.discovery.getCase({ discoveryCaseId });
+        const extraction = (caseView.extractions || []).find((item) => item.status === "large_corpus_pending");
+        if (!extraction) throw new Error("No pending corpus extraction was found for this Discovery case.");
+        const result = await platformAdapter.discovery.indexCorpus({ discoveryCaseId, extractionId: extraction.id, actorId: "project_state_deterministic", maxChunks: 120, chunkCharacters: 12000 });
+        corpusReadyForAi = true;
+        ideaOutput.innerHTML = `<p class="notice"><strong>Corpus index ready.</strong> Created ${result.chunks?.length || 0} local evidence chunks${result.indexed?.truncated ? ` from the first ${result.indexed.maxChunks} chunks; later passes can continue indexing.` : "."}</p>`;
+        indexButton.textContent = "Run local AI idea analysis";
+        indexButton.removeAttribute("data-index-corpus");
+        indexButton.setAttribute("data-run-idea-analysis", "true");
+        indexButton.disabled = false;
+      } catch (error) {
+        console.error("Corpus indexing failed.", error);
+        ideaOutput.innerHTML = `<p class="notice danger">Corpus indexing could not continue: ${escapeDisplay(error.message || "Unknown error", DISPLAY_META_LIMIT)}</p>`;
+        indexButton.disabled = false;
+        indexButton.textContent = "Retry corpus indexing";
+      }
+      return;
+    }
     const runButton = event.target.closest("[data-run-idea-analysis]");
     if (runButton) {
+      if (corpusIntake && !corpusReadyForAi) {
+        ideaOutput.innerHTML = `<p class="notice danger">Large corpus has been staged but not indexed yet. Build a corpus index before running local AI idea analysis.</p>`;
+        return;
+      }
       runButton.disabled = true;
       runButton.textContent = "Analyzing exact chunks locally…";
       try {

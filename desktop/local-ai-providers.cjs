@@ -141,18 +141,41 @@ async function callOllamaGenerate(prompt) {
   }, OLLAMA_GENERATE_TIMEOUT_MS);
 }
 
+function parseQwenJsonResponse(responseText = "") {
+  return JSON.parse(stripModelJson(responseText || ""));
+}
+
+async function callQwenForJson(prompt, { candidateTypes, maxCandidates } = {}) {
+  const first = await callOllamaGenerate(prompt);
+  try {
+    return { parsed: parseQwenJsonResponse(first.response || ""), attempts: 1 };
+  } catch (firstError) {
+    const retryPrompt = [
+      "Your previous response was not valid JSON.",
+      "Return valid JSON only. Do not include markdown, commentary, trailing text, or partial arrays.",
+      "The entire response must parse with JSON.parse.",
+      "Use exactly this top-level shape:",
+      '{"candidates":[{"workingLabel":"short label","neutralSummary":"plain evidence-based summary","candidateType":"other","scope":"unknown","keyTerms":[],"evidence":[{"discoveryChunkId":"chunk id from the supplied chunks","relationship":"supports","excerpt":"short quote or paraphrase"}],"confidence":{"score":0.5,"basis":"why","uncertaintyNotes":""},"clarificationQuestions":[]}]}',
+      candidateTypes?.length ? `Allowed candidateType values: ${candidateTypes.join(", ")}` : "",
+      maxCandidates ? `Maximum candidates: ${maxCandidates}` : "",
+      "Original task:",
+      prompt
+    ].filter(Boolean).join("\n\n");
+    const second = await callOllamaGenerate(retryPrompt);
+    try {
+      return { parsed: parseQwenJsonResponse(second.response || ""), attempts: 2 };
+    } catch (secondError) {
+      throw localAiError("PROVIDER_RESPONSE_INVALID", `Qwen3 8B returned unreadable JSON after retry: ${secondError.message}; first attempt: ${firstError.message}`);
+    }
+  }
+}
+
 async function generateQwenIdeaCandidates({ validated, envelope, ideaContract, maxCandidates }) {
   const providers = await describeLocalAiProviders();
   const provider = providers.find((item) => item.providerId === QWEN3_8B_PROVIDER_ID);
   if (!provider?.available) throw localAiError("PROVIDER_UNAVAILABLE", provider?.lastError || "Qwen3 8B is not installed in Ollama.");
   const prompt = buildAnalysisPrompt({ chunks: validated, candidateTypes: ideaContract.objects.IdeaCandidate.candidateTypes, maxCandidates });
-  const response = await callOllamaGenerate(prompt);
-  let parsed;
-  try {
-    parsed = JSON.parse(stripModelJson(response.response || ""));
-  } catch (error) {
-    throw localAiError("PROVIDER_RESPONSE_INVALID", `Qwen3 8B returned unreadable JSON: ${error.message}`);
-  }
+  const { parsed, attempts } = await callQwenForJson(prompt, { candidateTypes: ideaContract.objects.IdeaCandidate.candidateTypes, maxCandidates });
   const suppliedCandidates = Array.isArray(parsed.candidates) ? parsed.candidates : [];
   const chunkById = new Map(validated.map((item) => [item.chunk.id, item]));
   const allowedTypes = new Set(ideaContract.objects.IdeaCandidate.candidateTypes);
@@ -208,7 +231,7 @@ async function generateQwenIdeaCandidates({ validated, envelope, ideaContract, m
         affects: normalizeText(question.affects || "meaning", 80),
         allowNotSure: question.allowNotSure !== false
       })).filter((question) => question.text),
-      provenance: { providerId: QWEN3_8B_PROVIDER_ID, modelId: QWEN3_8B_MODEL_ID, externalJobId: `local_ollama_${envelope.requestId}` }
+      provenance: { providerId: QWEN3_8B_PROVIDER_ID, modelId: QWEN3_8B_MODEL_ID, externalJobId: `local_ollama_${envelope.requestId}`, responseAttempts: attempts }
     };
   });
 }
