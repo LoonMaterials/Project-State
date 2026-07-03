@@ -3337,7 +3337,7 @@ let armTransportStatus = {
   tokenConfigured: false,
   lastError: ""
 };
-let discoveryWorkspace = { loaded: false, loading: false, cases: [], error: "" };
+let discoveryWorkspace = { loaded: false, loading: false, cases: [], extractions: [], error: "" };
 let saveState = {
   status: "saved",
   message: ""
@@ -5107,8 +5107,8 @@ function createIntakeItem(input = {}) {
     armType: normalizeArmType(input.armType),
     status: "pending",
     reviewState: "needs_review",
-    queueState: "new",
-    queueNotes: "",
+    queueState: normalizeIntakeQueueState(input.queueState || "new"),
+    queueNotes: input.queueNotes || "",
     queueReviewedAt: "",
     queueReviewedBy: "",
     queueReviewReason: "",
@@ -5120,11 +5120,14 @@ function createIntakeItem(input = {}) {
     proposedObjectType: normalizeProposedObjectType(input.proposedObjectType),
     proposedChange: input.proposedChange || {},
     evidence: input.evidence || {},
+    destination: input.destination || (input.projectId ? "existing_project" : ""),
+    proposedProjectName: input.proposedProjectName || "",
     approval: null,
     assignments: [],
     comments: [],
     archived: false
   };
+  if (input.queueState === undefined) item.queueState = intakeSuggestedQueueState(item);
   store.intakeItems = Array.isArray(store.intakeItems) ? store.intakeItems : [];
   store.intakeItems.unshift(item);
   if (input.save !== false) saveStore({ allowWithoutCoreApproval: true, reason: "intake-only" });
@@ -5134,7 +5137,7 @@ function createIntakeItem(input = {}) {
 function approveIntakeItem(intakeId, actor, reason, applyApprovedChange) {
   const intake = store.intakeItems?.find((item) => item.id === intakeId);
   requireHumanApproval(actor, reason, { origin: "intake" });
-  if (!actorHasPermission(actor, "approve", getProject(intake?.projectId))) {
+  if (!actorHasPermission(actor, "approve", intakePermissionProject(intake))) {
     throw new Error(t("permissionDenied"));
   }
   if (!intake || intake.status !== "pending" || typeof applyApprovedChange !== "function") return null;
@@ -5667,6 +5670,10 @@ function currentActor() {
   return getActor(store.settings?.primaryActorId) || store.actors.find((actor) => normalizeActorStatus(actor.status) === "active") || null;
 }
 
+function defaultUiActor() {
+  return currentActor() || store.actors.find((actor) => normalizeActorStatus(actor.status) === "active") || getOrCreateActor("Owner", "Human");
+}
+
 function actorPermissionRoles(actor, project = null) {
   if (!actor) return [];
   const roles = [normalizeActorRole(actor.role, actor.type)];
@@ -5872,6 +5879,45 @@ function allRequiredFlagsPass(flags = []) {
   return flags.every((flag) => !flag.required || flag.passed);
 }
 
+function knownImportSources(project = {}) {
+  return (project.sources || []).filter((source) => source.status !== "archived");
+}
+
+function isKnownImportProject(project = {}) {
+  return Boolean(project.sourceImportChecked || project.sourceImportReviewPending) && knownImportSources(project).length > 0;
+}
+
+function knownImportHasVerifiedSources(project = {}) {
+  const sources = knownImportSources(project);
+  return sources.length > 0 && !sources.some((source) => ["missing", "changed", "unverifiable"].includes(source.fileVerification?.status));
+}
+
+function intakeHasExistingTarget(item = {}) {
+  return Boolean(item.projectId && getProject(item.projectId));
+}
+
+function intakeHasProposedProjectTarget(item = {}) {
+  return item.destination === "proposed_new_project" && Boolean(String(item.proposedProjectName || "").trim());
+}
+
+function intakeHasCoreTarget(item = {}) {
+  return intakeHasExistingTarget(item) || intakeHasProposedProjectTarget(item);
+}
+
+function intakePermissionProject(item = {}) {
+  return intakeHasExistingTarget(item) ? getProject(item.projectId) : null;
+}
+
+function intakeSuggestedQueueState(item = {}) {
+  const proposed = item.proposedChange || {};
+  const hasMinimumProposal = String(item.title || "").trim()
+    && String(proposed.text || "").trim()
+    && normalizeProposedObjectType(item.proposedObjectType);
+  if (hasMinimumProposal && intakeHasCoreTarget(item)) return "ready";
+  if (hasMinimumProposal) return "needs_review";
+  return "new";
+}
+
 function renderFlagPills(flags = []) {
   if (!flags.length) return "";
   return `
@@ -5885,11 +5931,12 @@ function projectCompletenessFlags(project) {
   const activeSources = (project.sources || []).filter((source) => source.status !== "archived");
   const sourceLinks = Array.isArray(project.sourceLinks) ? project.sourceLinks : [];
   const sourceIssues = activeSources.some((source) => ["missing", "changed", "unverifiable"].includes(source.fileVerification?.status));
+  const knownImportReady = isKnownImportProject(project) && String(project.currentStatus || "").trim() && String(project.currentSummary || "").trim() && knownImportHasVerifiedSources(project);
   return [
     flagItem("hasCurrentStatus", t("hasCurrentStatus"), String(project.currentStatus || "").trim()),
     flagItem("hasCurrentSummary", t("hasCurrentSummary"), String(project.currentSummary || "").trim()),
-    flagItem("hasNextAction", t("hasNextAction"), (project.nextActions || []).some((action) => getActionStatus(action) === "open")),
-    flagItem("hasRecentDecision", t("hasRecentDecision"), (project.decisions || []).some((decision) => !decision.archived)),
+    flagItem("hasNextAction", t("hasNextAction"), knownImportReady || (project.nextActions || []).some((action) => getActionStatus(action) === "open")),
+    flagItem("hasRecentDecision", t("hasRecentDecision"), knownImportReady || (project.decisions || []).some((decision) => !decision.archived)),
     flagItem("hasSourceReference", t("hasSourceReference"), activeSources.length || sourceLinks.length),
     flagItem("sourceFilesClear", t("sourceFilesClear"), activeSources.length ? !sourceIssues : false),
     flagItem("healthNotBlocked", t("healthNotBlocked"), !["blocked", "at_risk"].includes(project.healthFlag))
@@ -5898,9 +5945,8 @@ function projectCompletenessFlags(project) {
 
 function intakeAirlockChecks(intake) {
   const proposed = intake.proposedChange || {};
-  const validTarget = Boolean(getProject(intake.projectId)) || (intake.destination === "proposed_new_project" && Boolean(String(intake.proposedProjectName || "").trim()));
   return [
-    flagItem("targetProjectSelected", t("targetProjectSelected"), validTarget, true),
+    flagItem("targetProjectSelected", t("targetProjectSelected"), intakeHasCoreTarget(intake), true),
     flagItem("proposedTitleRecorded", t("proposedTitleRecorded"), String(intake.title || "").trim(), true),
     flagItem("proposedTextRecorded", t("proposedTextRecorded"), String(proposed.text || "").trim(), true),
     flagItem("proposedTypeSelected", t("proposedTypeSelected"), normalizeProposedObjectType(intake.proposedObjectType), true),
@@ -6462,7 +6508,7 @@ function shell(inner) {
         ${!activeProjectId ? `<button class="btn secondary" data-action="show-projects">${escapeHtml(t("projects"))}</button>` : ""}
         ${!activeProjectId ? `<button class="btn secondary" data-action="show-inbox">${escapeHtml(t("needsAttention"))}${workInboxCount() ? ` (${workInboxCount()})` : ""}</button>` : ""}
         ${!activeProjectId ? `<button class="btn secondary" data-action="show-work-orders">${escapeHtml(t("aiWorkOrders"))}${activeAiWorkOrderCount() ? ` (${activeAiWorkOrderCount()})` : ""}</button>` : ""}
-        ${!activeProjectId ? `<button class="btn secondary" data-action="show-files">${escapeHtml(t("filesLibrary"))}</button>` : ""}
+        ${!activeProjectId ? `<button class="btn secondary" data-action="show-files">${escapeHtml(t("addIntake"))}</button>` : ""}
         ${!activeProjectId ? `<button class="btn secondary" data-action="show-archived-projects">${escapeHtml(t("archivedProjects"))}${archivedProjectCount() ? ` (${archivedProjectCount()})` : ""}</button>` : ""}
         ${!activeProjectId ? `<button class="btn secondary" data-action="show-intake">${escapeHtml(t("intake"))}${pendingIntakeCount() ? ` (${pendingIntakeCount()})` : ""}</button>` : ""}
         ${!activeProjectId && platformAdapter.storage.externalStore ? `<button class="btn secondary" data-action="refresh-storage">${escapeHtml(t("refreshStorage"))}</button>` : ""}
@@ -6472,7 +6518,6 @@ function shell(inner) {
         ${activeProjectId ? `<button class="btn secondary" data-action="export-project">${escapeHtml(t("exportJson"))}</button>` : ""}
         <span class="actor-role-indicator">${escapeHtml(t("currentActorRole"))}: ${escapeHtml(actorRoleLabel(currentActor()?.role, currentActor()?.type))}</span>
         <span class="save-indicator ${saveState.status}" role="status">${escapeHtml(saveState.message || t("saved"))}</span>
-        ${!activeProjectId ? `<button class="btn secondary" data-action="create-intake">${escapeHtml(t("addIntake"))}</button>` : ""}
         <button class="btn" data-action="create-project">${escapeHtml(t("createProject"))}</button>
       </div>
     </header>
@@ -6493,7 +6538,15 @@ function projectCorrectionForFlag(flagKey = "") {
 function projectNextStep(project) {
   const flags = projectCompletenessFlags(project);
   const missing = new Set(flags.filter((flag) => !flag.passed).map((flag) => flag.key));
+  const knownImportChecked = isKnownImportProject(project);
   if (missing.has("hasCurrentStatus") || missing.has("hasCurrentSummary")) return { action: "edit-status", label: "Complete current state", detail: "Record the current status and summary." };
+  if (knownImportChecked) return {
+    action: "show-files",
+    label: "Project ready",
+    buttonLabel: "Add Intake",
+    detail: "Known project material is already in Core and listed below. Add more files when needed, or make changes only if something looks wrong.",
+    secondaryActions: [{ action: "edit-status", label: "Make changes" }]
+  };
   if (missing.has("hasNextAction")) return { action: "add-action", label: "Add next action", detail: "Give the project one concrete next step." };
   if (missing.has("hasRecentDecision")) return { action: "add-decision", label: "Record a decision", detail: "Capture the latest governing decision." };
   if (missing.has("hasSourceReference")) return { action: "add-source", label: "Add supporting source", detail: "Connect evidence to the project." };
@@ -6509,6 +6562,15 @@ function intakeNextStep(item, airlockFlags = intakeAirlockChecks(item)) {
   return { action: "review-intake-queue", label: item.queueState === "blocked" ? "Resolve blocked proposal" : "Complete proposal review", intakeId: item.id };
 }
 
+function intakeLaneLabel(item = {}) {
+  if (item.armType === "discovery" && item.destination === "proposed_new_project") return "Discovery → new project";
+  if (item.armType === "discovery" && item.projectId) return "Discovery → existing project";
+  if (item.armType === "discovery") return "Discovery sorting";
+  if (item.proposedObjectType === "Source" && item.projectId) return "Add evidence";
+  if (item.destination === "proposed_new_project") return "Manual → new project";
+  return "Manual intake";
+}
+
 function workflowBreadcrumbHtml() {
   const parts = [];
   if (activeProjectId) {
@@ -6518,7 +6580,7 @@ function workflowBreadcrumbHtml() {
     parts.push(viewLabels[activeView] || t("dashboard"));
     if (activeObjectDetail) parts.push(objectLabel(activeObjectDetail.objectType, getProjectObject(project, activeObjectDetail.objectType, activeObjectDetail.objectId) || {}));
   } else {
-    const rootLabels = { projects: t("projects"), inbox: t("needsAttention"), "work-orders": t("aiWorkOrders"), files: t("filesLibrary"), intake: t("intake"), archived: t("archivedProjects"), settings: t("settings") };
+    const rootLabels = { projects: t("projects"), inbox: t("needsAttention"), "work-orders": t("aiWorkOrders"), files: t("addIntake"), intake: t("intake"), archived: t("archivedProjects"), settings: t("settings") };
     parts.push(rootLabels[activeRootView] || t("projects"));
   }
   return `<nav class="workflow-breadcrumb" aria-label="Current location">${parts.map((part, index) => `<span>${escapeDisplay(part, DISPLAY_META_LIMIT)}</span>${index < parts.length - 1 ? `<span aria-hidden="true">›</span>` : ""}`).join("")}</nav>`;
@@ -7752,46 +7814,63 @@ function managedSourceFiles() {
   return files.sort((a, b) => dateSortValue(b.source.dateAdded) - dateSortValue(a.source.dateAdded));
 }
 
+function discoveryProgressCases() {
+  const largeProgressStatuses = new Set(["large_file_pending", "large_corpus_pending"]);
+  const extractionCaseIds = new Set((discoveryWorkspace.extractions || [])
+    .filter((extraction) => largeProgressStatuses.has(extraction.status))
+    .map((extraction) => extraction.discoveryCaseId)
+    .filter(Boolean));
+  return (discoveryWorkspace.cases || []).filter((discoveryCase) => extractionCaseIds.has(discoveryCase.id));
+}
+
+function renderDiscoveryProgressPanel() {
+  const cases = discoveryProgressCases();
+  if (!cases.length && !discoveryWorkspace.error) return "";
+  return `
+    <section class="panel">
+      <div class="panel-head"><h2 class="panel-title">Discovery progress</h2></div>
+      ${discoveryWorkspace.error ? `<p class="warning">${escapeHtml(discoveryWorkspace.error)}</p>` : ""}
+      ${cases.length ? `<div class="list">${cases.map(renderDiscoveryCaseSummary).join("")}</div>` : emptyText("No long Discovery scans are running.")}
+    </section>
+  `;
+}
+
 function renderFilesLibrary() {
-  const intakeFiles = sortNewest(managedFileIntakeItems(), "createdAt");
-  const pending = intakeFiles.filter((item) => item.status !== "approved" && !item.archived);
-  const approved = managedSourceFiles();
   const rememberedFolders = normalizeLastImportFolders(store.settings?.uiState?.lastImportFolders);
   const rememberedFolderText = Object.entries(rememberedFolders).map(([key, value]) => `${key.replaceAll("_", " ")}: ${value}`).join(" · ");
   shell(`
     <section class="view-head">
       <div>
-        <h1 class="view-title">${escapeHtml(t("filesLibrary"))}</h1>
-        <p class="view-subtitle">${escapeHtml(t("filesLibrarySubtitle"))}</p>
-      </div>
-      <div class="button-row">
-        <button class="btn" type="button" data-action="import-project-files">Add files to project</button>
-        <button class="btn" type="button" data-action="import-project-folder">Add project folder</button>
-        <button class="btn secondary" type="button" data-action="import-files">Add files to Discovery</button>
-        <button class="btn secondary" type="button" data-action="import-folder">Scan folder for Discovery</button>
+        <h1 class="view-title">${escapeHtml(t("addIntake"))}</h1>
+        <p class="view-subtitle">Add files or folders. Known project material can go straight into a project; unknown material goes through Discovery before Core approval.</p>
       </div>
     </section>
     ${fileImportFlowState.message || rememberedFolderText ? `<section class="panel">${fileImportFlowState.message ? `<p class="item-meta"><strong>File picker status:</strong> ${escapeDisplay(fileImportFlowState.message, DISPLAY_META_LIMIT)}${fileImportFlowState.updatedAt ? ` · ${escapeHtml(formatDate(fileImportFlowState.updatedAt))}` : ""}</p>` : ""}${rememberedFolderText ? `<p class="item-meta"><strong>Remembered folders:</strong> ${escapeDisplay(rememberedFolderText, 1200)}</p>` : ""}${pendingFileImportReviewSelection?.candidates?.length ? `<div class="item-actions"><button class="btn secondary compact" data-action="reopen-pending-file-import-review">${["project_files", "project_folder"].includes(pendingFileImportReviewSelection.importKind) ? "Open pending project file import" : "Open pending Discovery review"} (${pendingFileImportReviewSelection.candidates.length})</button></div>` : ""}</section>` : ""}
+    <section class="dashboard-grid">
+      <article class="panel strong">
+        <div class="panel-head"><h2 class="panel-title">Known project material</h2></div>
+        <p class="item-body">Use this when you already know the selected files or folder belong to one project.</p>
+        <div class="item-actions">
+          <button class="btn" type="button" data-action="import-project-folder">Add project folder</button>
+          <button class="btn secondary" type="button" data-action="import-project-files">Add project files</button>
+        </div>
+      </article>
+      <article class="panel strong">
+        <div class="panel-head"><h2 class="panel-title">Discovery scan</h2></div>
+        <p class="item-body">Use this when you want Project State to inspect material first and suggest project candidates before anything reaches Core.</p>
+        <div class="item-actions">
+          <button class="btn" type="button" data-action="import-folder">Scan unknown folder</button>
+          <button class="btn secondary" type="button" data-action="import-files">Scan selected files</button>
+        </div>
+      </article>
+    </section>
     <section class="panel strong">
       <div class="panel-head"><h2 class="panel-title">External security responsibility</h2></div>
       <p>Project State does not scan files for malware. Only add files you trust and have already checked using your own security tools.</p>
       <p class="item-meta">Project State copies selected files, records exact checksums, and blocks reads if staged bytes change.</p>
     </section>
-    <section class="panel">
-      <div class="panel-head"><h2 class="panel-title">Discovery cases</h2></div>
-      ${discoveryWorkspace.cases.length ? `<div class="list">${discoveryWorkspace.cases.map(renderDiscoveryCaseSummary).join("")}</div>` : emptyText("No Discovery cases yet.")}
-    </section>
+    ${renderDiscoveryProgressPanel()}
     <p class="notice">${escapeHtml(t("originalFilePreserved"))} ${escapeHtml(t("recursiveFolderImport"))}</p>
-    <section class="two-col-layout">
-      <article class="panel">
-        <div class="panel-head"><h2 class="panel-title">${escapeHtml(t("pendingFileImports"))}</h2></div>
-        ${pending.length ? `<div class="list">${pending.map(renderPendingManagedFile).join("")}</div>` : emptyText(t("noPendingIntake"))}
-      </article>
-      <article class="panel">
-        <div class="panel-head"><h2 class="panel-title">${escapeHtml(t("approvedManagedFiles"))}</h2></div>
-        ${approved.length ? `<div class="list">${approved.map(renderApprovedManagedFile).join("")}</div>` : emptyText(t("noManagedFiles"))}
-      </article>
-    </section>
   `);
 }
 
@@ -7812,6 +7891,7 @@ async function refreshDiscoveryWorkspace() {
   try {
     const state = await platformAdapter.discovery.readFoundationState({});
     discoveryWorkspace.cases = state.discoveryCases || [];
+    discoveryWorkspace.extractions = state.extractions || [];
     discoveryWorkspace.error = "";
   } catch (error) {
     discoveryWorkspace.error = error.message || "Discovery could not be loaded.";
@@ -7926,17 +8006,25 @@ function folderRelativeGroup(localPath = "", rootPath = "") {
 
 function partitionDiscoveryCandidates(candidates = [], mode = "folder_groups", rootPath = "") {
   const grouped = new Map();
+  const folderName = pathFolderName(rootPath) || "Selected folder";
   for (const candidate of candidates) {
-    const label = mode === "one_case" ? "Selected folder" : mode === "each_file" ? candidate.name || "Selected file" : folderRelativeGroup(candidate.localPath, rootPath);
+    const label = mode === "one_project_folder"
+      ? `Project folder: ${folderName}`
+      : mode === "one_case"
+        ? "Selected folder"
+        : mode === "each_file"
+          ? candidate.name || "Selected file"
+          : folderRelativeGroup(candidate.localPath, rootPath);
     if (!grouped.has(label)) grouped.set(label, []);
     grouped.get(label).push(candidate);
   }
   const groups = [];
   for (const [label, files] of grouped.entries()) {
-    for (let index = 0; index < files.length; index += 24) {
+    const chunkSize = mode === "one_project_folder" ? files.length || 1 : 24;
+    for (let index = 0; index < files.length; index += chunkSize) {
       const chunk = files.slice(index, index + 24);
-      const part = files.length > 24 ? ` · part ${Math.floor(index / 24) + 1}` : "";
-      groups.push({ label: `${label}${part}`, candidates: chunk });
+      const part = mode !== "one_project_folder" && files.length > 24 ? ` · part ${Math.floor(index / 24) + 1}` : "";
+      groups.push({ label: `${label}${part}`, candidates: mode === "one_project_folder" ? files : chunk, folderIntent: mode, folderRootPath: rootPath });
     }
   }
   return groups;
@@ -8001,10 +8089,13 @@ function titleFromFileName(fileName = "") {
 
 function sourceTypeForProjectFile(file = {}) {
   const extension = fileExtension(file.name || file.localPath);
-  if (["png", "jpg", "jpeg", "webp", "gif"].includes(extension)) return "Image / sketch";
-  if (["pdf", "docx"].includes(extension)) return "Document";
+  if (["png", "jpg", "jpeg", "webp", "gif", "blend"].includes(extension)) return "Image / visual";
+  if (["pdf", "docx"].includes(extension)) return "Document / patent";
+  if (["ipynb"].includes(extension)) return "Notebook / analysis";
+  if (["py", "js", "ts", "jsx", "tsx", "html", "css", "scss", "cpp", "c", "h", "hpp", "cs", "java", "rs", "go", "sql", "sh", "ps1"].includes(extension)) return "Code / tests";
+  if (["uproject", "uplugin", "uasset", "umap", "ini"].includes(extension)) return "Unreal / visual project";
   if (["md", "txt"].includes(extension)) return "Notes";
-  if (["json", "csv"].includes(extension)) return "Data";
+  if (["json", "csv", "yaml", "yml", "toml"].includes(extension)) return "Data / config";
   return "Project file";
 }
 
@@ -8025,7 +8116,7 @@ function openProjectFileImportModal(selection) {
   const activeProjects = store.projects.filter((project) => !project.archived);
   showModal({
     title: isFolderImport ? "Add project folder" : "Add files to project",
-    submitText: "Add to project",
+    submitText: "Finish import",
     forceReplace: true,
     body: `
       <p class="notice">Use this when you already know these files belong under one project. Project State will copy the files into managed storage and add them as project Sources without creating separate Discovery project candidates.</p>
@@ -8045,11 +8136,12 @@ function openProjectFileImportModal(selection) {
       </div>
       <div data-new-project-import>
         <div class="field"><label for="projectName">Project name</label><input id="projectName" name="projectName" value="${escapeHtml(defaultProjectName)}" required></div>
-        <div class="field"><label for="currentStatus">${escapeHtml(t("currentStatus"))}</label><input id="currentStatus" name="currentStatus" value="Active · materials imported for review" required></div>
-        <div class="field"><label for="currentSummary">${escapeHtml(t("currentSummary"))}</label><textarea id="currentSummary" name="currentSummary" rows="3">${escapeHtml(isFolderImport ? `Project created from folder: ${folderName}.` : `Project created from selected files.`)}</textarea></div>
+        <div class="field"><label for="currentStatus">${escapeHtml(t("currentStatus"))}</label><input id="currentStatus" name="currentStatus" value="Active · project materials imported" required></div>
+        <div class="field"><label for="currentSummary">${escapeHtml(t("currentSummary"))}</label><textarea id="currentSummary" name="currentSummary" rows="3">${escapeHtml(isFolderImport ? `Project created from folder: ${folderName}. Imported files are listed below as Sources.` : `Project created from selected files. Imported files are listed below as Sources.`)}</textarea></div>
       </div>
       <div class="field">
         <label>${escapeHtml(t("selectedFiles"))} (${selection.candidates.length})</label>
+        <p class="notice"><strong>Checked:</strong> Project State found the supported files below. Keep the right files selected, then finish the import.</p>
         <p class="item-meta">${escapeHtml(selectedSummary)}</p>
         <div class="list import-file-list">
           ${selection.candidates.map((file) => `
@@ -8076,26 +8168,29 @@ function openProjectFileImportModal(selection) {
       </div>
       ${confirmationField("externalSecurityAcknowledged", "I understand Project State does not scan files. I trust these files and accept responsibility for checking them with my own security tools.")}
       ${selection.skipped?.length ? `<p class="notice">${escapeHtml(t("unsupportedFilesSkipped"))}: ${selection.skipped.length}</p>` : ""}
-      ${auditFields({ reasonLabel: "Why are these files being added?" })}
     `,
     async onSubmit(data, form) {
       const selectedPaths = [...form.querySelectorAll("[data-import-path]:checked")].map((field) => field.dataset.importPath);
       const candidates = selection.candidates.filter((file) => selectedPaths.includes(file.localPath));
       if (!candidates.length) { window.alert("Select at least one file to add."); return false; }
-      const actor = getOrCreateActor(data.actorName, "Human");
+      const actor = defaultUiActor();
       const useExisting = data.projectImportMode === "existing";
       let project = useExisting ? getProject(data.projectId) : null;
       if (useExisting && !project) { window.alert("Choose an existing project or create a new one."); return false; }
       if (!validateActorPermission(actor, "create", project)) return false;
-      const reason = String(data.reason || "").trim();
+      const reason = isFolderImport ? "Known project folder selected for import." : "Known project files selected for import.";
       const timestamp = nowIso();
       if (!project) {
         project = {
           id: uid("project"),
           name: String(data.projectName || defaultProjectName).trim(),
-          currentStatus: String(data.currentStatus || "Active · materials imported for review").trim(),
+          currentStatus: String(data.currentStatus || "Active · project materials imported").trim(),
           currentSummary: String(data.currentSummary || "").trim(),
           healthFlag: "active",
+          sourceImportReviewPending: false,
+          sourceImportChecked: true,
+          sourceImportCheckedAt: timestamp,
+          sourceImportKind: selection.importKind,
           archived: false,
           deletionStatus: "",
           createdAt: timestamp,
@@ -8189,6 +8284,12 @@ function openProjectFileImportModal(selection) {
           }
         });
       }
+      project.sourceImportReviewPending = false;
+      project.sourceImportChecked = true;
+      project.sourceImportCheckedAt = timestamp;
+      project.sourceImportKind = selection.importKind;
+      project.updatedAt = timestamp;
+      project.updatedBy = actor.id;
       pendingFileImportReviewSelection = null;
       setFileImportFlowState("project_import_complete", `Added ${stagedResult.staged.length} ${stagedResult.staged.length === 1 ? "file" : "files"} to ${project.name}.`, selection.importKind || "");
       activeRootView = "projects";
@@ -8243,25 +8344,29 @@ function openFileImportReviewModal(selection) {
           `).join("")}
         </div>
       </div>
-      ${isFolderImport ? `<div class="field"><label for="folderGroupingMode">How should this folder be reviewed?</label><select id="folderGroupingMode" name="folderGroupingMode"><option value="folder_groups">Use suggested folder groups (${suggestedFolderGroups.length})</option><option value="one_case">Treat the selected folder as one case</option><option value="each_file">Review every file separately</option></select><p class="item-meta">Groups larger than 24 files continue as numbered parts so no selected file is silently omitted.</p></div>` : ""}
+      ${isFolderImport ? `<div class="field"><label for="folderGroupingMode">How should this folder be reviewed?</label><select id="folderGroupingMode" name="folderGroupingMode"><option value="one_project_folder">Treat selected folder as one project / evidence collection</option><option value="folder_groups">Scan folder groups for separate project candidates (${suggestedFolderGroups.length})</option><option value="each_file">Review every file separately</option></select><p class="item-meta">Use the first choice when the folder already belongs to one project. Use folder groups or each file when Project State should look for separate ideas.</p></div>` : ""}
       <div class="field"><label for="privacyClass">Privacy</label><select id="privacyClass" name="privacyClass"><option value="local_only">Keep local only</option><option value="personal">Personal</option><option value="confidential">Confidential</option><option value="restricted">Restricted</option><option value="provider_allowed">Configured provider allowed later</option></select></div>
       ${confirmationField("externalSecurityAcknowledged", "I understand Project State does not scan files. I trust these files and accept responsibility for checking them with my own security tools.")}
       ${selection.skipped?.length ? `<p class="notice">${escapeHtml(t("unsupportedFilesSkipped"))}: ${selection.skipped.length}</p>` : ""}
-      ${auditFields({ reasonLabel: t("reason") })}
     `,
     async onSubmit(data, form) {
       const selectedPaths = [...form.querySelectorAll("[data-import-path]:checked")].map((field) => field.dataset.importPath);
       const candidates = selection.candidates.filter((file) => selectedPaths.includes(file.localPath));
       if (!candidates.length) return false;
-      const actor = getOrCreateActor(data.actorName, "Human");
-      const groupingMode = isFolderImport ? data.folderGroupingMode || "folder_groups" : "one_case";
+      const actor = defaultUiActor();
+      const groupingMode = isFolderImport ? data.folderGroupingMode || "one_project_folder" : "one_case";
       const candidateGroups = partitionDiscoveryCandidates(candidates, groupingMode, selection.rootPath);
+      const reviewReason = isFolderImport
+        ? groupingMode === "one_project_folder"
+          ? "Selected folder staged as one Discovery project candidate."
+          : "Selected folder staged for Discovery scan."
+        : "Selected files staged for Discovery review.";
       const discoveryReviews = [];
       for (const candidateGroup of candidateGroups) {
         let discoveryCaseId = "";
         const stagedFiles = [];
         for (const candidate of candidateGroup.candidates) {
-          const staged = await platformAdapter.discovery.stageTrustedFile({ path: candidate.localPath, discoveryCaseId: discoveryCaseId || undefined, caseTitle: candidateGroup.label, actorId: actor.id, privacyClass: data.privacyClass || "local_only", externalSecurityAcknowledged: data.externalSecurityAcknowledged === "on", reason: String(data.reason || "").trim() });
+          const staged = await platformAdapter.discovery.stageTrustedFile({ path: candidate.localPath, discoveryCaseId: discoveryCaseId || undefined, caseTitle: candidateGroup.label, actorId: actor.id, privacyClass: data.privacyClass || "local_only", externalSecurityAcknowledged: data.externalSecurityAcknowledged === "on", reason: reviewReason });
           discoveryCaseId = staged.discoveryCaseId;
           stagedFiles.push({ ...staged, originalName: candidate.name });
         }
@@ -8276,7 +8381,7 @@ function openFileImportReviewModal(selection) {
           extractions.push({ fileVersionId: staged.fileVersionId, originalName: staged.originalName, deduplicated: staged.deduplicated === true, status: result.extraction?.status || "failed", text, textBytes: result.extraction?.textBytes || 0, chunkCount: result.extraction?.chunkCount || 0, error: result.extraction?.error || null });
         }
         const analysis = await platformAdapter.discovery.analyzeCase({ discoveryCaseId, actorId: "project_state_deterministic" });
-        discoveryReviews.push({ discoveryCaseId, analysis, extractions, actor, reason: String(data.reason || "").trim(), groupLabel: candidateGroup.label, privacyClass: data.privacyClass || "local_only" });
+        discoveryReviews.push({ discoveryCaseId, analysis, extractions, actor, reason: reviewReason, groupLabel: candidateGroup.label, privacyClass: data.privacyClass || "local_only", folderIntent: candidateGroup.folderIntent || groupingMode, folderRootPath: candidateGroup.folderRootPath || selection.rootPath || "" });
       }
       if (!discoveryReviews.length) { window.alert(t("fileImportFailed")); return false; }
       pendingFileImportReviewSelection = null;
@@ -8444,6 +8549,8 @@ async function runFakeIdeaAnalysis(discoveryCaseId, actor, reason = "") {
   const hasPendingCorpus = (caseView.extractions || []).some((extraction) => extraction.status === "large_corpus_pending");
   if (!chunks.length && hasPendingCorpus) throw new Error("Large file has been staged but not indexed yet. Build a large-file index before running local AI idea analysis.");
   if (!chunks.length) throw new Error("No extracted text chunks are available for idea analysis.");
+  const maximumChunks = Number(capabilities.limits?.maximumChunks || 100);
+  const analysisChunks = chunks.slice(0, Math.max(1, maximumChunks));
   const extractionById = new Map((caseView.extractions || []).map((extraction) => [extraction.id, extraction]));
   const versionById = new Map((caseView.fileVersions || []).map((version) => [version.id, version]));
   const assetById = new Map((caseView.fileAssets || []).map((asset) => [asset.id, asset]));
@@ -8451,7 +8558,7 @@ async function runFakeIdeaAnalysis(discoveryCaseId, actor, reason = "") {
   if (privacyClasses.size !== 1) throw new Error("Mixed privacy classes must be reviewed in separate Discovery Cases before analysis.");
   const privacyClass = [...privacyClasses][0];
   const sourceScopeMap = new Map();
-  for (const chunk of chunks) {
+  for (const chunk of analysisChunks) {
     const extraction = extractionById.get(chunk.discoveryExtractionId);
     if (!extraction) continue;
     if (!sourceScopeMap.has(extraction.fileVersionId)) sourceScopeMap.set(extraction.fileVersionId, { fileVersionId: extraction.fileVersionId, sourceSha256: extraction.sourceSha256, expectedChunkIds: [] });
@@ -8461,30 +8568,35 @@ async function runFakeIdeaAnalysis(discoveryCaseId, actor, reason = "") {
   const modelId = capabilities.realProviderInstalled ? "qwen3:8b" : "deterministic_fake_v0.1";
   const analysisStrategy = capabilities.realProviderInstalled ? "local_ai_qwen3_8b" : "fake_local_contract_test";
   await platformAdapter.analysis.createRun({ id: analysisRunId, discoveryCaseId, actorId: capabilities.arm.armId, actorType: "tool", method: "ai", status: "running", sourceScope: [...sourceScopeMap.values()], provenance: { providerId: capabilities.arm.providerId, modelId } });
-  const chunkScopes = chunks.map((chunk) => ({ discoveryChunkId: chunk.id, chunkTextSha256: chunk.textSha256 }));
+  const chunkScopes = analysisChunks.map((chunk) => ({ discoveryChunkId: chunk.id, chunkTextSha256: chunk.textSha256 }));
   const authorizationRecordId = uid("idea_privacy");
   const authorization = await platformAdapter.analysis.authorizeTransmission({ id: authorizationRecordId, discoveryCaseId, actorId: actor.id, actorType: "human", providerId: capabilities.arm.providerId, purpose: "idea_candidate_discovery", privacyClass, chunkScopes, redactionMode: "none", reason: reason || "Authorized exact chunks for local AI idea analysis." });
   const inputChunks = [];
-  for (const chunk of chunks) {
+  for (const chunk of analysisChunks) {
     const read = await platformAdapter.discovery.readChunkText({ discoveryChunkId: chunk.id });
     const extraction = extractionById.get(chunk.discoveryExtractionId);
     const version = versionById.get(extraction.fileVersionId);
     inputChunks.push({ discoveryChunkId: chunk.id, discoveryExtractionId: extraction.id, fileVersionId: version.id, sourceSha256: extraction.sourceSha256, chunkTextSha256: chunk.textSha256, content: { type: "text", text: read.text }, redactionState: "original" });
   }
   const requestId = uid("analysis_request");
-  const result = await platformAdapter.analysis.submitAnalysisBatch({ contractVersion: "0.1", requestId, idempotencyKey: uid("analysis_idempotency"), submittedAt: nowIso(), arm: capabilities.arm, analysisRunId, discoveryCaseId, purpose: "idea_candidate_discovery", privacyAuthorization: { authorizationRecordId: authorization.authorization.id, authorizedBy: actor.id, authorizedAt: authorization.authorization.authorizedAt, providerId: capabilities.arm.providerId, purpose: "idea_candidate_discovery", privacyClass, chunkScopes, redactionMode: "none" }, batch: { batchId: uid("analysis_batch"), batchIndex: 0, isFinalBatch: true }, input: { chunks: inputChunks }, analysisOptions: { language: currentLanguage(), candidateTypes: capabilities.supportedCandidateTypes, maxCandidates: capabilities.limits.candidatesPerResultPage, includeRelationships: Boolean(capabilities.realProviderInstalled), includeClarificationQuestions: true }, provenance: { projectStateContract: "ai-analysis-arm-v0.1", ideaCandidateSchema: "0.1", analysisStrategy } });
-  return result;
+  const result = await platformAdapter.analysis.submitAnalysisBatch({ contractVersion: "0.1", requestId, idempotencyKey: uid("analysis_idempotency"), submittedAt: nowIso(), arm: capabilities.arm, analysisRunId, discoveryCaseId, purpose: "idea_candidate_discovery", privacyAuthorization: { authorizationRecordId: authorization.authorization.id, authorizedBy: actor.id, authorizedAt: authorization.authorization.authorizedAt, providerId: capabilities.arm.providerId, purpose: "idea_candidate_discovery", privacyClass, chunkScopes, redactionMode: "none" }, batch: { batchId: uid("analysis_batch"), batchIndex: 0, isFinalBatch: analysisChunks.length >= chunks.length }, input: { chunks: inputChunks }, analysisOptions: { language: currentLanguage(), candidateTypes: capabilities.supportedCandidateTypes, maxCandidates: capabilities.limits.candidatesPerResultPage, includeRelationships: Boolean(capabilities.realProviderInstalled), includeClarificationQuestions: true }, provenance: { projectStateContract: "ai-analysis-arm-v0.1", ideaCandidateSchema: "0.1", analysisStrategy, analyzedChunkWindow: { analyzedChunks: analysisChunks.length, totalIndexedChunks: chunks.length } } });
+  return { ...result, analysisChunkWindow: { analyzedChunks: analysisChunks.length, totalIndexedChunks: chunks.length } };
 }
 
-function openDiscoveryReviewModal({ discoveryCaseId, analysis, extractions = [], actor, reason, groupLabel = "", privacyClass = "local_only", sequencePosition = null, onConfirmed = null }) {
-  const bestName = analysis.suggestedProjectNames?.[0]?.name || "";
+function openDiscoveryReviewModal({ discoveryCaseId, analysis, extractions = [], actor, reason, groupLabel = "", privacyClass = "local_only", folderIntent = "", folderRootPath = "", sequencePosition = null, onConfirmed = null }) {
+  const folderProjectName = folderIntent === "one_project_folder"
+    ? pathFolderName(folderRootPath) || String(groupLabel || "").replace(/^Project folder:\s*/i, "").trim()
+    : "";
+  const bestName = folderProjectName || analysis.suggestedProjectNames?.[0]?.name || "";
   const suggestedUnits = (analysis.documentUnits || []).slice(0, 8);
   const visibleQuestions = (analysis.questions || []).filter((question) => !(privacyClass === "local_only" && question.id === "privacy_confirmation"));
   const automaticQuestionAnswers = privacyClass === "local_only" ? { privacy_confirmation: "Keep local only" } : {};
-  const suggestedProjectNames = discoverySuggestedProjectNames(analysis, suggestedUnits);
+  const suggestedProjectNames = folderProjectName
+    ? [folderProjectName, ...discoverySuggestedProjectNames(analysis, suggestedUnits)].filter(Boolean)
+    : discoverySuggestedProjectNames(analysis, suggestedUnits);
   const slotCount = Math.min(8, Math.max(3, suggestedUnits.length + 2));
   let unitSlots = Array.from({ length: slotCount }, (_, index) => suggestedUnits[index] || { id: `manual_unit_${index + 1}`, title: "", summary: "", fileVersionIds: [], evidence: [], suggested: false });
-  const suggestedMode = analysis.unitModeSuggestion === "multiple_units" ? "multiple_units" : "one_item";
+  const suggestedMode = folderIntent === "one_project_folder" ? "one_item" : analysis.unitModeSuggestion === "multiple_units" ? "multiple_units" : "one_item";
   const corpusIntake = analysis.corpusIntake?.recommended ? analysis.corpusIntake : null;
   let corpusReadyForAi = false;
   const ideaAnalysisPanel = platformAdapter.analysis?.available
@@ -8498,6 +8610,7 @@ function openDiscoveryReviewModal({ discoveryCaseId, analysis, extractions = [],
     body: `
       <p class="notice"><strong>${corpusIntake ? "Large file staged." : "Read complete."}</strong> Project State copied the selected file into managed staging, verified its exact bytes, and ${corpusIntake ? "identified material that needs indexed large-file processing before project candidates are reliable." : "completed the supported local extraction shown below."}</p>
       ${corpusIntake ? `<p class="notice"><strong>Large-file lane:</strong> ${Number(corpusIntake.totalEstimatedWords || 0).toLocaleString()} estimated words across ${corpusIntake.pendingFiles} file${corpusIntake.pendingFiles === 1 ? "" : "s"}. Suggested type: ${escapeDisplay((corpusIntake.corpusKinds || []).join(", ") || "large document", DISPLAY_META_LIMIT)}. Next step: ${escapeDisplay(corpusIntake.nextStep || "Index before promotion.", DISPLAY_META_LIMIT)}</p>` : ""}
+      ${folderIntent === "one_project_folder" ? `<p class="notice"><strong>Folder intent:</strong> Treat this folder as one project / evidence collection. Project State will keep the selected files together unless you choose to review several ideas separately below.</p>` : ""}
       ${groupLabel ? `<p class="notice"><strong>Suggested group:</strong> ${escapeDisplay(groupLabel, DISPLAY_META_LIMIT)}</p>` : ""}
       <div class="field">
         <label>File reading result</label>
@@ -8613,17 +8726,24 @@ function openDiscoveryReviewModal({ discoveryCaseId, analysis, extractions = [],
     const indexButton = event.target.closest("[data-index-corpus]");
     if (indexButton) {
       indexButton.disabled = true;
-      indexButton.textContent = "Indexing large file locally…";
+      indexButton.textContent = indexButton.dataset.continueIndex === "true" ? "Indexing next local batch…" : "Indexing large file locally…";
       try {
         const caseView = await platformAdapter.discovery.getCase({ discoveryCaseId });
         const extraction = (caseView.extractions || []).find((item) => item.status === "large_corpus_pending");
         if (!extraction) throw new Error("No pending large-file extraction was found for this Discovery case.");
-        const result = await platformAdapter.discovery.indexCorpus({ discoveryCaseId, extractionId: extraction.id, actorId: "project_state_deterministic", maxChunks: 120, chunkCharacters: 12000 });
-        corpusReadyForAi = true;
-        ideaOutput.innerHTML = `<p class="notice"><strong>Large file index ready.</strong> Created ${result.chunks?.length || 0} local evidence chunks${result.indexed?.truncated ? ` from the first ${result.indexed.maxChunks} chunks; later passes can continue indexing.` : "."}</p>`;
-        indexButton.textContent = "Run local AI idea analysis";
-        indexButton.removeAttribute("data-index-corpus");
-        indexButton.setAttribute("data-run-idea-analysis", "true");
+        const result = await platformAdapter.discovery.indexCorpus({ discoveryCaseId, extractionId: extraction.id, actorId: "project_state_deterministic", maxChunks: 120, chunkCharacters: 12000, continueIndex: indexButton.dataset.continueIndex === "true" });
+        corpusReadyForAi = Boolean(result.chunks?.length);
+        if (result.indexed?.truncated) {
+          ideaOutput.innerHTML = `<p class="notice"><strong>Large file indexing continued.</strong> Indexed ${Number(result.indexed.totalIndexedChunks || result.chunks?.length || 0).toLocaleString()} of ${Number(result.indexed.totalDetectedChunks || 0).toLocaleString()} detected chunks. Continue indexing before running full idea analysis.</p>`;
+          indexButton.textContent = "Index next large-file batch";
+          indexButton.dataset.continueIndex = "true";
+        } else {
+          ideaOutput.innerHTML = `<p class="notice"><strong>Large file index ready.</strong> Indexed ${Number(result.indexed?.totalIndexedChunks || result.chunks?.length || 0).toLocaleString()} local evidence chunks. Local AI can now analyze the indexed evidence.</p>`;
+          indexButton.textContent = "Run local AI idea analysis";
+          indexButton.removeAttribute("data-index-corpus");
+          indexButton.removeAttribute("data-continue-index");
+          indexButton.setAttribute("data-run-idea-analysis", "true");
+        }
         indexButton.disabled = false;
       } catch (error) {
         console.error("Corpus indexing failed.", error);
@@ -8648,7 +8768,10 @@ function openDiscoveryReviewModal({ discoveryCaseId, analysis, extractions = [],
           ideaOutput.innerHTML = `<p class="notice">The local test arm found no Idea Candidates. No project or route was created.</p>`;
           return;
         }
-        ideaOutput.innerHTML = renderIdeaCandidateReview(currentIdeaCandidates, actor);
+        const partialWindow = result.analysisChunkWindow && result.analysisChunkWindow.analyzedChunks < result.analysisChunkWindow.totalIndexedChunks
+          ? `<p class="notice"><strong>Partial analysis window:</strong> Local AI reviewed ${Number(result.analysisChunkWindow.analyzedChunks).toLocaleString()} of ${Number(result.analysisChunkWindow.totalIndexedChunks).toLocaleString()} indexed chunks. More analysis windows will be needed for full-corpus coverage.</p>`
+          : "";
+        ideaOutput.innerHTML = `${partialWindow}${renderIdeaCandidateReview(currentIdeaCandidates, actor)}`;
       } catch (error) {
         console.error("Local idea analysis failed.", error);
         ideaOutput.innerHTML = `<p class="notice danger">Idea analysis could not continue: ${escapeDisplay(error.message || "Unknown error", DISPLAY_META_LIMIT)}</p>`;
@@ -8716,7 +8839,6 @@ function renderIntakeQueue() {
       </div>
       <div class="button-row">
         ${pending.length ? `<button class="btn secondary" data-action="batch-triage">${escapeHtml(t("batchTriage"))}</button>` : ""}
-        <button class="btn" data-action="create-intake">${escapeHtml(t("addIntake"))}</button>
       </div>
     </section>
 
@@ -8768,7 +8890,7 @@ function renderIntakeItem(item) {
         <span class="pill">${escapeHtml(intakeStatusLabel(item))}</span>
         ${renderTrustBoundaryLabel("External", item)} <span aria-hidden="true">→</span> ${renderTrustBoundaryLabel("Intake", item)}
       </div>
-      <p class="item-meta">${escapeHtml(armTypeLabel(item.armType))} · ${escapeHtml(proposedObjectTypeLabel(item.proposedObjectType))}</p>
+      <p class="item-meta">${escapeHtml(intakeLaneLabel(item))} · ${escapeHtml(armTypeLabel(item.armType))} · ${escapeHtml(proposedObjectTypeLabel(item.proposedObjectType))}</p>
       <p class="item-meta">${escapeHtml(t("target"))}: ${escapeDisplay(projectName, DISPLAY_META_LIMIT)} · ${escapeHtml(t("created"))} ${escapeHtml(formatDate(item.createdAt))} · ${escapeHtml(t("age"))}: ${escapeHtml(intakeQueueAgeLabel(item.createdAt))}</p>
       ${item.sourceLabel ? `<p class="item-meta">${escapeHtml(t("source"))}: ${escapeDisplay(item.sourceLabel, DISPLAY_META_LIMIT)}</p>` : ""}
       ${proposed.text ? `<p class="item-body">${escapeDisplay(proposed.text)}</p>` : ""}
@@ -8992,7 +9114,10 @@ function renderProject(project) {
         <h2 class="panel-title">${escapeHtml(nextStep.label)}</h2>
         <p class="item-meta">${escapeHtml(nextStep.detail)}</p>
       </div>
-      <button class="btn" data-action="${escapeHtml(nextStep.action)}">${escapeHtml(nextStep.label)}</button>
+      <div class="item-actions">
+        <button class="btn" data-action="${escapeHtml(nextStep.action)}">${escapeHtml(nextStep.buttonLabel || nextStep.label)}</button>
+        ${(nextStep.secondaryActions || []).map((secondary) => `<button class="btn secondary" data-action="${escapeHtml(secondary.action)}">${escapeHtml(secondary.label)}</button>`).join("")}
+      </div>
     </article>
     <section class="meta-grid">
       <div class="meta-card">
@@ -11355,6 +11480,10 @@ function activeActorOptions(selectedName = "") {
 
 function auditReasonOptions(selectedReason = "") {
   const reasons = [
+    "Create new project",
+    "Import known project folder",
+    "Import known project files",
+    "Approve Discovery project candidate",
     "Updated current project state",
     "Added supporting evidence",
     "Recorded a project decision",
@@ -11733,45 +11862,60 @@ function archiveAiWorkOrder(workOrderId) {
 }
 
 function openCreateIntakeModal() {
+  const defaultProjectId = activeProjectId || "";
   showModal({
     title: t("addIntake"),
     submitText: t("saveToAirlock"),
     body: `
-      <p class="notice">${escapeHtml(t("proposedChangeNotice"))}</p>
+      <p class="notice">Fast Intake is for sorting material before Core. Pick the lane, check the suggested fields, then approve later only when you want it written into Core history.</p>
+      <div class="field">
+        <label for="intakeLane">What are you adding?</label>
+        <select id="intakeLane" name="intakeLane">
+          <option value="new_project">Known new project or folder</option>
+          <option value="existing_project"${defaultProjectId ? " selected" : ""}>Add evidence/change to existing project</option>
+          <option value="needs_review">Needs review / not sure yet</option>
+        </select>
+        <p class="item-meta">Use Discovery for real file/folder scanning. This manual form is for fast notes, known material, and cleanup.</p>
+      </div>
       <div class="field">
         <label for="armType">${escapeHtml(t("arm"))}</label>
         <select id="armType" name="armType">${armTypeOptions("manual")}</select>
       </div>
-      <div class="field">
+      <div class="field" data-existing-target>
         <label for="projectId">${escapeHtml(t("targetProject"))}</label>
-        <select id="projectId" name="projectId" required>
-          ${projectOptions()}
+        <select id="projectId" name="projectId">
+          <option value="">Choose existing project</option>
+          ${projectOptions(defaultProjectId)}
         </select>
       </div>
+      <div class="field" data-new-target>
+        <label for="proposedProjectName">New project name</label>
+        <input id="proposedProjectName" name="proposedProjectName" placeholder="Project name to create at approval">
+      </div>
       <div class="field">
-        <label for="proposedObjectType">${escapeHtml(t("proposedChangeType"))}</label>
-        <select id="proposedObjectType" name="proposedObjectType">${proposedObjectTypeOptions()}</select>
+        <label for="proposedObjectType">What should Core receive?</label>
+        <select id="proposedObjectType" name="proposedObjectType">${proposedObjectTypeOptions("Source")}</select>
       </div>
       <div class="field">
         <label for="title">${escapeHtml(t("intakeTitle"))}</label>
-        <input id="title" name="title" required>
+        <input id="title" name="title" required placeholder="Short label for this proposal">
       </div>
       <div class="field">
-        <label for="text">${escapeHtml(t("proposedText"))}</label>
-        <textarea id="text" name="text" required></textarea>
+        <label for="text">Core text/title</label>
+        <textarea id="text" name="text" required placeholder="The exact title, source title, fact, decision, action, or status text"></textarea>
       </div>
       <div class="field">
-        <label for="summary">${escapeHtml(t("summaryContext"))}</label>
-        <textarea id="summary" name="summary"></textarea>
+        <label for="summary">Plain summary / context</label>
+        <textarea id="summary" name="summary" placeholder="Optional. Why it matters or what it contains."></textarea>
       </div>
       <div class="field">
         <label for="sourceLabel">${escapeHtml(t("sourceOriginLabel"))}</label>
-        <input id="sourceLabel" name="sourceLabel">
+        <input id="sourceLabel" name="sourceLabel" placeholder="Manual note, folder name, conversation, etc.">
       </div>
       <div class="two-col">
         <div class="field">
-          <label for="target">${escapeHtml(t("relationshipTargetOwner"))}</label>
-          <input id="target" name="target" list="project-suggestions">
+          <label for="target">Owner / relationship target</label>
+          <input id="target" name="target" list="project-suggestions" placeholder="Optional owner, next-action owner, or related project">
           ${projectSuggestionDatalist()}
         </div>
         <div class="field">
@@ -11781,14 +11925,32 @@ function openCreateIntakeModal() {
       </div>
     `,
     onSubmit(data) {
-      if (!store.projects.length) return false;
+      const lane = String(data.intakeLane || "needs_review");
+      const projectId = lane === "existing_project" ? String(data.projectId || "").trim() : "";
+      const proposedProjectName = lane === "new_project" ? String(data.proposedProjectName || data.title || "").trim() : "";
+      if (lane === "existing_project" && !projectId) { window.alert("Choose the existing project, or switch the lane to known new project / needs review."); return false; }
+      if (lane === "new_project" && !proposedProjectName) { window.alert("Enter the new project name, or switch the lane to needs review."); return false; }
+      const actor = currentActor() || getOrCreateActor("Owner", "Human");
+      const proposedObjectType = lane === "new_project" && data.proposedObjectType === "ProjectStatus" ? "Source" : normalizeProposedObjectType(data.proposedObjectType);
+      const draftItem = {
+        armType: normalizeArmType(data.armType),
+        title: data.title.trim(),
+        projectId,
+        destination: lane === "new_project" ? "proposed_new_project" : projectId ? "existing_project" : "unassigned",
+        proposedProjectName,
+        proposedObjectType,
+        proposedChange: { text: data.text.trim(), summary: data.summary.trim() }
+      };
       createIntakeItem({
         armType: normalizeArmType(data.armType),
         title: data.title.trim(),
-        createdBy: "human",
+        createdBy: actor.id,
         sourceLabel: data.sourceLabel.trim(),
-        projectId: data.projectId,
-        proposedObjectType: normalizeProposedObjectType(data.proposedObjectType),
+        projectId,
+        destination: draftItem.destination,
+        proposedProjectName,
+        proposedObjectType,
+        queueState: intakeSuggestedQueueState(draftItem),
         proposedChange: {
           text: data.text.trim(),
           summary: data.summary.trim(),
@@ -11804,6 +11966,28 @@ function openCreateIntakeModal() {
       return true;
     }
   });
+  const modal = document.querySelector(".modal");
+  const laneField = modal?.querySelector("#intakeLane");
+  const typeField = modal?.querySelector("#proposedObjectType");
+  const projectField = modal?.querySelector("#projectId");
+  const proposedProjectField = modal?.querySelector("#proposedProjectName");
+  const titleField = modal?.querySelector("#title");
+  const textField = modal?.querySelector("#text");
+  const syncLane = () => {
+    const lane = laneField?.value || "needs_review";
+    modal?.querySelectorAll("[data-existing-target]").forEach((node) => { node.hidden = lane !== "existing_project"; });
+    modal?.querySelectorAll("[data-new-target]").forEach((node) => { node.hidden = lane !== "new_project"; });
+    if (projectField) projectField.required = lane === "existing_project";
+    if (proposedProjectField) proposedProjectField.required = lane === "new_project";
+    if (lane === "new_project" && typeField && typeField.value === "ProjectStatus") typeField.value = "Source";
+  };
+  const syncTitleText = () => {
+    if (!textField || String(textField.value || "").trim()) return;
+    textField.value = titleField?.value || "";
+  };
+  laneField?.addEventListener("change", syncLane);
+  titleField?.addEventListener("blur", syncTitleText);
+  syncLane();
 }
 
 function correctionFieldForObjectType(objectType = "") {
@@ -11899,7 +12083,7 @@ function openApproveIntakeModal(intakeId) {
     `,
     onSubmit(data, form) {
       const actor = getOrCreateActor(data.actorName, "Human");
-      if (!validateActorPermission(actor, "approve", getProject(intake.projectId))) return false;
+      if (!validateActorPermission(actor, "approve", intakePermissionProject(intake))) return false;
       const result = approveIntakeItem(intake.id, actor, data.reason, (item, approval) => applyApprovedIntakeToCore(item, actor, data.reason, approval));
       if (result) {
         const next = nextPendingIntake(intake.id, { readyOnly: true });
@@ -11917,37 +12101,76 @@ function openApproveIntakeModal(intakeId) {
 function openReviewIntakeQueueModal(intakeId) {
   const intake = findIntakeItem(intakeId);
   if (!intake || intake.status !== "pending" || intake.archived) return;
+  const suggestedQueueState = intakeSuggestedQueueState(intake);
+  const selectedRoute = intake.projectId
+    ? "existing_project"
+    : intake.destination === "proposed_new_project" && intake.proposedProjectName
+      ? "proposed_new_project"
+      : intake.destination === "rejected"
+        ? "rejected"
+        : "needs_review";
   showModal({
     title: t("approvalQueueReview"),
     submitText: t("saveQueueReview"),
     body: `
-      <p class="notice">Edit anything Discovery proposed before approval. Nothing here changes Core until you approve it.</p>
+      <p class="notice">Fast review: choose where this should go, fix the short title/text if needed, then mark ready. Nothing here changes Core until final approval.</p>
       ${renderIntakeApprovalPreview(intake)}
+      <div class="two-col">
+        <div class="field">
+          <label for="intakeRoute">Routing</label>
+          <select id="intakeRoute" name="intakeRoute">
+            <option value="proposed_new_project"${selectedRoute === "proposed_new_project" ? " selected" : ""}>Create proposed new project</option>
+            <option value="existing_project"${selectedRoute === "existing_project" ? " selected" : ""}>Add to existing project</option>
+            <option value="needs_review"${selectedRoute === "needs_review" ? " selected" : ""}>Needs more review</option>
+            <option value="rejected"${selectedRoute === "rejected" ? " selected" : ""}>Reject / do not promote</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="proposedObjectType">Core item type</label>
+          <select id="proposedObjectType" name="proposedObjectType">${proposedObjectTypeOptions(intake.proposedObjectType || "Source")}</select>
+        </div>
+      </div>
       <div class="field">
         <label for="intakeTitle">Proposal title</label>
         <input id="intakeTitle" name="intakeTitle" value="${escapeHtml(intake.title || "")}" required>
       </div>
       <div class="field">
-        <label for="proposedText">Proposed source title</label>
+        <label for="proposedText">Core text/title</label>
         <textarea id="proposedText" name="proposedText" required>${escapeHtml(intake.proposedChange?.text || "")}</textarea>
       </div>
       <div class="field">
-        <label for="proposedSummary">Source summary or extracted context</label>
+        <label for="proposedSummary">Summary or extracted context</label>
         <textarea id="proposedSummary" name="proposedSummary" rows="8">${escapeHtml(intake.proposedChange?.summary || "")}</textarea>
       </div>
-      <div class="field">
+      <div class="field" data-existing-target>
         <label for="intakeProjectId">Existing target project</label>
         <select id="intakeProjectId" name="intakeProjectId"><option value="">None</option>${projectOptions(intake.projectId || "")}</select>
       </div>
-      <div class="field">
+      <div class="field" data-new-target>
         <label for="proposedProjectName">Proposed new project name</label>
         <input id="proposedProjectName" name="proposedProjectName" value="${escapeHtml(intake.proposedProjectName || "")}">
       </div>
       <div class="field">
-        <label for="queueState">${escapeHtml(t("queueState"))}</label>
+        <label for="sourceLabel">${escapeHtml(t("sourceOriginLabel"))}</label>
+        <input id="sourceLabel" name="sourceLabel" value="${escapeHtml(intake.sourceLabel || "")}">
+      </div>
+      <div class="two-col">
+        <div class="field">
+          <label for="target">Owner / relationship target</label>
+          <input id="target" name="target" value="${escapeHtml(intake.proposedChange?.target || "")}" list="project-suggestions">
+          ${projectSuggestionDatalist()}
+        </div>
+        <div class="field">
+          <label for="dueDate">${escapeHtml(t("dueDate"))}</label>
+          <input id="dueDate" name="dueDate" type="date" value="${escapeHtml(intake.proposedChange?.dueDate || "")}">
+        </div>
+      </div>
+      <div class="field">
+        <label for="queueState">Review state</label>
         <select id="queueState" name="queueState" required>
-          ${INTAKE_QUEUE_STATES.map((state) => `<option value="${escapeHtml(state)}" ${intake.queueState === state ? "selected" : ""}>${escapeHtml(intakeQueueStateLabel(state))}</option>`).join("")}
+          ${INTAKE_QUEUE_STATES.map((state) => `<option value="${escapeHtml(state)}" ${(intake.queueState || suggestedQueueState) === state ? "selected" : ""}>${escapeHtml(intakeQueueStateLabel(state))}</option>`).join("")}
         </select>
+        ${suggestedQueueState === "ready" ? `<p class="item-meta">This proposal has enough information to approve after your review.</p>` : `<p class="item-meta">Add a Core target and proposal text before marking ready.</p>`}
       </div>
       <div class="field">
         <label for="queueNotes">${escapeHtml(t("queueReviewNotes"))}</label>
@@ -11957,17 +12180,27 @@ function openReviewIntakeQueueModal(intakeId) {
     `,
     onSubmit(data) {
       const actor = getOrCreateActor(data.actorName, "Human");
+      const route = String(data.intakeRoute || "needs_review");
       intake.title = String(data.intakeTitle || "").trim();
       intake.proposedChange = {
         ...(intake.proposedChange || {}),
         text: String(data.proposedText || "").trim(),
-        summary: String(data.proposedSummary || "").trim()
+        summary: String(data.proposedSummary || "").trim(),
+        target: String(data.target || "").trim(),
+        dueDate: String(data.dueDate || "").trim()
       };
-      intake.projectId = String(data.intakeProjectId || "").trim();
-      intake.proposedProjectName = String(data.proposedProjectName || "").trim();
-      if (intake.projectId) intake.destination = "existing_project";
-      else if (intake.proposedProjectName) intake.destination = "proposed_new_project";
+      intake.proposedObjectType = normalizeProposedObjectType(data.proposedObjectType);
+      intake.sourceLabel = String(data.sourceLabel || "").trim();
+      intake.projectId = route === "existing_project" ? String(data.intakeProjectId || "").trim() : "";
+      intake.proposedProjectName = route === "proposed_new_project" ? String(data.proposedProjectName || "").trim() : "";
+      if (route === "existing_project" && !intake.projectId) { window.alert("Choose the existing target project, or change Routing."); return false; }
+      if (route === "proposed_new_project" && !intake.proposedProjectName) { window.alert("Enter a proposed new project name, or change Routing."); return false; }
+      intake.destination = route === "existing_project" ? "existing_project" : route === "proposed_new_project" ? "proposed_new_project" : route === "rejected" ? "rejected" : "unassigned";
       intake.queueState = normalizeIntakeQueueState(data.queueState);
+      if (intake.queueState === "ready" && !allRequiredFlagsPass(intakeAirlockChecks(intake))) {
+        window.alert("This proposal is not ready yet. Add the missing Core target, title, text, and type first.");
+        return false;
+      }
       intake.queueNotes = String(data.queueNotes || "").trim();
       intake.queueReviewedAt = nowIso();
       intake.queueReviewedBy = actor.id;
@@ -11978,6 +12211,30 @@ function openReviewIntakeQueueModal(intakeId) {
       return true;
     }
   });
+  const modal = document.querySelector(".modal");
+  const routeField = modal?.querySelector("#intakeRoute");
+  const projectField = modal?.querySelector("#intakeProjectId");
+  const proposedProjectField = modal?.querySelector("#proposedProjectName");
+  const queueField = modal?.querySelector("#queueState");
+  const syncRoute = () => {
+    const route = routeField?.value || "needs_review";
+    modal?.querySelectorAll("[data-existing-target]").forEach((node) => { node.hidden = route !== "existing_project"; });
+    modal?.querySelectorAll("[data-new-target]").forEach((node) => { node.hidden = route !== "proposed_new_project"; });
+    if (projectField) projectField.required = route === "existing_project";
+    if (proposedProjectField) proposedProjectField.required = route === "proposed_new_project";
+    if (queueField && route === "rejected") queueField.value = "blocked";
+    if (queueField && route !== "rejected" && intakeSuggestedQueueState({
+      ...intake,
+      projectId: route === "existing_project" ? projectField?.value || "" : "",
+      destination: route,
+      proposedProjectName: route === "proposed_new_project" ? proposedProjectField?.value || "" : "",
+      proposedChange: { ...(intake.proposedChange || {}), text: modal?.querySelector("#proposedText")?.value || "" }
+    }) === "ready") queueField.value = "ready";
+  };
+  routeField?.addEventListener("change", syncRoute);
+  projectField?.addEventListener("change", syncRoute);
+  proposedProjectField?.addEventListener("input", syncRoute);
+  syncRoute();
 }
 
 function nextPendingIntake(currentId = "", { readyOnly = false } = {}) {
@@ -14972,7 +15229,6 @@ app.addEventListener("click", (event) => {
   }
 
   if (action === "create-project") openCreateProjectModal();
-  if (action === "create-intake") openCreateIntakeModal();
   if (action === "backup-storage") exportStorageBackup();
   if (action === "restore-storage") openRestoreStorageModal();
   if (action === "export-current-raw-data") exportCurrentRawData();
@@ -14997,7 +15253,6 @@ app.addEventListener("click", (event) => {
     activeRootView = "files";
     activeProjectId = null;
     render();
-    refreshDiscoveryWorkspace().then(() => { if (activeRootView === "files") render(); });
   }
   if (action === "show-archived-projects") {
     activeRootView = "archived";
@@ -15379,7 +15634,6 @@ async function initializeApp() {
   render();
   store = await loadStore() || emptyStore();
   await refreshArmTransportStatus();
-  if (platformAdapter.discovery?.available) await refreshDiscoveryWorkspace();
   storageReady = true;
   render();
 }

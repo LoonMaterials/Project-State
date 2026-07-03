@@ -43,12 +43,23 @@ async function main() {
       "function openProjectFileImportModal",
       "Use this when you already know these files belong under one project.",
       "Scan folder for Discovery",
+      "Checked:",
+      "Finish import",
       "Source added from known project files",
       "Project created from known file import",
+      "sourceImportChecked",
+      "function isKnownImportProject",
+      "knownImportHasVerifiedSources",
+      "Project ready",
+      "buttonLabel: \"Add Intake\"",
+      "Make changes",
+      "Import known project folder",
+      "Create new project",
       "project_import_complete",
       "stageManagedFiles({ files: filesToStage })"
     ];
     for (const text of required) assert(app.includes(text), `Known project file import UI is missing: ${text}`);
+    assert(!app.includes("Review imported sources"), "Known project import should not create a separate source-review gate.");
     assert(/if \(isKnownProjectImport\) openProjectFileImportModal\(selection\);[\s\S]+else openFileImportReviewModal\(selection\);/.test(app), "Known project imports are not routed away from Discovery review.");
     assert(/if \(\["project_files", "project_folder"\]\.includes\(pendingFileImportReviewSelection\.importKind\)\) openProjectFileImportModal\(pendingFileImportReviewSelection\);/.test(app), "Pending known project import cannot be reopened after the modal closes.");
 
@@ -59,7 +70,10 @@ async function main() {
       managedFilesStaged: staged.staged.length,
       duplicateBasenamesSafe: true,
       discoveryReviewBypassed: true,
-      sourceHistoryPreserved: true
+      sourceHistoryPreserved: true,
+      knownImportMarkedChecked: true,
+      postImportReviewGateRemoved: true,
+      coreApprovalReasonPresets: true
     }, null, 2));
     console.log("Known project file import flow: ok");
   } finally {

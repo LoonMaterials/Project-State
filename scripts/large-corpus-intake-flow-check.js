@@ -76,14 +76,27 @@ async function main() {
       maxChunks: 12
     });
     assert(indexed.chunks.length === 12, "Corpus index should create bounded chunks for local AI.", indexed);
+    assert(indexed.indexed?.truncated === true, "First corpus indexing pass should report that more chunks remain.", indexed.indexed);
     const readChunk = await bridge.discoveryStorage.readChunkText({ discoveryChunkId: indexed.chunks[0].id });
     assert(readChunk.text.includes("User:") && readChunk.text.includes("Assistant:"), "Indexed corpus chunk was not readable.", readChunk);
+    const continued = await bridge.discoveryStorage.indexCorpus({
+      discoveryCaseId: staged.discoveryCaseId,
+      extractionId: extracted.extraction.id,
+      actorId: "project_state_deterministic",
+      createdAt: "2026-07-02T09:02:45.000Z",
+      chunkCharacters: 12000,
+      maxChunks: 5,
+      continueIndex: true
+    });
+    assert(continued.indexed?.chunkCount === 5, "Corpus continuation should add only the requested next batch.", continued.indexed);
+    assert(continued.chunks.length === 17, "Corpus continuation should preserve prior chunks and append the next batch.", continued);
+    assert(continued.chunks[12].chunkIndex === 12, "Corpus continuation did not preserve sequential chunk indexes.", continued.chunks.slice(10, 14));
     const indexedAgain = await bridge.discoveryStorage.indexCorpus({
       discoveryCaseId: staged.discoveryCaseId,
       extractionId: extracted.extraction.id,
       actorId: "project_state_deterministic"
     });
-    assert(indexedAgain.deduplicated === true && indexedAgain.chunks.length === indexed.chunks.length, "Corpus indexing should be idempotent.", indexedAgain);
+    assert(indexedAgain.deduplicated === true && indexedAgain.chunks.length === continued.chunks.length, "Corpus indexing should be idempotent unless continuation is requested.", indexedAgain);
 
     await bridge.discoveryStorage.confirmRouting({
       discoveryCaseId: staged.discoveryCaseId,
@@ -109,6 +122,10 @@ async function main() {
     const appSource = fs.readFileSync(path.join(__dirname, "..", "app.js"), "utf8");
     assert(appSource.includes("data-corpus-index-required"), "Large corpus review UI should show that indexing is required before local AI.");
     assert(appSource.includes("data-index-corpus"), "Large corpus review UI should expose indexing before normal local AI.");
+    assert(appSource.includes("continueIndex"), "Large corpus review UI should support resumable indexing.");
+    assert(appSource.includes("Index next large-file batch"), "Large corpus review UI should expose the next indexing batch.");
+    assert(appSource.includes("Partial analysis window"), "Large corpus AI path should disclose bounded local-analysis windows.");
+    assert(appSource.includes("maximumChunks"), "Large corpus AI path should obey local analysis arm chunk limits.");
     assert(appSource.includes("Index large file for local AI"), "Large-file review UI should make the indexing action explicit.");
     assert(appSource.includes("Build a large-file index before running local AI idea analysis."), "Chunkless large-file AI path should explain the required next step.");
 
@@ -118,7 +135,7 @@ async function main() {
       estimatedWords: extracted.extraction.preflight.estimatedWords,
       corpusKind: extracted.extraction.preflight.corpusKind,
       immediateChunks: extracted.chunks.length,
-      indexedChunks: indexed.chunks.length,
+      indexedChunks: continued.chunks.length,
       corpusUnit: analysis.documentUnits[0].title,
       intakeProposals: promotion.intakeItemIds.length,
       coreChanged: false

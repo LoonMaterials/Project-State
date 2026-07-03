@@ -23,7 +23,14 @@ const DATABASE_FILE = "project-state.db";
 const FOLDERS = ["sources", "extracts", "attachments", "quarantine", "discovery", "backups", "recovery", "manifests", "logs", "temp", "integrations"];
 const SPLIT_TABLES = ["projects", "changes", "sources", "extracts", "attachments", "draft_projects"];
 const BACKUP_MANAGED_FOLDERS = ["sources", "extracts", "attachments", "quarantine", "discovery", "manifests", "recovery"];
-const IMPORT_FILE_EXTENSIONS = new Set([".pdf", ".docx", ".txt", ".md", ".csv", ".json", ".png", ".jpg", ".jpeg", ".webp", ".gif"]);
+const IMPORT_FILE_EXTENSIONS = new Set([
+  ".pdf", ".docx", ".txt", ".md", ".csv", ".json", ".ipynb",
+  ".py", ".js", ".ts", ".jsx", ".tsx", ".html", ".css", ".scss",
+  ".cpp", ".c", ".h", ".hpp", ".cs", ".java", ".rs", ".go", ".sql", ".sh", ".ps1",
+  ".uproject", ".uplugin", ".ini", ".yaml", ".yml", ".toml",
+  ".png", ".jpg", ".jpeg", ".webp", ".gif",
+  ".uasset", ".umap", ".blend"
+]);
 const MAX_IMPORT_FILE_BYTES = 2147483648;
 const MAX_TEXT_EXTRACTION_BYTES = 104857600;
 const MAX_IMMEDIATE_DISCOVERY_WORDS = 250000;
@@ -308,7 +315,8 @@ async function inspectImportSelection({ paths = [] } = {}) {
       name: path.basename(localPath),
       contentType: mimeFromFileName(localPath),
       size: stat.size,
-      lastModified: stat.mtime.toISOString()
+      lastModified: stat.mtime.toISOString(),
+      evidenceKind: evidenceKindFromFileName(localPath)
     });
   }
 
@@ -1507,11 +1515,21 @@ async function stageTrustedDiscoveryFile({ storageRoot, dbPath, payload = {} }) 
 }
 
 function immediateTextExtractionExtension(extension) {
-  return [".txt", ".md", ".csv", ".json", ".pdf", ".docx"].includes(extension);
+  return [
+    ".txt", ".md", ".csv", ".json", ".ipynb", ".pdf", ".docx",
+    ".py", ".js", ".ts", ".jsx", ".tsx", ".html", ".css", ".scss",
+    ".cpp", ".c", ".h", ".hpp", ".cs", ".java", ".rs", ".go", ".sql", ".sh", ".ps1",
+    ".uproject", ".uplugin", ".ini", ".yaml", ".yml", ".toml"
+  ].includes(extension);
 }
 
 function sampleableCorpusExtension(extension) {
-  return [".txt", ".md", ".csv", ".json"].includes(extension);
+  return [
+    ".txt", ".md", ".csv", ".json", ".ipynb",
+    ".py", ".js", ".ts", ".jsx", ".tsx", ".html", ".css", ".scss",
+    ".cpp", ".c", ".h", ".hpp", ".cs", ".java", ".rs", ".go", ".sql", ".sh", ".ps1",
+    ".uproject", ".uplugin", ".ini", ".yaml", ".yml", ".toml"
+  ].includes(extension);
 }
 
 async function readDiscoveryFileSample(filePath, byteSize, sampleBytes = CORPUS_PREFLIGHT_SAMPLE_BYTES) {
@@ -1625,7 +1643,7 @@ async function extractDiscoveryFileVersion({ storageRoot, dbPath, payload = {} }
         text = cleanExtractedText(await extractText(physicalPath) || "");
         status = text ? "complete" : "partial";
       }
-    } else if ([".png", ".jpg", ".jpeg", ".webp", ".gif"].includes(extension)) status = "metadata_only";
+    } else if ([".png", ".jpg", ".jpeg", ".webp", ".gif", ".blend", ".uasset", ".umap"].includes(extension)) status = "metadata_only";
   } catch (caught) {
     status = "failed";
     error = { name: caught.name || "Error", message: caught.message || "Extraction failed." };
@@ -1687,41 +1705,45 @@ async function indexDiscoveryCorpus({ storageRoot, dbPath, payload = {} }) {
   const createdAt = requiredDiscoveryTimestamp(payload.createdAt || nowIso(), "Corpus indexing timestamp");
   const chunkCharacters = Math.max(2000, Math.min(20000, Number(payload.chunkCharacters) || 12000));
   const maxChunks = Math.max(1, Math.min(500, Number(payload.maxChunks) || 120));
+  const continueIndex = payload.continueIndex === true || payload.mode === "continue";
   const db = openDatabase(dbPath);
   let extraction;
   let version;
+  let existingChunkCount = 0;
   try {
     extraction = dbRecord(db, "discovery_extractions", extractionId);
     if (!extraction || extraction.discoveryCaseId !== discoveryCaseId) throw new Error("Large corpus extraction was not found for this Discovery Case.");
     if (extraction.status !== "large_corpus_pending") throw new Error("Only pending large-corpus extractions can be indexed by this operation.");
     version = dbRecord(db, "file_versions", extraction.fileVersionId);
     if (!version) throw new Error("Discovery File Version was not found.");
-    const existingChunks = db.prepare("SELECT COUNT(*) AS count FROM discovery_chunks WHERE discovery_extraction_id = ?").get(extractionId).count;
-    if (existingChunks > 0) {
+    existingChunkCount = db.prepare("SELECT COUNT(*) AS count FROM discovery_chunks WHERE discovery_extraction_id = ?").get(extractionId).count;
+    if (existingChunkCount > 0 && !continueIndex) {
       const chunks = db.prepare("SELECT record_json FROM discovery_chunks WHERE discovery_extraction_id = ? ORDER BY chunk_index").all(extractionId).map(parseRecordRow);
-      return { ok: true, deduplicated: true, discoveryCaseId, extraction, chunks };
+      return { ok: true, deduplicated: true, discoveryCaseId, extraction, chunks, indexed: { chunkCount: 0, totalIndexedChunks: chunks.length, alreadyIndexed: true } };
     }
   } finally { db.close(); }
   await authorizeDiscoveryContentAccess({ storageRoot, dbPath, reference: { managedPath: version.managedPath } });
   const extension = path.extname(version.originalName || "").toLowerCase();
-  if (!sampleableCorpusExtension(extension)) throw new Error("Corpus indexing currently supports text, markdown, CSV, and JSON archives.");
+  if (!sampleableCorpusExtension(extension)) throw new Error("Corpus indexing currently supports text, markdown, CSV, JSON, notebooks, and source-code archives.");
   const physicalPath = resolveManagedPath(storageRoot, version.managedPath);
-  const rawText = cleanExtractedText(extension === ".json" ? jsonToDiscoveryText(await readAsText(physicalPath), version.originalName || "") : await readAsText(physicalPath));
+  const rawText = cleanExtractedText(await readAsText(physicalPath));
   if (!rawText) throw new Error("Corpus indexing found no readable text.");
   const allPieces = chunkDeterministicText(rawText, chunkCharacters);
-  const pieces = allPieces.slice(0, maxChunks);
+  const startChunkIndex = continueIndex ? existingChunkCount : 0;
+  const pieces = allPieces.slice(startChunkIndex, startChunkIndex + maxChunks);
   const extractionRoot = path.join(storageRoot, "discovery", discoveryCaseId, extraction.fileVersionId, extractionId, "corpus-index");
   const chunks = [];
   await fsp.mkdir(path.join(extractionRoot, "chunks"), { recursive: true });
   for (let index = 0; index < pieces.length; index += 1) {
+    const chunkIndex = startChunkIndex + index;
     const chunkText = pieces[index];
-    const chunkId = `${extractionId}_corpus_chunk_${String(index).padStart(4, "0")}`;
-    const chunkPath = path.join(extractionRoot, "chunks", `${String(index).padStart(4, "0")}.txt`);
+    const chunkId = `${extractionId}_corpus_chunk_${String(chunkIndex).padStart(6, "0")}`;
+    const chunkPath = path.join(extractionRoot, "chunks", `${String(chunkIndex).padStart(6, "0")}.txt`);
     await fsp.writeFile(chunkPath, chunkText, "utf8");
     chunks.push({
       id: chunkId,
       discoveryExtractionId: extractionId,
-      chunkIndex: index,
+      chunkIndex,
       textPath: relativeManagedPath(storageRoot, chunkPath),
       textSha256: checksumText(chunkText),
       textBytes: Buffer.byteLength(chunkText, "utf8"),
@@ -1737,8 +1759,15 @@ async function indexDiscoveryCorpus({ storageRoot, dbPath, payload = {} }) {
     writeDb.exec("COMMIT");
   } catch (caught) { try { writeDb.exec("ROLLBACK"); } catch {} throw caught; }
   finally { writeDb.close(); }
-  await appendDiscoveryEvent({ storageRoot, dbPath, payload: { id: makeId("discovery_event"), discoveryCaseId, eventType: "large_corpus_indexed", actorId, actorType: "tool", occurredAt: createdAt, fileVersionId: extraction.fileVersionId, extractionId, chunkCount: chunks.length, chunkCharacters, maxChunks } });
-  return { ok: true, discoveryCaseId, extraction, chunks, indexed: { chunkCount: chunks.length, chunkCharacters, maxChunks, truncated: allPieces.length > maxChunks, totalDetectedChunks: allPieces.length } };
+  const readDb = openDatabase(dbPath);
+  let allChunks;
+  try {
+    allChunks = readDb.prepare("SELECT record_json FROM discovery_chunks WHERE discovery_extraction_id = ? ORDER BY chunk_index").all(extractionId).map(parseRecordRow);
+  } finally { readDb.close(); }
+  const totalIndexedChunks = allChunks.length;
+  const truncated = totalIndexedChunks < allPieces.length;
+  await appendDiscoveryEvent({ storageRoot, dbPath, payload: { id: makeId("discovery_event"), discoveryCaseId, eventType: "large_corpus_indexed", actorId, actorType: "tool", occurredAt: createdAt, fileVersionId: extraction.fileVersionId, extractionId, chunkCount: chunks.length, totalIndexedChunks, chunkCharacters, maxChunks, startChunkIndex, truncated } });
+  return { ok: true, discoveryCaseId, extraction, chunks: allChunks, indexed: { chunkCount: chunks.length, totalIndexedChunks, startChunkIndex, nextChunkIndex: totalIndexedChunks, chunkCharacters, maxChunks, truncated, complete: !truncated, totalDetectedChunks: allPieces.length } };
 }
 
 async function readDiscoveryChunkText({ storageRoot, dbPath, payload = {} }) {
@@ -1784,18 +1813,22 @@ async function analyzeDiscoveryCase({ storageRoot, dbPath, payload = {} }) {
   const actorId = requiredDiscoveryId(payload.actorId || "project_state_deterministic", "Discovery analysis actor ID");
   const createdAt = requiredDiscoveryTimestamp(payload.createdAt || nowIso(), "Discovery analysis createdAt");
   const db = openDatabase(dbPath);
+  let discoveryCase;
   let versions;
   let projects;
   let extractions;
   try {
-    if (!dbRecord(db, "discovery_cases", discoveryCaseId)) throw new Error("Discovery Case was not found.");
+    discoveryCase = dbRecord(db, "discovery_cases", discoveryCaseId);
+    if (!discoveryCase) throw new Error("Discovery Case was not found.");
     versions = db.prepare(`SELECT version.record_json FROM file_versions AS version JOIN discovery_case_files AS membership ON membership.file_version_id = version.id WHERE membership.discovery_case_id = ? ORDER BY membership.rowid`).all(discoveryCaseId).map(parseRecordRow);
     projects = readRecordJson(db, "projects");
     extractions = db.prepare("SELECT record_json FROM discovery_extractions WHERE discovery_case_id = ? ORDER BY rowid").all(discoveryCaseId).map(parseRecordRow);
   } finally { db.close(); }
   if (!versions.length) throw new Error("Discovery Case has no File Versions to analyze.");
   const baseNames = versions.map((version) => path.basename(version.originalName || "", path.extname(version.originalName || ""))).filter(Boolean);
-  const suggestedName = suggestDiscoveryName(baseNames) || "Unassigned material";
+  const caseTitleName = String(discoveryCase.title || "").replace(/^Project folder:\s*/i, "").trim();
+  const genericCaseTitle = !caseTitleName || ["selected folder", "folder root", "selected file", "selected files", "discovery case"].includes(caseTitleName.toLowerCase());
+  const suggestedName = !genericCaseTitle && caseTitleName ? titleFromTokens(caseTitleName) : suggestDiscoveryName(baseNames) || "Unassigned material";
   const suggestionTokens = tokenSet(suggestedName);
   const projectCandidates = projects.map((project) => {
     const projectTokens = tokenSet(project.name || "");
@@ -2039,20 +2072,23 @@ async function promoteDiscoveryToIntake({ storageRoot, dbPath, payload = {} }) {
       const supportingSummary = supportingFileEvidence
         ? `Supporting file for "${route.title || sourceTitle}". ${supportingFileEvidence.note || "Metadata-only file from the same Discovery case."}`
         : "";
+      const routeHasCoreTarget = targetProjectIds.length > 0 || (route.destination === "proposed_new_project" && String(route.proposedProjectName || "").trim());
+      const proposedObjectType = "Source";
+      const proposalReady = routeHasCoreTarget && proposedText && proposedObjectType;
       for (const projectId of (targetProjectIds.length ? targetProjectIds : [null])) intakeItems.push({
       id: makeId("intake_item"),
       intakeBatchId,
       projectId: projectId || "",
       status: "pending",
       reviewState: "needs_review",
-      queueState: "new",
-      queueNotes: "",
+      queueState: proposalReady ? "ready" : "needs_review",
+      queueNotes: proposalReady ? "Ready for Core approval after human review." : "Needs routing or proposal cleanup before Core approval.",
       title: itemTitle,
       createdAt: promotedAt,
       createdBy: actorId,
       sourceLabel: `Discovery: ${version.originalName || sourceTitle}`,
       armType: "discovery",
-      proposedObjectType: "Source",
+      proposedObjectType,
       proposedChange: {
         text: proposedText,
         summary: String(isSupportingFile ? supportingSummary : route.summary || extractedText).slice(0, 2000),
@@ -3823,12 +3859,30 @@ async function readAsDataUrl(file) {
 async function extractText(file) {
   const fileName = pathFromFileLike(file) || file?.name || "";
   const extension = path.extname(fileName).slice(1).toLowerCase();
-  if (extension === "txt" || extension === "md" || extension === "csv") return cleanExtractedText(await readAsText(file));
+  if ([
+    "txt", "md", "csv",
+    "py", "js", "ts", "jsx", "tsx", "html", "css", "scss",
+    "cpp", "c", "h", "hpp", "cs", "java", "rs", "go", "sql", "sh", "ps1",
+    "uproject", "uplugin", "ini", "yaml", "yml", "toml"
+  ].includes(extension)) return textFileToDiscoveryText(await readAsText(file), fileName, extension);
   if (extension === "json") return jsonToDiscoveryText(await readAsText(file), fileName);
+  if (extension === "ipynb") return notebookToDiscoveryText(await readAsText(file), fileName);
   const bytes = new Uint8Array(await readAsArrayBuffer(file));
   if (extension === "docx") return extractDocxText(bytes);
   if (extension === "pdf") return extractPdfText(bytes);
   return null;
+}
+
+function textFileToDiscoveryText(raw = "", fileName = "", extension = "") {
+  if (["txt", "md", "csv"].includes(extension)) return cleanExtractedText(raw);
+  const label = path.basename(String(fileName || "Text file"));
+  const kind = evidenceKindFromFileName(fileName);
+  return cleanExtractedText([
+    `${kind.label}: ${label}`,
+    extension ? `Extension: .${extension}` : "",
+    "",
+    raw
+  ].join("\n"));
 }
 
 function jsonToDiscoveryText(raw = "", fileName = "") {
@@ -3852,6 +3906,45 @@ function jsonToDiscoveryText(raw = "", fileName = "") {
     ].join("\n"));
   }
 }
+
+function notebookToDiscoveryText(raw = "", fileName = "") {
+  const sourceLabel = path.basename(String(fileName || "Jupyter notebook"));
+  try {
+    const parsed = JSON.parse(raw);
+    const cells = Array.isArray(parsed.cells) ? parsed.cells : [];
+    const parts = [`Jupyter notebook: ${sourceLabel}`, `Cells: ${cells.length}`, ""];
+    cells.slice(0, 2000).forEach((cell, index) => {
+      const source = Array.isArray(cell.source) ? cell.source.join("") : String(cell.source || "");
+      const outputs = Array.isArray(cell.outputs)
+        ? cell.outputs.map((output) => {
+          if (Array.isArray(output.text)) return output.text.join("");
+          if (output.data && typeof output.data === "object") return Object.keys(output.data).join(", ");
+          return output.output_type || "";
+        }).filter(Boolean).join("\n").slice(0, 2000)
+        : "";
+      parts.push(`Notebook cell ${index + 1} (${cell.cell_type || "unknown"})`);
+      if (source.trim()) parts.push(source.trim());
+      if (outputs.trim()) parts.push(`Output summary:\n${outputs.trim()}`);
+      parts.push("");
+    });
+    return cleanExtractedText(parts.join("\n"));
+  } catch {
+    return cleanExtractedText([`Jupyter notebook-like file: ${sourceLabel}`, "", raw].join("\n"));
+  }
+}
+
+function evidenceKindFromFileName(fileName = "") {
+  const extension = path.extname(String(fileName || "")).toLowerCase();
+  if ([".png", ".jpg", ".jpeg", ".webp", ".gif", ".blend"].includes(extension)) return { key: "image_visual", label: "Image / visual evidence" };
+  if ([".pdf", ".docx"].includes(extension)) return { key: "document", label: "Document evidence" };
+  if ([".ipynb"].includes(extension)) return { key: "notebook", label: "Notebook / analysis evidence" };
+  if ([".py", ".js", ".ts", ".jsx", ".tsx", ".html", ".css", ".scss", ".cpp", ".c", ".h", ".hpp", ".cs", ".java", ".rs", ".go", ".sql", ".sh", ".ps1"].includes(extension)) return { key: "code", label: "Code / test evidence" };
+  if ([".uproject", ".uplugin", ".uasset", ".umap", ".ini"].includes(extension)) return { key: "unreal", label: "Unreal / visual project evidence" };
+  if ([".json", ".csv", ".yaml", ".yml", ".toml"].includes(extension)) return { key: "data_config", label: "Data / config evidence" };
+  if ([".txt", ".md"].includes(extension)) return { key: "notes", label: "Notes evidence" };
+  return { key: "file", label: "File evidence" };
+}
+
 
 async function saveTextFile({ storageRoot, fileName = "project-state-export.txt", text = "", type = "text/plain" }) {
   await ensureSpine(storageRoot);
@@ -3966,7 +4059,37 @@ function mimeFromFileName(fileName = "") {
     docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     txt: "text/plain",
     md: "text/markdown",
-    json: "application/json"
+    csv: "text/csv",
+    json: "application/json",
+    ipynb: "application/x-ipynb+json",
+    py: "text/x-python",
+    js: "text/javascript",
+    ts: "text/typescript",
+    jsx: "text/javascript",
+    tsx: "text/typescript",
+    html: "text/html",
+    css: "text/css",
+    scss: "text/x-scss",
+    cpp: "text/x-c++src",
+    c: "text/x-csrc",
+    h: "text/x-chdr",
+    hpp: "text/x-c++hdr",
+    cs: "text/x-csharp",
+    java: "text/x-java-source",
+    rs: "text/rust",
+    go: "text/x-go",
+    sql: "application/sql",
+    sh: "application/x-sh",
+    ps1: "text/x-powershell",
+    uproject: "application/json",
+    uplugin: "application/json",
+    ini: "text/plain",
+    yaml: "application/yaml",
+    yml: "application/yaml",
+    toml: "application/toml",
+    uasset: "application/octet-stream",
+    umap: "application/octet-stream",
+    blend: "application/octet-stream"
   };
   return types[extension] || "application/octet-stream";
 }

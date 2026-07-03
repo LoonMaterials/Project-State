@@ -14,21 +14,31 @@ async function main() {
     await fsp.mkdir(path.join(inputRoot, "Alpha"), { recursive: true });
     await fsp.mkdir(path.join(inputRoot, "Beta"), { recursive: true });
     await fsp.writeFile(path.join(inputRoot, "Alpha", "alpha.md"), "# Alpha\n", "utf8");
+    await fsp.writeFile(path.join(inputRoot, "Alpha", "alpha-test.py"), "print('alpha')\n", "utf8");
+    await fsp.writeFile(path.join(inputRoot, "Alpha", "alpha-notebook.ipynb"), JSON.stringify({ cells: [{ cell_type: "markdown", source: ["# Alpha notebook"] }] }), "utf8");
+    await fsp.writeFile(path.join(inputRoot, "Alpha", "alpha.uproject"), JSON.stringify({ FileVersion: 3, EngineAssociation: "test" }), "utf8");
+    await fsp.writeFile(path.join(inputRoot, "Alpha", "alpha-sketch.png"), Buffer.from([0x89, 0x50, 0x4e, 0x47]));
+    await fsp.writeFile(path.join(inputRoot, "Alpha", "alpha-scene.uasset"), Buffer.from("unreal asset placeholder"));
     await fsp.writeFile(path.join(inputRoot, "Beta", "beta.md"), "# Beta\n", "utf8");
     await fsp.writeFile(path.join(inputRoot, "Beta", "blocked.exe"), "blocked", "utf8");
     const bridge = createProjectStateDesktopBridge({ storageRoot });
     const inspected = await bridge.files.inspectImportSelection({ paths: [inputRoot] });
-    assert(inspected.candidates.length === 2, "Recursive folder inspection lost supported files.", inspected);
+    assert(inspected.candidates.length === 7, "Recursive folder inspection lost supported mixed-evidence files.", inspected);
     assert(inspected.skipped.length === 1, "Unsupported folder item was not reported.", inspected);
+    assert(inspected.candidates.some((item) => item.evidenceKind?.key === "code"), "Source-code evidence was not classified.", inspected.candidates);
+    assert(inspected.candidates.some((item) => item.evidenceKind?.key === "notebook"), "Notebook evidence was not classified.", inspected.candidates);
+    assert(inspected.candidates.some((item) => item.evidenceKind?.key === "unreal"), "Unreal evidence was not classified.", inspected.candidates);
+    assert(inspected.candidates.some((item) => item.evidenceKind?.key === "image_visual"), "Visual evidence was not classified.", inspected.candidates);
     const app = fs.readFileSync(path.join(__dirname, "..", "app.js"), "utf8");
     const required = [
       "function folderRelativeGroup",
       "function partitionDiscoveryCandidates",
       "function openDiscoveryReviewSequence",
-      "Use suggested folder groups",
-      "Treat the selected folder as one case",
+      "Treat selected folder as one project / evidence collection",
+      "Scan folder groups for separate project candidates",
       "Review every file separately",
-      "files.slice(index, index + 24)",
+      "mode === \"one_project_folder\"",
+      "Folder intent:",
       "Suggested group:",
       "sequencePosition"
     ];
@@ -36,7 +46,7 @@ async function main() {
     assert(app.includes('caseTitle: candidateGroup.label'), "Folder grouping rationale is not passed into Discovery Case creation.");
     assert(app.includes('externalSecurityAcknowledged: data.externalSecurityAcknowledged === "on"'), "Folder grouping bypasses the external-security boundary.");
     console.log("Folder Discovery Flow Check");
-    console.log(JSON.stringify({ recursivelyInspected: inspected.candidates.length, unsupportedReported: inspected.skipped.length, groupingChoices: 3, boundedGroupSize: 24, noSilentOmission: true, sequentialReview: true, externalSecurityBoundaryPreserved: true }, null, 2));
+    console.log(JSON.stringify({ recursivelyInspected: inspected.candidates.length, unsupportedReported: inspected.skipped.length, groupingChoices: 3, oneProjectFolderLane: true, mixedEvidenceClassified: true, sequentialReview: true, externalSecurityBoundaryPreserved: true }, null, 2));
     console.log("Folder Discovery flow: ok");
   } finally {
     await fsp.rm(tempRoot, { recursive: true, force: true });
