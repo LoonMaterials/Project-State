@@ -1,6 +1,6 @@
 # Project State v0.1 Complete Implementation Inventory
 
-Generated: 2026-06-18; Discovery-stage boundary recorded 2026-06-19
+Generated: 2026-06-18; Discovery-stage boundary recorded 2026-06-19; intake fast-lane update recorded 2026-07-03
 
 This inventory describes the implementation currently present in this repository. It distinguishes completed behavior from future or deliberately excluded work.
 
@@ -892,3 +892,76 @@ AI Analysis Arm v0.1 deliberately does not request project names or routes. Thos
 - All 38 of 38 non-live regression checks and syntax checks passed.
 
 The next gated step is encrypted end-user credential configuration and a provider-connector shell with network calls still disabled. A real provider call should occur only after credential redaction/exclusion, cost preview/limits, provider consent, and a full fake-connector test pass.
+
+## 26. Intake Flow Simplification and Known-Import Fast Lane
+
+Status: implemented and live-tested 2026-07-03 after known-folder/file intake testing showed the earlier step-by-step flow was too heavy for normal single-user/small-group use.
+
+The governing product decision is now:
+
+`Known project material → checked file list → Finish import → Core project/source records`
+
+and separately:
+
+`Unknown or large material → Discovery progress/cases → questions/routing → Intake → human approval → Core`
+
+### What changed
+
+- The former global **Files** top-level workflow was renamed/reframed as **Add Intake**.
+- The duplicate manual **Add Intake** header button was removed from the main header; the Add Intake screen is now the intake/file/folder launcher.
+- The Add Intake screen now presents two clear lanes:
+  - **Known project material** for files/folders that already belong to one project.
+  - **Discovery scan** for unknown, mixed, large, or exploratory material.
+- Known project folder/file import now bypasses Discovery review and creates or updates Core project Source records directly.
+- Known imports use the primary button **Finish import** after the supported files are listed and checked.
+- Known imports mark `sourceImportChecked` and record `sourceImportCheckedAt`; they no longer create a pending “review imported sources” chore.
+- Known-import projects now show **Project ready** after import, with useful next actions:
+  - **Add Intake**
+  - **Make changes**
+- Known-import projects with current status, current summary, and verified source files are treated as complete enough for workflow/Needs Attention purposes even when they do not yet have decisions or next actions.
+- Imported project files are still copied into managed storage, assigned checksums, and attached as project Sources with source history and file-verification metadata.
+- The file/folder picker status and remembered last import folder remain visible for orientation and testing.
+
+### What was removed or hidden
+
+- The separate **Review imported sources** next-step gate was removed for known project imports.
+- The old general **Discovery cases** panel was removed from the Add Intake page.
+- Add Intake no longer refreshes or displays every historical Discovery Case just because the app starts or the user opens Add Intake.
+- Historical/parent-folder Discovery cases are no longer shown during known-folder imports.
+- The former pending/approved managed-file library panels were removed from the Add Intake page to avoid duplicating the project Source records that already show inside each project.
+- Known project imports no longer ask “why are these files being added?”; the import reason is assigned automatically as known project folder/files.
+
+### Discovery lane retained
+
+- Discovery Cases are still part of the system, but they now belong to unknown, large, or exploratory scans rather than known project imports.
+- The Add Intake page may show **Discovery progress** only for long/large Discovery work, such as pending large-file or large-corpus processing.
+- Unknown files/folders still use Discovery staging, extraction, questions, grouping/routing, Intake promotion, and human approval before Core.
+- Large files and folders remain planned/active test targets for the next flow round, especially mixed folders, huge ChatGPT exports, images/sketches, PDFs, code, notebooks, and patent-style files.
+
+### Verification added or updated
+
+- `scripts/known-project-file-import-flow-check.js` now asserts:
+  - known project import buttons exist;
+  - known imports bypass Discovery review;
+  - duplicate basenames stage safely;
+  - known imports mark `sourceImportChecked`;
+  - the old **Review imported sources** gate does not return;
+  - the post-import project state uses the **Project ready** / **Add Intake** / **Make changes** flow.
+- `scripts/intake-fast-lane-flow-check.js` verifies the Add Intake fast lane and removal of the duplicate manual Add Intake header path.
+- Existing folder/discovery checks continue to verify that unknown folders still use Discovery rather than bypassing the Airlock.
+
+### Verification results on 2026-07-03
+
+Passed:
+
+- `node --check app.js`
+- `node scripts/known-project-file-import-flow-check.js`
+- `node scripts/desktop-file-library-check.js`
+- `pnpm run check:flow-hardening`
+- `pnpm run check:folder-discovery`
+
+Live testing outcome:
+
+- Known project folder import became much faster and cleaner.
+- The app no longer showed unrelated parent-folder Discovery cases on the Add Intake page during known-folder testing.
+- The remaining next test area is the unknown/large Discovery lane.
