@@ -67,6 +67,9 @@ async function main() {
     assert(appSource.includes("Known project material") && appSource.includes("Discovery scan"), "The Add Intake launcher should separate known project material from Discovery scanning.");
     assert(appSource.includes("data-existing-target"), "Review form should hide/show existing-target fields conditionally.");
     assert(appSource.includes("data-new-target"), "Review form should hide/show proposed-new-project fields conditionally.");
+    assert(appSource.includes('if (route === "rejected") {') && appSource.includes('intake.status = "rejected";'), "Queue review rejection must remove the item from pending Needs Attention.");
+    assert(appSource.includes("Reject duplicate intra-folder project suggestion"), "Queue review needs rejection reason presets for Discovery cleanup.");
+    assert(!appSource.includes("queuePostModalAction(() => openApproveIntakeModal(next.id))"), "Core approval must not auto-open the next approval item.");
 
     console.log("Intake Fast Lane Flow Check");
     console.log(JSON.stringify({
@@ -75,7 +78,10 @@ async function main() {
       conditionalTargetFields: true,
       approvalPermissionUsesLane: true,
       addIntakeUsesFileLauncher: true,
-      duplicateManualAddHidden: true
+      duplicateManualAddHidden: true,
+      queueReviewRejectsPendingItem: true,
+      rejectionReasonPresets: true,
+      coreApprovalStopsAfterOneItem: true
     }, null, 2));
     console.log("Intake fast lane flow: ok");
   } finally {

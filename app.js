@@ -12,6 +12,7 @@ const STORAGE_SPLIT_STORES = ["meta", "projects", "history", "sources", "extract
 const DISPLAY_TEXT_LIMIT = 1200;
 const DISPLAY_META_LIMIT = 240;
 const EXTRACT_TEXT_LIMIT = 5000;
+const DISCOVERY_REVIEW_UNIT_LIMIT = 100;
 const PROJECT_HEALTH_FLAGS = ["active", "blocked", "at_risk", "complete", "on_hold"];
 const ARM_TYPES = ["calendar", "meeting", "api", "ai", "codex", "notes", "chat", "email", "file", "manual", "other"];
 const INTAKE_STATUSES = ["pending", "approved", "rejected", "archived"];
@@ -8008,13 +8009,14 @@ function partitionDiscoveryCandidates(candidates = [], mode = "folder_groups", r
   const grouped = new Map();
   const folderName = pathFolderName(rootPath) || "Selected folder";
   for (const candidate of candidates) {
+    const folderGroup = folderRelativeGroup(candidate.localPath, rootPath);
     const label = mode === "one_project_folder"
       ? `Project folder: ${folderName}`
       : mode === "one_case"
         ? "Selected folder"
         : mode === "each_file"
           ? candidate.name || "Selected file"
-          : folderRelativeGroup(candidate.localPath, rootPath);
+          : `Project folder candidate: ${folderGroup}`;
     if (!grouped.has(label)) grouped.set(label, []);
     grouped.get(label).push(candidate);
   }
@@ -8088,15 +8090,27 @@ function titleFromFileName(fileName = "") {
 }
 
 function sourceTypeForProjectFile(file = {}) {
+  if (file.fileType?.label) return file.fileType.label;
+  if (file.evidenceKind?.label) return file.evidenceKind.label;
   const extension = fileExtension(file.name || file.localPath);
-  if (["png", "jpg", "jpeg", "webp", "gif", "blend"].includes(extension)) return "Image / visual";
-  if (["pdf", "docx"].includes(extension)) return "Document / patent";
+  if (["png", "jpg", "jpeg", "webp", "gif", "bmp", "tif", "tiff", "svg", "heic", "psd", "ai", "eps", "blend"].includes(extension)) return "Image / visual";
+  if (["pdf", "docx", "doc", "rtf", "odt"].includes(extension)) return "Document / patent";
   if (["ipynb"].includes(extension)) return "Notebook / analysis";
-  if (["py", "js", "ts", "jsx", "tsx", "html", "css", "scss", "cpp", "c", "h", "hpp", "cs", "java", "rs", "go", "sql", "sh", "ps1"].includes(extension)) return "Code / tests";
+  if (["py", "js", "ts", "jsx", "tsx", "html", "css", "scss", "cpp", "c", "h", "hpp", "cs", "java", "rs", "go", "sql", "sh", "ps1", "bat", "cmd", "lua", "r", "m", "jl"].includes(extension)) return "Code / tests";
   if (["uproject", "uplugin", "uasset", "umap", "ini"].includes(extension)) return "Unreal / visual project";
   if (["md", "txt"].includes(extension)) return "Notes";
-  if (["json", "csv", "yaml", "yml", "toml"].includes(extension)) return "Data / config";
+  if (["json", "jsonl", "csv", "yaml", "yml", "toml", "xml", "xhtml", "log", "cfg", "conf"].includes(extension)) return "Data / config";
+  if (["stl", "step", "stp", "iges", "igs", "dwg", "dxf", "fbx", "obj", "gltf", "glb"].includes(extension)) return "3D / CAD / model";
+  if (["zip", "7z", "rar", "tar", "gz", "tgz", "bz2", "xz"].includes(extension)) return "Archive / package";
   return "Project file";
+}
+
+function readModeLabel(file = {}) {
+  const mode = file.readMode || file.fileType?.readMode || "";
+  if (mode === "text") return "readable";
+  if (mode === "metadata_only") return "surface only";
+  if (mode === "blocked") return "blocked";
+  return "";
 }
 
 function projectFileImportCategorySummary(candidates = []) {
@@ -8147,7 +8161,7 @@ function openProjectFileImportModal(selection) {
           ${selection.candidates.map((file) => `
             <label class="check-field">
               <input type="checkbox" data-import-path="${escapeHtml(file.localPath)}" checked>
-              <span><strong>${escapeDisplay(file.name, DISPLAY_META_LIMIT)}</strong><br>${escapeDisplay(file.localPath, DISPLAY_META_LIMIT)} · ${escapeHtml(formatBytes(file.size))} · ${escapeHtml(sourceTypeForProjectFile(file))}</span>
+              <span><strong>${escapeDisplay(file.name, DISPLAY_META_LIMIT)}</strong><br>${escapeDisplay(file.localPath, DISPLAY_META_LIMIT)} · ${escapeHtml(formatBytes(file.size))} · ${escapeHtml(sourceTypeForProjectFile(file))}${readModeLabel(file) ? ` · ${escapeHtml(readModeLabel(file))}` : ""}</span>
             </label>
           `).join("")}
         </div>
@@ -8253,7 +8267,9 @@ function openProjectFileImportModal(selection) {
             type: staged.contentType || "",
             size: Number(staged.size || candidate.size || 0),
             lastModified: staged.lastModified || candidate.lastModified || "",
-            localPath: staged.originalPath || candidate.localPath || ""
+            localPath: staged.originalPath || candidate.localPath || "",
+            fileType: candidate.fileType || null,
+            readMode: candidate.readMode || candidate.fileType?.readMode || ""
           },
           fileVerification: {
             status: "verified",
@@ -8339,12 +8355,12 @@ function openFileImportReviewModal(selection) {
           ${selection.candidates.map((file) => `
             <label class="check-field">
               <input type="checkbox" data-import-path="${escapeHtml(file.localPath)}" checked>
-              <span><strong>${escapeDisplay(file.name, DISPLAY_META_LIMIT)}</strong><br>${escapeDisplay(file.localPath, DISPLAY_META_LIMIT)} · ${escapeHtml(formatBytes(file.size))}${isFolderImport ? `<br>Suggested group: ${escapeDisplay(folderRelativeGroup(file.localPath, selection.rootPath), DISPLAY_META_LIMIT)}` : ""}</span>
+              <span><strong>${escapeDisplay(file.name, DISPLAY_META_LIMIT)}</strong><br>${escapeDisplay(file.localPath, DISPLAY_META_LIMIT)} · ${escapeHtml(formatBytes(file.size))} · ${escapeHtml(sourceTypeForProjectFile(file))}${readModeLabel(file) ? ` · ${escapeHtml(readModeLabel(file))}` : ""}${file.fileType?.routingHint ? `<br>${escapeDisplay(file.fileType.routingHint, DISPLAY_META_LIMIT)}` : ""}${isFolderImport ? `<br>Folder candidate: ${escapeDisplay(folderRelativeGroup(file.localPath, selection.rootPath), DISPLAY_META_LIMIT)}` : ""}</span>
             </label>
           `).join("")}
         </div>
       </div>
-      ${isFolderImport ? `<div class="field"><label for="folderGroupingMode">How should this unknown folder be reviewed?</label><select id="folderGroupingMode" name="folderGroupingMode"><option value="folder_groups" selected>Scan folder groups for project or idea candidates (${suggestedFolderGroups.length})</option><option value="one_project_folder">Treat entire folder as one Discovery evidence collection</option><option value="each_file">Review every file separately</option></select><p class="item-meta">Recommended for unknown folders: scan folder groups first. Use the one-folder choice only when you decide the whole folder belongs together.</p></div>` : ""}
+      ${isFolderImport ? `<div class="field"><label for="folderGroupingMode">How should this unknown folder be reviewed?</label><select id="folderGroupingMode" name="folderGroupingMode"><option value="folder_groups" selected>Review subfolders as project/container candidates first (${suggestedFolderGroups.length})</option><option value="one_project_folder">Treat entire folder as one Discovery evidence collection</option><option value="each_file">Review every file separately</option></select><p class="item-meta">Recommended for unknown folders: treat each subfolder as a possible project or container first. Split a group only when you want Project State to scan deeper inside it.</p></div>` : ""}
       <div class="field"><label for="privacyClass">Privacy</label><select id="privacyClass" name="privacyClass"><option value="local_only">Keep local only</option><option value="personal">Personal</option><option value="confidential">Confidential</option><option value="restricted">Restricted</option><option value="provider_allowed">Configured provider allowed later</option></select></div>
       ${confirmationField("externalSecurityAcknowledged", "I understand Project State does not scan files. I trust these files and accept responsibility for checking them with my own security tools.")}
       ${selection.skipped?.length ? `<p class="notice">${escapeHtml(t("unsupportedFilesSkipped"))}: ${selection.skipped.length}</p>` : ""}
@@ -8494,9 +8510,11 @@ function suggestedProjectNameOptions(names = [], selected = "") {
   ].join("");
 }
 
-function renderDiscoveryUnitEditor(unit, index, { included = false } = {}) {
+function renderDiscoveryUnitEditor(unit, index, { included = false, defaultDestination = "proposed_new_project" } = {}) {
   const title = unit?.title || "";
   const summary = unit?.summary || "";
+  const reviewReason = unit?.reviewReason || unit?.routingReason || "";
+  const destination = unit?.suggestedDestination || defaultDestination;
   const supportingFiles = (unit?.evidence || [])
     .filter((item) => item?.role === "supporting_file_without_text")
     .map((item) => item.fileName || "Supporting file")
@@ -8505,14 +8523,15 @@ function renderDiscoveryUnitEditor(unit, index, { included = false } = {}) {
   const corpusPreflight = unit?.corpusPreflight || {};
   return `
     <article class="item discovery-unit-editor" data-discovery-unit-index="${index}">
-      <label class="check-field"><input type="checkbox" name="unit_include_${index}" ${included ? "checked" : ""}><span><strong>${included ? "Include this suggested unit" : "Add another idea"}</strong></span></label>
+      <label class="check-field"><input type="checkbox" name="unit_include_${index}" ${included ? "checked" : ""}><span><strong>${included ? "Include this idea in the decision" : "Add another idea to review"}</strong><br>Use the route below to keep, reject, defer, or leave it unassigned.</span></label>
       <div class="field"><label for="unit_title_${index}">Idea or section name</label><input id="unit_title_${index}" name="unit_title_${index}" value="${escapeHtml(title)}" placeholder="Name this idea"></div>
       <div class="field"><label for="unit_summary_${index}">What this unit contains</label><textarea id="unit_summary_${index}" name="unit_summary_${index}" rows="3" placeholder="Optional plain-language summary">${escapeHtml(summary)}</textarea></div>
       ${supportingFiles.length ? `<p class="notice"><strong>Supporting files attached:</strong> ${supportingFiles.map((name) => escapeDisplay(name, DISPLAY_META_LIMIT)).join(", ")}</p>` : ""}
       ${corpusEvidence ? `<p class="notice"><strong>Large file:</strong> ${escapeDisplay(corpusEvidence.fileName || "Selected file", DISPLAY_META_LIMIT)}${corpusEvidence.estimatedWords ? ` · estimated ${Number(corpusEvidence.estimatedWords).toLocaleString()} words` : ""}${corpusEvidence.corpusKind ? ` · ${escapeDisplay(corpusEvidence.corpusKind, DISPLAY_META_LIMIT)}` : ""}. Index before splitting into project candidates.</p>` : ""}
       ${corpusPreflight.reasons?.length ? `<p class="item-meta">${corpusPreflight.reasons.map((item) => escapeDisplay(item, DISPLAY_META_LIMIT)).join(" ")}</p>` : ""}
-      <div class="field"><label for="unit_destination_${index}">Where should this unit go?</label><select id="unit_destination_${index}" name="unit_destination_${index}">${discoveryDestinationOptions("proposed_new_project")}</select></div>
+      <div class="field"><label for="unit_destination_${index}">Where should this unit go?</label><select id="unit_destination_${index}" name="unit_destination_${index}">${discoveryDestinationOptions(destination)}</select></div>
       <div class="field"><label for="unit_project_${index}">Existing project, if selected</label><select id="unit_project_${index}" name="unit_project_${index}"><option value="">None</option>${projectOptions()}</select></div>
+      <div class="field"><label for="unit_reason_${index}">Reason for this route</label><select name="unit_reason_preset_${index}" data-unit-reason-preset="${index}"><option value="">Choose a common reason or write your own</option><option value="Keep as a separate project candidate">Keep as a separate project candidate</option><option value="Keep with parent folder/project, not a standalone project">Keep with parent folder/project</option><option value="Keep as licensing or app reference, not a standalone project">Keep as licensing/app reference</option><option value="Reject duplicate intra-folder idea">Reject duplicate intra-folder idea</option><option value="Reject supporting note as standalone idea">Reject supporting note as standalone idea</option><option value="Leave unassigned until more context is available">Leave unassigned until more context is available</option><option value="Unrelated test material">Unrelated test material</option><option value="custom">Other / custom</option></select><textarea id="unit_reason_${index}" name="unit_reason_${index}" rows="2" placeholder="Why this idea should be kept, rejected, deferred, or left unassigned">${escapeHtml(reviewReason)}</textarea></div>
     </article>
   `;
 }
@@ -8586,19 +8605,24 @@ async function runFakeIdeaAnalysis(discoveryCaseId, actor, reason = "") {
 }
 
 function openDiscoveryReviewModal({ discoveryCaseId, analysis, extractions = [], actor, reason, groupLabel = "", privacyClass = "local_only", folderIntent = "", folderRootPath = "", sequencePosition = null, onConfirmed = null }) {
+  const folderCollectionIntent = ["one_project_folder", "folder_groups"].includes(folderIntent);
+  const cleanFolderGroupLabel = String(groupLabel || "").replace(/^(?:Project folder|Project folder candidate):\s*/i, "").trim();
   const folderProjectName = folderIntent === "one_project_folder"
-    ? pathFolderName(folderRootPath) || String(groupLabel || "").replace(/^Project folder:\s*/i, "").trim()
-    : "";
+    ? pathFolderName(folderRootPath) || cleanFolderGroupLabel
+    : folderIntent === "folder_groups"
+      ? cleanFolderGroupLabel
+      : "";
   const bestName = folderProjectName || analysis.suggestedProjectNames?.[0]?.name || "";
-  const suggestedUnits = (analysis.documentUnits || []).slice(0, 8);
+  const suggestedUnits = (analysis.documentUnits || []).slice(0, DISCOVERY_REVIEW_UNIT_LIMIT);
   const visibleQuestions = (analysis.questions || []).filter((question) => !(privacyClass === "local_only" && question.id === "privacy_confirmation"));
   const automaticQuestionAnswers = privacyClass === "local_only" ? { privacy_confirmation: "Keep local only" } : {};
   const suggestedProjectNames = folderProjectName
     ? [folderProjectName, ...discoverySuggestedProjectNames(analysis, suggestedUnits)].filter(Boolean)
     : discoverySuggestedProjectNames(analysis, suggestedUnits);
-  const slotCount = Math.min(8, Math.max(3, suggestedUnits.length + 2));
+  const slotCount = Math.min(DISCOVERY_REVIEW_UNIT_LIMIT, Math.max(3, suggestedUnits.length + 2));
   let unitSlots = Array.from({ length: slotCount }, (_, index) => suggestedUnits[index] || { id: `manual_unit_${index + 1}`, title: "", summary: "", fileVersionIds: [], evidence: [], suggested: false });
-  const suggestedMode = folderIntent === "one_project_folder" ? "one_item" : analysis.unitModeSuggestion === "multiple_units" ? "multiple_units" : "one_item";
+  const suggestedMode = folderCollectionIntent ? "one_item" : analysis.unitModeSuggestion === "multiple_units" ? "multiple_units" : "one_item";
+  const defaultUnitDestination = folderCollectionIntent ? "unassigned" : "proposed_new_project";
   const corpusIntake = analysis.corpusIntake?.recommended ? analysis.corpusIntake : null;
   let corpusReadyForAi = false;
   const ideaAnalysisPanel = platformAdapter.analysis?.available
@@ -8612,7 +8636,7 @@ function openDiscoveryReviewModal({ discoveryCaseId, analysis, extractions = [],
     body: `
       <p class="notice"><strong>${corpusIntake ? "Large file staged." : "Read complete."}</strong> Project State copied the selected file into managed staging, verified its exact bytes, and ${corpusIntake ? "identified material that needs indexed large-file processing before project candidates are reliable." : "completed the supported local extraction shown below."}</p>
       ${corpusIntake ? `<p class="notice"><strong>Large-file lane:</strong> ${Number(corpusIntake.totalEstimatedWords || 0).toLocaleString()} estimated words across ${corpusIntake.pendingFiles} file${corpusIntake.pendingFiles === 1 ? "" : "s"}. Suggested type: ${escapeDisplay((corpusIntake.corpusKinds || []).join(", ") || "large document", DISPLAY_META_LIMIT)}. Next step: ${escapeDisplay(corpusIntake.nextStep || "Index before promotion.", DISPLAY_META_LIMIT)}</p>` : ""}
-      ${folderIntent === "one_project_folder" ? `<p class="notice"><strong>Folder intent:</strong> Treat this folder as one Discovery evidence collection. Project State will keep the selected files together unless you choose to review several ideas separately below.</p>` : ""}
+      ${folderCollectionIntent ? `<p class="notice"><strong>Folder intent:</strong> Treat this folder group as a project/container candidate first. Project State will keep selected files together by default and will not make child projects unless you explicitly split and route them.</p>` : ""}
       ${groupLabel ? `<p class="notice"><strong>Suggested group:</strong> ${escapeDisplay(groupLabel, DISPLAY_META_LIMIT)}</p>` : ""}
       <div class="field">
         <label>File reading result</label>
@@ -8653,7 +8677,7 @@ function openDiscoveryReviewModal({ discoveryCaseId, analysis, extractions = [],
       ${ideaAnalysisPanel}
       <div data-multiple-discovery-routes>
         <p class="notice">Each included unit will receive its own route and pending Intake proposal. Suggested boundaries are editable and do not alter the original file.</p>
-        <div class="list">${unitSlots.map((unit, index) => renderDiscoveryUnitEditor(unit, index, { included: index < suggestedUnits.length })).join("")}</div>
+        <div class="list">${unitSlots.map((unit, index) => renderDiscoveryUnitEditor(unit, index, { included: index < suggestedUnits.length, defaultDestination: defaultUnitDestination })).join("")}</div>
       </div>
       ${analysis.projectCandidates?.length ? `<div class="field"><label>Possible existing projects</label><div class="list">${analysis.projectCandidates.map((item) => `<p>${escapeDisplay(item.name, DISPLAY_META_LIMIT)} · ${Math.round(item.confidence * 100)}%</p>`).join("")}</div></div>` : ""}
       ${privacyClass === "local_only" && (analysis.questions || []).some((question) => question.id === "privacy_confirmation") ? `<p class="notice">Privacy question answered from the previous page: <strong>Keep local only</strong>.</p>` : ""}
@@ -8680,11 +8704,13 @@ function openDiscoveryReviewModal({ discoveryCaseId, analysis, extractions = [],
           destination: data[`unit_destination_${index}`] || "unassigned",
           projectId: data[`unit_project_${index}`] || null,
           proposedProjectName: String(data[`unit_title_${index}`] || "").trim(),
+          reviewReason: String(data[`unit_reason_${index}`] || "").trim(),
           fileVersionIds: unit.fileVersionIds || [],
           evidence: unit.evidence || []
         })).filter((route) => route.included && route.title);
         if (!routes.length) { window.alert("Include and name at least one document unit, or review the material as one item."); return false; }
         if (routes.some((route) => route.destination === "existing_project" && !route.projectId)) { window.alert("Choose an existing project for every unit routed to an existing project."); return false; }
+        if (routes.some((route) => route.destination === "rejected" && !route.reviewReason)) { window.alert("Record a reason for each rejected idea."); return false; }
         routing = await platformAdapter.discovery.confirmRouting({ discoveryCaseId, actorId: actor.id, routes });
       } else {
         if (data.destination === "existing_project" && !data.projectId) { window.alert("Choose an existing project or select a different destination."); return false; }
@@ -8692,13 +8718,22 @@ function openDiscoveryReviewModal({ discoveryCaseId, analysis, extractions = [],
         routing = await platformAdapter.discovery.confirmRouting({ discoveryCaseId, actorId: actor.id, destination: data.destination, projectId: data.projectId || null, proposedProjectName: data.proposedProjectName || bestName });
       }
       const confirmedRoutes = routing.routing.routes?.length ? routing.routing.routes : [routing.routing];
-      if (confirmedRoutes.some((route) => !["unassigned", "rejected"].includes(route.destination))) await platformAdapter.discovery.promoteToIntake({ discoveryCaseId, actorId: actor.id, reason: reason || "Confirmed Discovery routing." });
+      let promotedReadyItemId = "";
+      if (confirmedRoutes.some((route) => !["unassigned", "rejected"].includes(route.destination))) {
+        const promotion = await platformAdapter.discovery.promoteToIntake({ discoveryCaseId, actorId: actor.id, reason: reason || "Confirmed Discovery routing." });
+        store = await loadStore() || store;
+        const promotedItems = (promotion.intakeItemIds || []).map((id) => findIntakeItem(id)).filter(Boolean);
+        const readyPromotedItems = promotedItems.filter((item) => item.status === "pending" && item.queueState === "ready" && allRequiredFlagsPass(intakeAirlockChecks(item)));
+        if (readyPromotedItems.length === 1 && promotedItems.length === 1) promotedReadyItemId = readyPromotedItems[0].id;
+      }
       store = await loadStore() || store;
       await refreshDiscoveryWorkspace();
       activeRootView = confirmedRoutes.every((route) => ["unassigned", "rejected"].includes(route.destination)) ? "files" : "intake";
       activeProjectId = null;
-      setSaveStatus("saved", "Discovery confirmed.");
-      if (typeof onConfirmed === "function" && sequencePosition?.index < sequencePosition?.total) queuePostModalAction(onConfirmed);
+      setSaveStatus("saved", promotedReadyItemId ? "Discovery accepted. Final Core approval is ready." : "Discovery confirmed.");
+      const hasNextDiscoveryReview = typeof onConfirmed === "function" && sequencePosition?.index < sequencePosition?.total;
+      if (hasNextDiscoveryReview) queuePostModalAction(onConfirmed);
+      else if (promotedReadyItemId) queuePostModalAction(() => openApproveIntakeModal(promotedReadyItemId));
       return true;
     }
   });
@@ -8712,6 +8747,18 @@ function openDiscoveryReviewModal({ discoveryCaseId, analysis, extractions = [],
     reviewModal?.querySelectorAll("[data-multiple-discovery-routes]").forEach((node) => { node.hidden = !multiple; });
   };
   modeField?.addEventListener("change", syncDiscoveryUnitMode);
+  reviewModal?.addEventListener("change", (event) => {
+    const preset = event.target.closest("[data-unit-reason-preset]");
+    if (!preset) return;
+    const index = preset.dataset.unitReasonPreset;
+    const reasonField = reviewModal.querySelector(`[name="unit_reason_${CSS.escape(index)}"]`);
+    if (!reasonField) return;
+    if (preset.value === "custom") {
+      reasonField.focus();
+      return;
+    }
+    if (preset.value) reasonField.value = preset.value;
+  });
   suggestedProjectNameChoice?.addEventListener("change", () => {
     if (!proposedProjectNameField) return;
     if (suggestedProjectNameChoice.value === "__custom__") {
@@ -8805,7 +8852,7 @@ function openDiscoveryReviewModal({ discoveryCaseId, analysis, extractions = [],
       if (confirmedUnits.length) {
         unitSlots = confirmedUnits.map((unit) => ({ id: unit.id, title: unit.title, summary: unit.summary, fileVersionIds: [...new Set((unit.evidence || []).map((evidence) => evidence.fileVersionId).filter(Boolean))], evidence: unit.evidence || [], suggested: false }));
         const multipleList = reviewModal.querySelector("[data-multiple-discovery-routes] .list");
-        if (multipleList) multipleList.innerHTML = unitSlots.map((unit, index) => renderDiscoveryUnitEditor(unit, index, { included: true })).join("");
+        if (multipleList) multipleList.innerHTML = unitSlots.map((unit, index) => renderDiscoveryUnitEditor(unit, index, { included: true, defaultDestination: defaultUnitDestination })).join("");
         if (modeField) modeField.value = "multiple_units";
         syncDiscoveryUnitMode();
         ideaOutput.innerHTML = `<p class="notice"><strong>Idea review confirmed.</strong> ${confirmedUnits.length} Confirmed Idea ${confirmedUnits.length === 1 ? "Unit is" : "Units are"} now ready for project naming and routing below. These units are still not Core.</p>`;
@@ -11450,7 +11497,7 @@ function wireFlowControls(form) {
   }
 }
 
-function auditFields({ actorLabel = t("approvedBy"), reasonLabel = t("reason") } = {}) {
+function auditFields({ actorLabel = t("approvedBy"), reasonLabel = t("reason"), reasonOptions = null } = {}) {
   const defaultActorName = auditWorkSession.actorName || currentActor()?.name || "";
   const defaultReason = auditWorkSession.reason || "";
   const options = activeActorOptions(defaultActorName);
@@ -11466,7 +11513,7 @@ function auditFields({ actorLabel = t("approvedBy"), reasonLabel = t("reason") }
       <label for="reason">${escapeHtml(reasonLabel)}</label>
       <select name="reasonPreset" aria-label="Common audit reason">
         <option value="">Choose a common reason or write a custom reason</option>
-        ${auditReasonOptions(defaultReason)}
+        ${auditReasonOptions(defaultReason, reasonOptions)}
         <option value="custom">Other / custom</option>
       </select>
       <textarea id="reason" name="reason" required>${escapeHtml(defaultReason)}</textarea>
@@ -11480,8 +11527,8 @@ function activeActorOptions(selectedName = "") {
   return activeActors.map((actor) => `<option value="${escapeHtml(actor.name)}" ${nameKey(actor.name) === nameKey(selectedName) ? "selected" : ""}>${escapeHtml(actorDisplay(actor.id))}</option>`).join("");
 }
 
-function auditReasonOptions(selectedReason = "") {
-  const reasons = [
+function auditReasonOptions(selectedReason = "", customReasons = null) {
+  const reasons = Array.isArray(customReasons) && customReasons.length ? customReasons : [
     "Create new project",
     "Import known project folder",
     "Import known project files",
@@ -12088,9 +12135,7 @@ function openApproveIntakeModal(intakeId) {
       if (!validateActorPermission(actor, "approve", intakePermissionProject(intake))) return false;
       const result = approveIntakeItem(intake.id, actor, data.reason, (item, approval) => applyApprovedIntakeToCore(item, actor, data.reason, approval));
       if (result) {
-        const next = nextPendingIntake(intake.id, { readyOnly: true });
-        if (next) queuePostModalAction(() => openApproveIntakeModal(next.id));
-        else if (intake.projectId && getProject(intake.projectId)) queuePostModalAction(() => {
+        if (intake.projectId && getProject(intake.projectId)) queuePostModalAction(() => {
           openProjectNow(intake.projectId, "dashboard");
           render();
         });
@@ -12178,7 +12223,16 @@ function openReviewIntakeQueueModal(intakeId) {
         <label for="queueNotes">${escapeHtml(t("queueReviewNotes"))}</label>
         <textarea id="queueNotes" name="queueNotes">${escapeHtml(intake.queueNotes || "")}</textarea>
       </div>
-      ${auditFields({ actorLabel: t("reviewedBy"), reasonLabel: t("reason") })}
+      ${auditFields({ actorLabel: t("reviewedBy"), reasonLabel: t("reason"), reasonOptions: [
+        "Review and mark ready",
+        "Needs more review before routing",
+        "Reject duplicate intra-folder project suggestion",
+        "Reject supporting file as standalone project",
+        "Reject because this belongs inside the parent folder project",
+        "Reject unrelated test material",
+        "Reject mistaken Discovery suggestion",
+        "Archive or defer for later manual review"
+      ] })}
     `,
     onSubmit(data) {
       const actor = getOrCreateActor(data.actorName, "Human");
@@ -12207,8 +12261,17 @@ function openReviewIntakeQueueModal(intakeId) {
       intake.queueReviewedAt = nowIso();
       intake.queueReviewedBy = actor.id;
       intake.queueReviewReason = data.reason.trim();
+      if (route === "rejected") {
+        intake.status = "rejected";
+        intake.review = {
+          reviewedAt: intake.queueReviewedAt,
+          actorId: actor.id,
+          actorName: actor.name,
+          reason: data.reason.trim()
+        };
+      }
       saveStore({ allowWithoutCoreApproval: true, reason: "intake-queue-reviewed" });
-      const next = nextPendingIntake(intake.id);
+      const next = route === "rejected" ? null : nextPendingIntake(intake.id);
       if (next) queuePostModalAction(() => openReviewIntakeQueueModal(next.id));
       return true;
     }
@@ -12298,7 +12361,14 @@ function openRejectIntakeModal(intakeId) {
     submitText: t("reject"),
     body: `
       <p class="notice">${escapeHtml(t("rejectIntakeNotice"))}</p>
-      ${auditFields()}
+      ${auditFields({ reasonOptions: [
+        "Reject duplicate intra-folder project suggestion",
+        "Reject supporting file as standalone project",
+        "Reject because this belongs inside the parent folder project",
+        "Reject unrelated test material",
+        "Reject mistaken Discovery suggestion",
+        "Reject for later manual review"
+      ] })}
     `,
     onSubmit(data) {
       const actor = getOrCreateActor(data.actorName, "Human");
@@ -12323,7 +12393,13 @@ function openArchiveIntakeModal(intakeId) {
     submitText: t("archive"),
     body: `
       <p class="notice">${escapeHtml(t("archiveIntakeNotice"))}</p>
-      ${auditFields()}
+      ${auditFields({ reasonOptions: [
+        "Archive after rejection cleanup",
+        "Archive duplicate Discovery proposal",
+        "Archive supporting material already handled elsewhere",
+        "Archive test item",
+        "Archive for later manual review"
+      ] })}
     `,
     onSubmit(data) {
       const actor = getOrCreateActor(data.actorName, "Human");

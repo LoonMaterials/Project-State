@@ -57,8 +57,9 @@ function workflowChecks() {
   const batch = app.slice(batchStart, batchEnd);
   assert(!batch.includes("approveIntakeItem"), "Batch triage contains an approval path.");
   assert(batch.includes("intake-batch-triage"), "Batch triage is not persisted through the approved intake-only path.");
+  assert(!app.includes("queuePostModalAction(() => openApproveIntakeModal(next.id))"), "Core approval auto-opens the next approval item.");
 
-  return { requiredIntegrations: required.length, correctionAirlock: true, batchApprovalBlocked: true };
+  return { requiredIntegrations: required.length, correctionAirlock: true, batchApprovalBlocked: true, approvalAutoAdvanceBlocked: true };
 }
 
 function uiStateChecks() {

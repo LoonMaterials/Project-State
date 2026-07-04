@@ -23,19 +23,127 @@ const DATABASE_FILE = "project-state.db";
 const FOLDERS = ["sources", "extracts", "attachments", "quarantine", "discovery", "backups", "recovery", "manifests", "logs", "temp", "integrations"];
 const SPLIT_TABLES = ["projects", "changes", "sources", "extracts", "attachments", "draft_projects"];
 const BACKUP_MANAGED_FOLDERS = ["sources", "extracts", "attachments", "quarantine", "discovery", "manifests", "recovery"];
-const IMPORT_FILE_EXTENSIONS = new Set([
-  ".pdf", ".docx", ".txt", ".md", ".csv", ".json", ".ipynb",
-  ".py", ".js", ".ts", ".jsx", ".tsx", ".html", ".css", ".scss",
-  ".cpp", ".c", ".h", ".hpp", ".cs", ".java", ".rs", ".go", ".sql", ".sh", ".ps1",
-  ".uproject", ".uplugin", ".ini", ".yaml", ".yml", ".toml",
-  ".png", ".jpg", ".jpeg", ".webp", ".gif",
-  ".uasset", ".umap", ".blend"
-]);
+const DISCOVERY_FILE_TYPE_REGISTRY = [
+  {
+    extensions: [".pdf", ".docx"],
+    key: "document",
+    label: "Document / patent evidence",
+    readMode: "text",
+    projectRole: "primary_document",
+    routingHint: "Use extracted text when available; keep supporting files with the same folder/project."
+  },
+  {
+    extensions: [".doc", ".rtf", ".odt"],
+    key: "document_legacy",
+    label: "Legacy document evidence",
+    readMode: "metadata_only",
+    projectRole: "primary_document",
+    routingHint: "Do not deep-read locally yet; route by filename, folder, and nearby readable documents."
+  },
+  {
+    extensions: [".txt", ".md", ".csv", ".log", ".xml", ".xhtml", ".pat", ".bib", ".ris"],
+    key: "notes",
+    label: "Notes / text evidence",
+    readMode: "text",
+    projectRole: "primary_or_supporting_text",
+    routingHint: "Read locally and use headings, filenames, and folder grouping for project candidates."
+  },
+  {
+    extensions: [".ipynb"],
+    key: "notebook",
+    label: "Notebook / analysis evidence",
+    readMode: "text",
+    projectRole: "analysis_notebook",
+    routingHint: "Read notebook cells locally and keep outputs with nearby code, data, and project context."
+  },
+  {
+    extensions: [".json", ".jsonl", ".yaml", ".yml", ".toml", ".ini", ".cfg", ".conf"],
+    key: "data_config",
+    label: "Data / config evidence",
+    readMode: "text",
+    projectRole: "data_or_configuration",
+    routingHint: "Read locally when safe; use top-level keys, filenames, and parent folder context."
+  },
+  {
+    extensions: [".py", ".js", ".ts", ".jsx", ".tsx", ".html", ".css", ".scss", ".cpp", ".c", ".h", ".hpp", ".cs", ".java", ".rs", ".go", ".sql", ".sh", ".ps1", ".bat", ".cmd", ".lua", ".r", ".m", ".jl"],
+    key: "code",
+    label: "Code / test evidence",
+    readMode: "text",
+    projectRole: "source_code_or_test",
+    routingHint: "Read as source text only; never execute. Keep with the nearest project folder."
+  },
+  {
+    extensions: [".uproject", ".uplugin"],
+    key: "unreal",
+    label: "Unreal project descriptor",
+    readMode: "text",
+    projectRole: "project_descriptor",
+    routingHint: "Strongly indicates the parent folder is an Unreal project."
+  },
+  {
+    extensions: [".uasset", ".umap"],
+    key: "unreal",
+    label: "Unreal asset / map evidence",
+    readMode: "metadata_only",
+    projectRole: "project_asset",
+    routingHint: "Do not deep-read; keep with the parent Unreal project or nearest project descriptor."
+  },
+  {
+    extensions: [".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp", ".tif", ".tiff", ".svg", ".heic", ".psd", ".ai", ".eps"],
+    key: "image_visual",
+    label: "Image / sketch / visual evidence",
+    readMode: "metadata_only",
+    projectRole: "visual_supporting_evidence",
+    routingHint: "Treat as visual support; route by filename, folder, and nearby readable documents."
+  },
+  {
+    extensions: [".blend", ".fbx", ".obj", ".gltf", ".glb", ".stl", ".step", ".stp", ".iges", ".igs", ".dwg", ".dxf", ".3ds", ".dae"],
+    key: "model_cad",
+    label: "3D / CAD / model evidence",
+    readMode: "metadata_only",
+    projectRole: "model_or_design_asset",
+    routingHint: "Do not deep-read; keep with design, patent, Unreal, or prototype folder context."
+  },
+  {
+    extensions: [".zip", ".7z", ".rar", ".tar", ".gz", ".tgz", ".bz2", ".xz"],
+    key: "archive_package",
+    label: "Archive / package evidence",
+    readMode: "metadata_only",
+    projectRole: "packaged_supporting_material",
+    routingHint: "Do not unpack automatically; keep as supporting evidence unless the user explicitly extracts it."
+  },
+  {
+    extensions: [".sqlite", ".sqlite3", ".db", ".mdb", ".accdb"],
+    key: "database",
+    label: "Database evidence",
+    readMode: "metadata_only",
+    projectRole: "data_store",
+    routingHint: "Do not query automatically; route by filename, folder, and related code/config files."
+  },
+  {
+    extensions: [".mp4", ".mov", ".avi", ".mkv", ".webm", ".mp3", ".wav", ".flac", ".m4a"],
+    key: "media",
+    label: "Audio / video evidence",
+    readMode: "metadata_only",
+    projectRole: "media_supporting_evidence",
+    routingHint: "Do not transcribe automatically; keep with nearby project material."
+  },
+  {
+    extensions: [".exe", ".msi", ".dll", ".scr", ".com", ".jar", ".apk", ".app", ".dmg", ".pkg", ".so", ".dylib"],
+    key: "blocked_executable",
+    label: "Executable / installer",
+    readMode: "blocked",
+    projectRole: "blocked_security_sensitive_file",
+    routingHint: "Do not import or read. Record only as blocked if a future surface manifest is created."
+  }
+];
+const DISCOVERY_FILE_TYPE_BY_EXTENSION = new Map(DISCOVERY_FILE_TYPE_REGISTRY.flatMap((entry) => entry.extensions.map((extension) => [extension, entry])));
 const MAX_IMPORT_FILE_BYTES = 2147483648;
 const MAX_TEXT_EXTRACTION_BYTES = 104857600;
 const MAX_IMMEDIATE_DISCOVERY_WORDS = 250000;
 const CORPUS_PREFLIGHT_SAMPLE_BYTES = 524288;
 const MAX_IMPORT_FILES = 500;
+const DISCOVERY_REVIEW_UNIT_LIMIT = 100;
 const REQUIRED_TABLES = [
   "meta",
   "actors",
@@ -297,9 +405,9 @@ async function inspectImportSelection({ paths = [] } = {}) {
       return;
     }
     if (!stat.isFile()) return;
-    const extension = path.extname(localPath).toLowerCase();
-    if (!IMPORT_FILE_EXTENSIONS.has(extension)) {
-      skipped.push({ localPath, reason: "File type is not supported." });
+    const classification = classifyDiscoveryFile(localPath);
+    if (!classification.importAllowed) {
+      skipped.push({ localPath, reason: classification.blockReason || "File type is not supported.", fileType: classification });
       return;
     }
     if (!stat.size) {
@@ -316,7 +424,11 @@ async function inspectImportSelection({ paths = [] } = {}) {
       contentType: mimeFromFileName(localPath),
       size: stat.size,
       lastModified: stat.mtime.toISOString(),
-      evidenceKind: evidenceKindFromFileName(localPath)
+      evidenceKind: classification.evidenceKind,
+      fileType: classification,
+      readMode: classification.readMode,
+      projectRole: classification.projectRole,
+      routingHint: classification.routingHint
     });
   }
 
@@ -334,9 +446,9 @@ async function stageManagedFiles({ storageRoot, files = [] } = {}) {
     try {
       if (!/^intake_[A-Za-z0-9_-]+$/.test(intakeId)) throw new Error("A valid Intake ID is required.");
       const stat = await fsp.lstat(localPath);
-      const extension = path.extname(localPath).toLowerCase();
+      const classification = classifyDiscoveryFile(localPath);
       if (!stat.isFile() || stat.isSymbolicLink()) throw new Error("Only regular files can be imported.");
-      if (!IMPORT_FILE_EXTENSIONS.has(extension)) throw new Error("File type is not supported.");
+      if (!classification.importAllowed) throw new Error(classification.blockReason || "File type is not supported.");
       if (!stat.size || stat.size > MAX_IMPORT_FILE_BYTES) throw new Error("File size is outside the allowed archive range.");
       const fileName = safeFileName(path.basename(localPath));
       const targetPath = path.join(storageRoot, "sources", intakeId, fileName);
@@ -355,7 +467,9 @@ async function stageManagedFiles({ storageRoot, files = [] } = {}) {
         sha256,
         managedPath: relativeManagedPath(storageRoot, targetPath),
         originalPath: localPath,
-        lastModified: stat.mtime.toISOString()
+        lastModified: stat.mtime.toISOString(),
+        fileType: classification,
+        readMode: classification.readMode
       });
     } catch (error) {
       errors.push({ intakeId, localPath, message: error.message });
@@ -867,6 +981,7 @@ async function registerDiscoveryFileVersion({ storageRoot, dbPath, payload = {} 
       originalName,
       managedPath,
       createdAt,
+      fileType: payload.fileType || classifyDiscoveryFile(originalName),
       securityState: payload.externalSecurityAcknowledged ? "external_responsibility_acknowledged" : "unacknowledged",
       externalSecurityAcknowledged: payload.externalSecurityAcknowledged === true,
       externalSecurityAcknowledgedBy: payload.externalSecurityAcknowledgedBy || "",
@@ -1280,19 +1395,55 @@ function collectObjectKeys(value, output = []) {
   return output;
 }
 
+const LEGAL_REFERENCE_PATTERNS = [
+  ["license", /\blicen[cs](?:e|ing|ed|es)\b/i],
+  ["agreement", /\bagreement\b/i],
+  ["eula", /\bend\s+user\s+licen[cs]e\b|\beula\b/i],
+  ["terms of service", /\bterms\s+(?:of\s+(?:service|use)|and\s+conditions)\b/i],
+  ["privacy policy", /\bprivacy\s+policy\b/i],
+  ["developer agreement", /\bdeveloper\s+(?:program\s+)?agreement\b/i],
+  ["app store terms", /\bapp\s+store\b|\bgoogle\s+play\b|\bmicrosoft\s+store\b|\bsteamworks\b|\bepic\s+games\s+store\b/i],
+  ["sdk/api terms", /\b(?:sdk|api)\s+(?:agreement|terms|license)\b/i],
+  ["third party notices", /\bthird[-\s]party\s+notices\b|\bopen\s+source\s+notices\b/i],
+  ["copyright/trademark", /\bcopyright\b|\btrademark\b|\ball\s+rights\s+reserved\b/i]
+];
+
+function legalReferenceSignals(text = "", fileName = "") {
+  const name = String(fileName || "");
+  const compactText = String(text || "").slice(0, 30000);
+  const haystack = `${name}\n${compactText}`;
+  const found = LEGAL_REFERENCE_PATTERNS.filter(([, pattern]) => pattern.test(haystack)).map(([label]) => label);
+  const fileNameSignal = /\b(?:license|licensing|eula|terms|privacy|notices|third[-\s]?party|copyright|trademark)\b/i.test(name)
+    || /\b(?:developer|app|store|sdk|api|software|end\s+user)\b.{0,40}\bagreement\b/i.test(name)
+    || /\bagreement\b.{0,40}\b(?:developer|app|store|sdk|api|software|end\s+user)\b/i.test(name);
+  const contentSignalCount = found.length;
+  return {
+    isLegalReference: fileNameSignal || contentSignalCount >= 2,
+    terms: [...new Set(found)].slice(0, 8)
+  };
+}
+
 function fakeIdeaCandidateFromChunk({ chunk, extraction, envelope, index, text }) {
   const compact = String(text || "").replace(/\s+/g, " ").trim();
   const heading = String(text || "").split(/\r?\n/).map((line) => line.trim()).find((line) => /^#{1,6}\s+/.test(line));
-  const workingLabel = (heading ? heading.replace(/^#{1,6}\s+/, "") : compact.split(/[.!?]/)[0] || `Idea from chunk ${index + 1}`).slice(0, 200);
+  const legalSignals = legalReferenceSignals(text, extraction?.fileName || extraction?.originalName || "");
+  const sourceName = extraction?.fileName || extraction?.originalName || `chunk ${index + 1}`;
+  const workingLabel = legalSignals.isLegalReference
+    ? `Licensing/reference material: ${titleFromTokens(path.basename(sourceName, path.extname(sourceName)) || sourceName)}`
+    : (heading ? heading.replace(/^#{1,6}\s+/, "") : compact.split(/[.!?]/)[0] || `Idea from chunk ${index + 1}`).slice(0, 200);
   return {
     clientCandidateId: `fake_candidate_${String(index + 1).padStart(4, "0")}`,
     workingLabel,
-    neutralSummary: compact.slice(0, 2000),
-    candidateType: "other",
-    scope: "unknown",
+    neutralSummary: legalSignals.isLegalReference
+      ? `This chunk looks like licensing, app agreement, terms, privacy, or other reference material. Keep it as supporting context unless a human confirms it describes a standalone project. Signals: ${(legalSignals.terms || []).join(", ") || "filename/content legal reference"}. ${compact.slice(0, 1500)}`
+      : compact.slice(0, 2000),
+    candidateType: legalSignals.isLegalReference ? "reference" : "other",
+    scope: legalSignals.isLegalReference ? "supporting" : "unknown",
     keyTerms: [...new Set(workingLabel.toLowerCase().replace(/[^a-z0-9\s]/g, " ").split(/\s+/).filter((term) => term.length > 3))].slice(0, 32),
-    evidence: [{ discoveryChunkId: chunk.id, discoveryExtractionId: extraction.id, fileVersionId: extraction.fileVersionId, sourceSha256: extraction.sourceSha256, chunkTextSha256: chunk.textSha256, relationship: "supports", excerpt: compact.slice(0, 500) }],
-    confidence: { score: 0.5, basis: "Fake local arm produced one deterministic candidate from one exact chunk for contract testing.", uncertaintyNotes: "No semantic AI provider was used." },
+    evidence: [{ discoveryChunkId: chunk.id, discoveryExtractionId: extraction.id, fileVersionId: extraction.fileVersionId, sourceSha256: extraction.sourceSha256, chunkTextSha256: chunk.textSha256, relationship: legalSignals.isLegalReference ? "context_only" : "supports", excerpt: compact.slice(0, 500) }],
+    confidence: legalSignals.isLegalReference
+      ? { score: 0.72, basis: "Deterministic local arm detected licensing/app-agreement reference signals and marked the chunk as supporting context.", uncertaintyNotes: "Human review can override this if the legal material is itself the project." }
+      : { score: 0.5, basis: "Fake local arm produced one deterministic candidate from one exact chunk for contract testing.", uncertaintyNotes: "No semantic AI provider was used." },
     relationships: [],
     clarificationQuestions: [{ clientQuestionId: `fake_question_${String(index + 1).padStart(4, "0")}`, text: "Should this candidate remain separate, merge with another idea, or be deferred?", affects: "grouping", allowNotSure: true }],
     provenance: { providerId: FAKE_ANALYSIS_PROVIDER_ID, modelId: "deterministic_fake_v0.1", externalJobId: `fake_job_${envelope.requestId}` }
@@ -1483,8 +1634,9 @@ async function stageTrustedDiscoveryFile({ storageRoot, dbPath, payload = {} }) 
   if (!fs.existsSync(sourcePath) || !fs.statSync(sourcePath).isFile()) throw new Error("Selected file does not exist or is not a file.");
   const stat = fs.statSync(sourcePath);
   if (stat.size > MAX_IMPORT_FILE_BYTES) throw new Error(`Selected file exceeds the configured ${formatBytesForLog(MAX_IMPORT_FILE_BYTES)} archive import size limit.`);
-  const extension = path.extname(sourcePath).toLowerCase();
-  if (!IMPORT_FILE_EXTENSIONS.has(extension)) throw new Error("Selected file type is not supported for Discovery.");
+  const classification = classifyDiscoveryFile(sourcePath);
+  if (!classification.importAllowed) throw new Error(classification.blockReason || "Selected file type is not supported for Discovery.");
+  const extension = classification.extension;
   const timestamp = requiredDiscoveryTimestamp(payload.timestamp || nowIso(), "Staging timestamp");
   const discoveryCaseId = payload.discoveryCaseId || makeId("discovery_case");
   const assetId = makeId("file_asset");
@@ -1501,7 +1653,7 @@ async function stageTrustedDiscoveryFile({ storageRoot, dbPath, payload = {} }) 
   try { caseCreated = !lookupDb.prepare("SELECT 1 AS found FROM discovery_cases WHERE id = ?").get(discoveryCaseId); }
   finally { lookupDb.close(); }
   if (caseCreated) await createDiscoveryCase({ storageRoot, dbPath, payload: { id: discoveryCaseId, createdBy: actorId, createdAt: timestamp, stage: "quarantine", status: "created", title: payload.caseTitle || path.basename(sourcePath) } });
-  const registration = await registerDiscoveryFileVersion({ storageRoot, dbPath, payload: { fileAssetId: assetId, fileVersionId: versionId, sha256, byteSize: stagedStat.size, originalName: path.basename(sourcePath), managedPath, createdAt: timestamp, privacyClass: payload.privacyClass || "local_only", externalSecurityAcknowledged: true, externalSecurityAcknowledgedBy: actorId, externalSecurityAcknowledgedAt: timestamp, externalSecurityReason: reason } });
+  const registration = await registerDiscoveryFileVersion({ storageRoot, dbPath, payload: { fileAssetId: assetId, fileVersionId: versionId, sha256, byteSize: stagedStat.size, originalName: path.basename(sourcePath), managedPath, createdAt: timestamp, privacyClass: payload.privacyClass || "local_only", externalSecurityAcknowledged: true, externalSecurityAcknowledgedBy: actorId, externalSecurityAcknowledgedAt: timestamp, externalSecurityReason: reason, fileType: classification } });
   const actualAsset = registration.fileAsset;
   const actualVersion = registration.fileVersion;
   if (registration.deduplicated && actualVersion.managedPath !== managedPath) await fsp.rm(path.dirname(stagedPath), { recursive: true, force: true });
@@ -1515,21 +1667,11 @@ async function stageTrustedDiscoveryFile({ storageRoot, dbPath, payload = {} }) 
 }
 
 function immediateTextExtractionExtension(extension) {
-  return [
-    ".txt", ".md", ".csv", ".json", ".ipynb", ".pdf", ".docx",
-    ".py", ".js", ".ts", ".jsx", ".tsx", ".html", ".css", ".scss",
-    ".cpp", ".c", ".h", ".hpp", ".cs", ".java", ".rs", ".go", ".sql", ".sh", ".ps1",
-    ".uproject", ".uplugin", ".ini", ".yaml", ".yml", ".toml"
-  ].includes(extension);
+  return classifyDiscoveryFile(`file${extension}`).readMode === "text";
 }
 
 function sampleableCorpusExtension(extension) {
-  return [
-    ".txt", ".md", ".csv", ".json", ".ipynb",
-    ".py", ".js", ".ts", ".jsx", ".tsx", ".html", ".css", ".scss",
-    ".cpp", ".c", ".h", ".hpp", ".cs", ".java", ".rs", ".go", ".sql", ".sh", ".ps1",
-    ".uproject", ".uplugin", ".ini", ".yaml", ".yml", ".toml"
-  ].includes(extension);
+  return classifyDiscoveryFile(`file${extension}`).readMode === "text";
 }
 
 async function readDiscoveryFileSample(filePath, byteSize, sampleBytes = CORPUS_PREFLIGHT_SAMPLE_BYTES) {
@@ -1620,7 +1762,8 @@ async function extractDiscoveryFileVersion({ storageRoot, dbPath, payload = {} }
     if (!version) throw new Error("File Version was not found.");
   } finally { db.close(); }
   await authorizeDiscoveryContentAccess({ storageRoot, dbPath, reference: { managedPath: version.managedPath } });
-  const extension = path.extname(version.originalName || "").toLowerCase();
+  const classification = version.fileType || classifyDiscoveryFile(version.originalName || "");
+  const extension = classification.extension || path.extname(version.originalName || "").toLowerCase();
   const physicalPath = resolveManagedPath(storageRoot, version.managedPath);
   const extractionId = payload.id || makeId("discovery_extraction");
   let status = "unsupported";
@@ -1643,7 +1786,11 @@ async function extractDiscoveryFileVersion({ storageRoot, dbPath, payload = {} }
         text = cleanExtractedText(await extractText(physicalPath) || "");
         status = text ? "complete" : "partial";
       }
-    } else if ([".png", ".jpg", ".jpeg", ".webp", ".gif", ".blend", ".uasset", ".umap"].includes(extension)) status = "metadata_only";
+    } else if (classification.readMode === "metadata_only") status = "metadata_only";
+    else if (classification.readMode === "blocked") {
+      status = "unsupported";
+      error = { name: "BlockedFileType", message: classification.blockReason || "File type is blocked from Discovery extraction." };
+    }
   } catch (caught) {
     status = "failed";
     error = { name: caught.name || "Error", message: caught.message || "Extraction failed." };
@@ -1670,7 +1817,7 @@ async function extractDiscoveryFileVersion({ storageRoot, dbPath, payload = {} }
       chunks.push({ id: chunkId, discoveryExtractionId: extractionId, chunkIndex: index, textPath: relativeManagedPath(storageRoot, chunkPath), textSha256: checksumText(chunkText), textBytes: Buffer.byteLength(chunkText, "utf8") });
     }
   }
-  const record = { id: extractionId, discoveryCaseId, fileAssetId: version.fileAssetId, fileVersionId, sourceSha256: version.sha256, status, extractorId: "project_state_deterministic_v0.1", textPath, textSha256, textBytes, chunkCount: chunks.length, createdAt, error, preflight };
+  const record = { id: extractionId, discoveryCaseId, fileAssetId: version.fileAssetId, fileVersionId, sourceSha256: version.sha256, status, extractorId: "project_state_deterministic_v0.1", textPath, textSha256, textBytes, chunkCount: chunks.length, createdAt, error, preflight, fileType: classification };
   const writeDb = openDatabase(dbPath);
   try {
     writeDb.exec("BEGIN IMMEDIATE TRANSACTION");
@@ -1887,7 +2034,7 @@ async function confirmDiscoveryRouting({ storageRoot, dbPath, payload = {} }) {
   const routeInputs = Array.isArray(payload.routes) && payload.routes.length
     ? payload.routes
     : [{ id: "unit_1", title: payload.proposedProjectName || "Whole document", destination: payload.destination, projectId: payload.projectId, additionalProjectIds: payload.additionalProjectIds, proposedProjectName: payload.proposedProjectName, summary: payload.summary || "", fileVersionIds: payload.fileVersionIds, evidence: payload.evidence }];
-  if (routeInputs.length > 8) throw new Error("A Discovery routing confirmation may contain at most 8 document units.");
+  if (routeInputs.length > DISCOVERY_REVIEW_UNIT_LIMIT) throw new Error(`A Discovery routing confirmation may contain at most ${DISCOVERY_REVIEW_UNIT_LIMIT} document units.`);
   const routes = routeInputs.map((input, index) => {
     const id = requiredDiscoveryId(input.id || `unit_${index + 1}`, "Document unit ID");
     const destination = String(input.destination || "");
@@ -1899,7 +2046,7 @@ async function confirmDiscoveryRouting({ storageRoot, dbPath, payload = {} }) {
     if (destination === "proposed_new_project" && !proposedProjectName) throw new Error("New-project routing requires a proposed project name.");
     const title = String(input.title || proposedProjectName || `Document unit ${index + 1}`).trim();
     if (!title) throw new Error("Every document unit requires a title.");
-    return { id, title, summary: String(input.summary || "").trim(), destination, projectId, additionalProjectIds, proposedProjectName, fileVersionIds: Array.isArray(input.fileVersionIds) ? [...new Set(input.fileVersionIds.map((value) => requiredDiscoveryId(value, "File Version ID")))] : [], evidence: Array.isArray(input.evidence) ? cloneJson(input.evidence) : [], confirmedBy: actorId, confirmedAt };
+    return { id, title, summary: String(input.summary || "").trim(), destination, projectId, additionalProjectIds, proposedProjectName, reviewReason: String(input.reviewReason || input.routingReason || "").trim(), fileVersionIds: Array.isArray(input.fileVersionIds) ? [...new Set(input.fileVersionIds.map((value) => requiredDiscoveryId(value, "File Version ID")))] : [], evidence: Array.isArray(input.evidence) ? cloneJson(input.evidence) : [], confirmedBy: actorId, confirmedAt };
   });
   if (new Set(routes.map((route) => route.id)).size !== routes.length) throw new Error("Document unit IDs must be unique within a routing confirmation.");
   const db = openDatabase(dbPath);
@@ -1952,6 +2099,29 @@ function detectDiscoveryDocumentUnits({ versions = [], extractionTexts = [], ext
   for (const { extraction, text } of extractionTexts) {
     const version = versionById.get(extraction.fileVersionId) || {};
     const fileName = version.originalName || "Discovery source";
+    const legalSignals = legalReferenceSignals(text, fileName);
+    if (legalSignals.isLegalReference) {
+      const sourceTitle = path.basename(fileName, path.extname(fileName)) || fileName;
+      const signalText = (legalSignals.terms || []).join(", ") || "filename/content legal reference";
+      units.push({
+        id: `unit_${units.length + 1}`,
+        title: titleFromTokens(sourceTitle),
+        summary: `Licensing, app agreement, terms, privacy, or other reference material. Treat as supporting context, not a standalone project idea unless a human says otherwise. Signals: ${signalText}.`,
+        fileVersionIds: [extraction.fileVersionId],
+        evidence: [{
+          fileVersionId: extraction.fileVersionId,
+          extractionId: extraction.id,
+          fileName,
+          role: "legal_reference_support",
+          evidenceKind: "legal_reference",
+          note: "Licensing/app agreement material is routed as reference/supporting evidence by default."
+        }],
+        suggestedDestination: "general_reference",
+        reviewReason: "Licensing/app agreement material; keep as reference/supporting evidence, not a standalone project.",
+        suggested: true
+      });
+      continue;
+    }
     const lines = String(text || "").replaceAll("\r\n", "\n").split("\n");
     const headings = [];
     for (let index = 0; index < lines.length; index += 1) {
@@ -1964,7 +2134,7 @@ function detectDiscoveryDocumentUnits({ versions = [], extractionTexts = [], ext
       if (title) headings.push({ lineIndex: index, title: title.trim() });
     }
     if (headings.length >= 2) {
-      for (let index = 0; index < Math.min(headings.length, 8); index += 1) {
+      for (let index = 0; index < Math.min(headings.length, DISCOVERY_REVIEW_UNIT_LIMIT); index += 1) {
         const heading = headings[index];
         const endLine = headings[index + 1]?.lineIndex ?? lines.length;
         const summary = lines.slice(heading.lineIndex + 1, endLine).join(" ").replace(/\s+/g, " ").trim().slice(0, 600);
@@ -2015,12 +2185,17 @@ function detectDiscoveryDocumentUnits({ versions = [], extractionTexts = [], ext
         fileVersionId: version.id,
         fileName: version.originalName || "Supporting file",
         role: "supporting_file_without_text",
+        evidenceKind: version.fileType?.key || evidenceKindFromFileName(version.originalName).key,
+        evidenceLabel: version.fileType?.label || evidenceKindFromFileName(version.originalName).label,
+        readMode: version.fileType?.readMode || "metadata_only",
+        projectRole: version.fileType?.projectRole || "supporting_file",
+        routingHint: version.fileType?.routingHint || "Use filename, folder location, and nearby readable files for routing.",
         note: "Metadata-only file from the same Discovery folder attached so it is not left unassigned."
       }))
     ];
     firstUnit.supportingFileCount = supportingVersions.length;
   }
-  return units.slice(0, 8);
+  return units.slice(0, DISCOVERY_REVIEW_UNIT_LIMIT);
 }
 
 function tokenSet(value) {
@@ -2072,6 +2247,7 @@ async function promoteDiscoveryToIntake({ storageRoot, dbPath, payload = {} }) {
       const supportingSummary = supportingFileEvidence
         ? `Supporting file for "${route.title || sourceTitle}". ${supportingFileEvidence.note || "Metadata-only file from the same Discovery case."}`
         : "";
+      const routeReviewReason = String(route.reviewReason || "").trim();
       const routeHasCoreTarget = targetProjectIds.length > 0 || (route.destination === "proposed_new_project" && String(route.proposedProjectName || "").trim());
       const proposedObjectType = "Source";
       const proposalReady = routeHasCoreTarget && proposedText && proposedObjectType;
@@ -2082,7 +2258,7 @@ async function promoteDiscoveryToIntake({ storageRoot, dbPath, payload = {} }) {
       status: "pending",
       reviewState: "needs_review",
       queueState: proposalReady ? "ready" : "needs_review",
-      queueNotes: proposalReady ? "Ready for Core approval after human review." : "Needs routing or proposal cleanup before Core approval.",
+      queueNotes: routeReviewReason || (proposalReady ? "Ready for Core approval after human review." : "Needs routing or proposal cleanup before Core approval."),
       title: itemTitle,
       createdAt: promotedAt,
       createdBy: actorId,
@@ -2103,7 +2279,7 @@ async function promoteDiscoveryToIntake({ storageRoot, dbPath, payload = {} }) {
         supportRole: isSupportingFile ? "supporting_file_without_text" : "primary_source",
         supportsDiscoveryUnitId: route.id || "unit_1",
         supportsDiscoveryUnitTitle: route.title || sourceTitle,
-        discoveryUnit: { id: route.id || "unit_1", title: route.title || sourceTitle, summary: route.summary || "", evidence: cloneJson(route.evidence || []) },
+        discoveryUnit: { id: route.id || "unit_1", title: route.title || sourceTitle, summary: route.summary || "", reviewReason: routeReviewReason, evidence: cloneJson(route.evidence || []) },
         managedFile: {
           fileName: version.originalName || sourceTitle,
           managedPath: version.managedPath,
@@ -2125,6 +2301,7 @@ async function promoteDiscoveryToIntake({ storageRoot, dbPath, payload = {} }) {
       proposedBy: actorId,
       proposedAt: promotedAt,
       reason,
+      routingReviewReason: routeReviewReason,
       approval: null,
       assignments: [],
       comments: [],
@@ -3860,10 +4037,10 @@ async function extractText(file) {
   const fileName = pathFromFileLike(file) || file?.name || "";
   const extension = path.extname(fileName).slice(1).toLowerCase();
   if ([
-    "txt", "md", "csv",
+    "txt", "md", "csv", "log", "xml", "xhtml", "jsonl",
     "py", "js", "ts", "jsx", "tsx", "html", "css", "scss",
-    "cpp", "c", "h", "hpp", "cs", "java", "rs", "go", "sql", "sh", "ps1",
-    "uproject", "uplugin", "ini", "yaml", "yml", "toml"
+    "cpp", "c", "h", "hpp", "cs", "java", "rs", "go", "sql", "sh", "ps1", "bat", "cmd", "lua", "r", "m", "jl",
+    "uproject", "uplugin", "ini", "yaml", "yml", "toml", "cfg", "conf"
   ].includes(extension)) return textFileToDiscoveryText(await readAsText(file), fileName, extension);
   if (extension === "json") return jsonToDiscoveryText(await readAsText(file), fileName);
   if (extension === "ipynb") return notebookToDiscoveryText(await readAsText(file), fileName);
@@ -3934,15 +4111,31 @@ function notebookToDiscoveryText(raw = "", fileName = "") {
 }
 
 function evidenceKindFromFileName(fileName = "") {
+  return classifyDiscoveryFile(fileName).evidenceKind;
+}
+
+function classifyDiscoveryFile(fileName = "") {
   const extension = path.extname(String(fileName || "")).toLowerCase();
-  if ([".png", ".jpg", ".jpeg", ".webp", ".gif", ".blend"].includes(extension)) return { key: "image_visual", label: "Image / visual evidence" };
-  if ([".pdf", ".docx"].includes(extension)) return { key: "document", label: "Document evidence" };
-  if ([".ipynb"].includes(extension)) return { key: "notebook", label: "Notebook / analysis evidence" };
-  if ([".py", ".js", ".ts", ".jsx", ".tsx", ".html", ".css", ".scss", ".cpp", ".c", ".h", ".hpp", ".cs", ".java", ".rs", ".go", ".sql", ".sh", ".ps1"].includes(extension)) return { key: "code", label: "Code / test evidence" };
-  if ([".uproject", ".uplugin", ".uasset", ".umap", ".ini"].includes(extension)) return { key: "unreal", label: "Unreal / visual project evidence" };
-  if ([".json", ".csv", ".yaml", ".yml", ".toml"].includes(extension)) return { key: "data_config", label: "Data / config evidence" };
-  if ([".txt", ".md"].includes(extension)) return { key: "notes", label: "Notes evidence" };
-  return { key: "file", label: "File evidence" };
+  const registryEntry = DISCOVERY_FILE_TYPE_BY_EXTENSION.get(extension);
+  const base = registryEntry || {
+    key: "unknown_file",
+    label: extension ? `Unknown ${extension} file` : "Unknown file",
+    readMode: "metadata_only",
+    projectRole: "unknown_supporting_material",
+    routingHint: "Do not deep-read; use filename, folder location, size, and nearby readable files for routing."
+  };
+  const blocked = base.readMode === "blocked";
+  return {
+    key: base.key,
+    label: base.label,
+    extension,
+    readMode: base.readMode,
+    projectRole: base.projectRole,
+    routingHint: base.routingHint,
+    importAllowed: !blocked,
+    blockReason: blocked ? `${base.label} is blocked from Project State import. Keep it outside Discovery unless a future external security workflow explicitly records it as surface-only.` : "",
+    evidenceKind: { key: base.key, label: base.label }
+  };
 }
 
 
@@ -4055,12 +4248,23 @@ function mimeFromFileName(fileName = "") {
     jpeg: "image/jpeg",
     webp: "image/webp",
     gif: "image/gif",
+    bmp: "image/bmp",
+    tif: "image/tiff",
+    tiff: "image/tiff",
+    svg: "image/svg+xml",
     pdf: "application/pdf",
     docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    doc: "application/msword",
+    rtf: "application/rtf",
+    odt: "application/vnd.oasis.opendocument.text",
     txt: "text/plain",
     md: "text/markdown",
     csv: "text/csv",
+    log: "text/plain",
+    xml: "application/xml",
+    xhtml: "application/xhtml+xml",
     json: "application/json",
+    jsonl: "application/x-ndjson",
     ipynb: "application/x-ipynb+json",
     py: "text/x-python",
     js: "text/javascript",
@@ -4081,15 +4285,35 @@ function mimeFromFileName(fileName = "") {
     sql: "application/sql",
     sh: "application/x-sh",
     ps1: "text/x-powershell",
+    bat: "application/x-msdos-program",
+    cmd: "application/cmd",
+    lua: "text/x-lua",
+    r: "text/x-r",
+    m: "text/x-matlab",
+    jl: "text/x-julia",
     uproject: "application/json",
     uplugin: "application/json",
     ini: "text/plain",
+    cfg: "text/plain",
+    conf: "text/plain",
     yaml: "application/yaml",
     yml: "application/yaml",
     toml: "application/toml",
     uasset: "application/octet-stream",
     umap: "application/octet-stream",
-    blend: "application/octet-stream"
+    blend: "application/octet-stream",
+    zip: "application/zip",
+    "7z": "application/x-7z-compressed",
+    rar: "application/vnd.rar",
+    tar: "application/x-tar",
+    gz: "application/gzip",
+    sqlite: "application/vnd.sqlite3",
+    sqlite3: "application/vnd.sqlite3",
+    db: "application/octet-stream",
+    mp4: "video/mp4",
+    mov: "video/quicktime",
+    mp3: "audio/mpeg",
+    wav: "audio/wav"
   };
   return types[extension] || "application/octet-stream";
 }

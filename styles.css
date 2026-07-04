@@ -116,12 +116,31 @@ button {
 }
 
 .import-file-list .check-field {
-  align-items: flex-start;
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  align-items: start;
+  width: 100%;
+  gap: 10px;
 }
 
 .import-file-list .check-field input {
   flex: 0 0 auto;
-  margin-top: 3px;
+  align-self: start;
+  justify-self: start;
+  margin: 2px 0 0;
+}
+
+.import-file-list .check-field span {
+  display: block;
+  min-width: 0;
+  overflow-wrap: break-word;
+  word-break: normal;
+  line-height: 1.4;
+}
+
+.import-file-list .check-field strong {
+  overflow-wrap: normal;
+  word-break: normal;
 }
 
 .search-box {

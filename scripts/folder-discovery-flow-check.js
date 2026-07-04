@@ -19,27 +19,38 @@ async function main() {
     await fsp.writeFile(path.join(inputRoot, "Alpha", "alpha.uproject"), JSON.stringify({ FileVersion: 3, EngineAssociation: "test" }), "utf8");
     await fsp.writeFile(path.join(inputRoot, "Alpha", "alpha-sketch.png"), Buffer.from([0x89, 0x50, 0x4e, 0x47]));
     await fsp.writeFile(path.join(inputRoot, "Alpha", "alpha-scene.uasset"), Buffer.from("unreal asset placeholder"));
+    await fsp.writeFile(path.join(inputRoot, "Alpha", "alpha-model.stl"), "solid alpha\nendsolid alpha\n", "utf8");
+    await fsp.writeFile(path.join(inputRoot, "Alpha", "alpha-weird.customidea"), "custom opaque material", "utf8");
     await fsp.writeFile(path.join(inputRoot, "Beta", "beta.md"), "# Beta\n", "utf8");
     await fsp.writeFile(path.join(inputRoot, "Beta", "blocked.exe"), "blocked", "utf8");
     const bridge = createProjectStateDesktopBridge({ storageRoot });
     const inspected = await bridge.files.inspectImportSelection({ paths: [inputRoot] });
-    assert(inspected.candidates.length === 7, "Recursive folder inspection lost supported mixed-evidence files.", inspected);
+    assert(inspected.candidates.length === 9, "Recursive folder inspection lost supported mixed-evidence files.", inspected);
     assert(inspected.skipped.length === 1, "Unsupported folder item was not reported.", inspected);
     assert(inspected.candidates.some((item) => item.evidenceKind?.key === "code"), "Source-code evidence was not classified.", inspected.candidates);
     assert(inspected.candidates.some((item) => item.evidenceKind?.key === "notebook"), "Notebook evidence was not classified.", inspected.candidates);
     assert(inspected.candidates.some((item) => item.evidenceKind?.key === "unreal"), "Unreal evidence was not classified.", inspected.candidates);
     assert(inspected.candidates.some((item) => item.evidenceKind?.key === "image_visual"), "Visual evidence was not classified.", inspected.candidates);
+    assert(inspected.candidates.some((item) => item.evidenceKind?.key === "model_cad" && item.readMode === "metadata_only"), "CAD/model evidence was not classified as metadata-only.", inspected.candidates);
+    assert(inspected.candidates.some((item) => item.evidenceKind?.key === "unknown_file" && item.readMode === "metadata_only"), "Unknown file evidence was not preserved as metadata-only.", inspected.candidates);
+    assert(inspected.skipped.some((item) => item.fileType?.key === "blocked_executable"), "Executable file was not explicitly blocked.", inspected.skipped);
     const app = fs.readFileSync(path.join(__dirname, "..", "app.js"), "utf8");
     const required = [
       "function folderRelativeGroup",
       "function partitionDiscoveryCandidates",
       "function openDiscoveryReviewSequence",
       "How should this unknown folder be reviewed?",
-      "Scan folder groups for project or idea candidates",
+      "Review subfolders as project/container candidates first",
+      "Folder candidate:",
+      "Project folder candidate:",
       "Treat entire folder as one Discovery evidence collection",
       "Review every file separately",
       "data.folderGroupingMode || \"folder_groups\"",
       "mode === \"one_project_folder\"",
+      "const folderCollectionIntent = [\"one_project_folder\", \"folder_groups\"].includes(folderIntent)",
+      "const suggestedMode = folderCollectionIntent ? \"one_item\"",
+      "const defaultUnitDestination = folderCollectionIntent ? \"unassigned\"",
+      "project/container candidate first",
       "Folder intent:",
       "Suggested group:",
       "sequencePosition"

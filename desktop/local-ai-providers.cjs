@@ -102,6 +102,28 @@ function normalizeTerms(value = []) {
   return [...new Set(input.map((term) => normalizeText(term, 80).toLowerCase()).filter((term) => term.length > 2))].slice(0, 32);
 }
 
+const LEGAL_REFERENCE_PATTERNS = [
+  ["license", /\blicen[cs](?:e|ing|ed|es)\b/i],
+  ["agreement", /\bagreement\b/i],
+  ["eula", /\bend\s+user\s+licen[cs]e\b|\beula\b/i],
+  ["terms of service", /\bterms\s+(?:of\s+(?:service|use)|and\s+conditions)\b/i],
+  ["privacy policy", /\bprivacy\s+policy\b/i],
+  ["developer agreement", /\bdeveloper\s+(?:program\s+)?agreement\b/i],
+  ["app store terms", /\bapp\s+store\b|\bgoogle\s+play\b|\bmicrosoft\s+store\b|\bsteamworks\b|\bepic\s+games\s+store\b/i],
+  ["sdk/api terms", /\b(?:sdk|api)\s+(?:agreement|terms|license)\b/i],
+  ["third party notices", /\bthird[-\s]party\s+notices\b|\bopen\s+source\s+notices\b/i],
+  ["copyright/trademark", /\bcopyright\b|\btrademark\b|\ball\s+rights\s+reserved\b/i]
+];
+
+function legalReferenceSignals(text = "") {
+  const haystack = String(text || "").slice(0, 30000);
+  const found = LEGAL_REFERENCE_PATTERNS.filter(([, pattern]) => pattern.test(haystack)).map(([label]) => label);
+  return {
+    isLegalReference: found.length >= 2,
+    terms: [...new Set(found)].slice(0, 8)
+  };
+}
+
 function buildAnalysisPrompt({ chunks, candidateTypes, maxCandidates }) {
   const safeChunks = chunks.map(({ chunk, text }, index) => ({
     index,
@@ -113,6 +135,8 @@ function buildAnalysisPrompt({ chunks, candidateTypes, maxCandidates }) {
     "You are a local Project State analysis arm. You are not the source of truth.",
     "Analyze only the supplied chunks. Create non-authoritative Idea Candidates only.",
     "Do not create project names, project IDs, routes, approvals, facts, or history.",
+    "Licensing agreements, EULAs, terms, privacy policies, developer/app-store agreements, SDK/API terms, and third-party notices are reference/supporting material. Do not split them into project ideas unless the text clearly describes a buildable project.",
+    "When a chunk is mostly legal/app agreement material, return at most one reference candidate with scope supporting.",
     "Every candidate must cite at least one supplied discoveryChunkId.",
     "Return strict JSON only with this shape:",
     '{"candidates":[{"workingLabel":"short label","neutralSummary":"plain evidence-based summary","candidateType":"other","scope":"standalone|supporting|cross_cutting|unknown","keyTerms":["term"],"evidence":[{"discoveryChunkId":"chunk id","relationship":"supports|mentions|contrasts|limits|depends_on|context_only","excerpt":"short quote or paraphrase from the chunk"}],"confidence":{"score":0.0,"basis":"why","uncertaintyNotes":"what is unclear"},"clarificationQuestions":[{"text":"question","affects":"meaning|scope|routing|priority|grouping","allowNotSure":true}]}]}',
@@ -178,6 +202,7 @@ async function generateQwenIdeaCandidates({ validated, envelope, ideaContract, m
   const { parsed, attempts } = await callQwenForJson(prompt, { candidateTypes: ideaContract.objects.IdeaCandidate.candidateTypes, maxCandidates });
   const suppliedCandidates = Array.isArray(parsed.candidates) ? parsed.candidates : [];
   const chunkById = new Map(validated.map((item) => [item.chunk.id, item]));
+  const legalByChunkId = new Map(validated.map((item) => [item.chunk.id, legalReferenceSignals(item.text)]));
   const allowedTypes = new Set(ideaContract.objects.IdeaCandidate.candidateTypes);
   const allowedScopes = new Set(ideaContract.objects.IdeaCandidate.candidateScopes);
   const allowedRelationships = new Set(ideaContract.objects.IdeaCandidate.evidenceRelationships);
@@ -209,12 +234,18 @@ async function generateQwenIdeaCandidates({ validated, envelope, ideaContract, m
         excerpt: normalizeText(source.text, 500)
       });
     }
-    const candidateType = allowedTypes.has(candidate.candidateType) ? candidate.candidateType : "other";
-    const scope = allowedScopes.has(candidate.scope) ? candidate.scope : "unknown";
+    const legalEvidenceSignals = normalizedEvidence.map((evidence) => legalByChunkId.get(evidence.discoveryChunkId)).filter(Boolean);
+    const isLegalReference = legalEvidenceSignals.some((signals) => signals.isLegalReference);
+    const legalTerms = [...new Set(legalEvidenceSignals.flatMap((signals) => signals.terms || []))].slice(0, 8);
+    const candidateType = isLegalReference ? "reference" : allowedTypes.has(candidate.candidateType) ? candidate.candidateType : "other";
+    const scope = isLegalReference ? "supporting" : allowedScopes.has(candidate.scope) ? candidate.scope : "unknown";
+    const neutralSummary = normalizeText(candidate.neutralSummary || candidate.summary || "", 2000);
     return {
       clientCandidateId: normalizeText(candidate.clientCandidateId || `qwen3_candidate_${String(index + 1).padStart(4, "0")}`, 120).replace(/[^a-zA-Z0-9_-]/g, "_") || `qwen3_candidate_${index + 1}`,
       workingLabel: normalizeText(candidate.workingLabel || candidate.title || `Idea candidate ${index + 1}`, 200),
-      neutralSummary: normalizeText(candidate.neutralSummary || candidate.summary || "", 2000),
+      neutralSummary: isLegalReference
+        ? normalizeText(`Licensing/app agreement/reference material. Keep as supporting context unless a human confirms it is the project. Signals: ${legalTerms.join(", ") || "legal reference"}. ${neutralSummary}`, 2000)
+        : neutralSummary,
       candidateType,
       scope,
       keyTerms: normalizeTerms(candidate.keyTerms),
