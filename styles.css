@@ -115,6 +115,15 @@ button {
   padding-right: 4px;
 }
 
+.import-file-list .check-field {
+  align-items: flex-start;
+}
+
+.import-file-list .check-field input {
+  flex: 0 0 auto;
+  margin-top: 3px;
+}
+
 .search-box {
   display: grid;
   gap: 4px;

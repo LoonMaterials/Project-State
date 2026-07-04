@@ -103,7 +103,8 @@ function validateCurrentModel(contract, appSource) {
   assert(!missing(currentProposalTypes, contract.allowedProposalTypes).length && !missing(contract.allowedProposalTypes, currentProposalTypes).length, "Contract proposal types drifted from app.js.", { contract: contract.allowedProposalTypes, app: currentProposalTypes });
   assert(appSource.includes('status: "pending"'), "Current Intake model no longer defaults status to pending.");
   assert(appSource.includes('reviewState: "needs_review"'), "Current Intake model no longer defaults review state to needs_review.");
-  assert(appSource.includes('queueState: "new"'), "Current Intake model no longer defaults queue state to new.");
+  assert(appSource.includes('queueState: normalizeIntakeQueueState(input.queueState || "new")'), "Current Intake model no longer preserves explicit/default queue state normalization.");
+  assert(appSource.includes("if (input.queueState === undefined) item.queueState = intakeSuggestedQueueState(item);"), "Current Intake model no longer applies fast-lane queue suggestions when no API/manual queue state is supplied.");
   assert(appSource.includes('saveStore({ allowWithoutCoreApproval: true, reason: "intake-only" })'), "Current Intake creation no longer uses the intake-only persistence path.");
   assert(appSource.includes("applyApprovedIntakeToCore"), "Current human-approved Intake-to-Core path is missing.");
   return { currentModelAligned: true };

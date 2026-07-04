@@ -34,9 +34,11 @@ async function main() {
       "function folderRelativeGroup",
       "function partitionDiscoveryCandidates",
       "function openDiscoveryReviewSequence",
-      "Treat selected folder as one project / evidence collection",
-      "Scan folder groups for separate project candidates",
+      "How should this unknown folder be reviewed?",
+      "Scan folder groups for project or idea candidates",
+      "Treat entire folder as one Discovery evidence collection",
       "Review every file separately",
+      "data.folderGroupingMode || \"folder_groups\"",
       "mode === \"one_project_folder\"",
       "Folder intent:",
       "Suggested group:",
@@ -46,7 +48,7 @@ async function main() {
     assert(app.includes('caseTitle: candidateGroup.label'), "Folder grouping rationale is not passed into Discovery Case creation.");
     assert(app.includes('externalSecurityAcknowledged: data.externalSecurityAcknowledged === "on"'), "Folder grouping bypasses the external-security boundary.");
     console.log("Folder Discovery Flow Check");
-    console.log(JSON.stringify({ recursivelyInspected: inspected.candidates.length, unsupportedReported: inspected.skipped.length, groupingChoices: 3, oneProjectFolderLane: true, mixedEvidenceClassified: true, sequentialReview: true, externalSecurityBoundaryPreserved: true }, null, 2));
+    console.log(JSON.stringify({ recursivelyInspected: inspected.candidates.length, unsupportedReported: inspected.skipped.length, groupingChoices: 3, unknownFolderDefaultsToGroups: true, oneProjectFolderLane: true, mixedEvidenceClassified: true, sequentialReview: true, externalSecurityBoundaryPreserved: true }, null, 2));
     console.log("Folder Discovery flow: ok");
   } finally {
     await fsp.rm(tempRoot, { recursive: true, force: true });

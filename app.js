@@ -8344,7 +8344,7 @@ function openFileImportReviewModal(selection) {
           `).join("")}
         </div>
       </div>
-      ${isFolderImport ? `<div class="field"><label for="folderGroupingMode">How should this folder be reviewed?</label><select id="folderGroupingMode" name="folderGroupingMode"><option value="one_project_folder">Treat selected folder as one project / evidence collection</option><option value="folder_groups">Scan folder groups for separate project candidates (${suggestedFolderGroups.length})</option><option value="each_file">Review every file separately</option></select><p class="item-meta">Use the first choice when the folder already belongs to one project. Use folder groups or each file when Project State should look for separate ideas.</p></div>` : ""}
+      ${isFolderImport ? `<div class="field"><label for="folderGroupingMode">How should this unknown folder be reviewed?</label><select id="folderGroupingMode" name="folderGroupingMode"><option value="folder_groups" selected>Scan folder groups for project or idea candidates (${suggestedFolderGroups.length})</option><option value="one_project_folder">Treat entire folder as one Discovery evidence collection</option><option value="each_file">Review every file separately</option></select><p class="item-meta">Recommended for unknown folders: scan folder groups first. Use the one-folder choice only when you decide the whole folder belongs together.</p></div>` : ""}
       <div class="field"><label for="privacyClass">Privacy</label><select id="privacyClass" name="privacyClass"><option value="local_only">Keep local only</option><option value="personal">Personal</option><option value="confidential">Confidential</option><option value="restricted">Restricted</option><option value="provider_allowed">Configured provider allowed later</option></select></div>
       ${confirmationField("externalSecurityAcknowledged", "I understand Project State does not scan files. I trust these files and accept responsibility for checking them with my own security tools.")}
       ${selection.skipped?.length ? `<p class="notice">${escapeHtml(t("unsupportedFilesSkipped"))}: ${selection.skipped.length}</p>` : ""}
@@ -8354,12 +8354,14 @@ function openFileImportReviewModal(selection) {
       const candidates = selection.candidates.filter((file) => selectedPaths.includes(file.localPath));
       if (!candidates.length) return false;
       const actor = defaultUiActor();
-      const groupingMode = isFolderImport ? data.folderGroupingMode || "one_project_folder" : "one_case";
+      const groupingMode = isFolderImport ? data.folderGroupingMode || "folder_groups" : "one_case";
       const candidateGroups = partitionDiscoveryCandidates(candidates, groupingMode, selection.rootPath);
       const reviewReason = isFolderImport
         ? groupingMode === "one_project_folder"
-          ? "Selected folder staged as one Discovery project candidate."
-          : "Selected folder staged for Discovery scan."
+          ? "Selected folder staged as one Discovery evidence collection."
+          : groupingMode === "each_file"
+            ? "Selected folder staged for individual file Discovery review."
+            : "Selected folder staged for grouped Discovery scan."
         : "Selected files staged for Discovery review.";
       const discoveryReviews = [];
       for (const candidateGroup of candidateGroups) {
@@ -8610,7 +8612,7 @@ function openDiscoveryReviewModal({ discoveryCaseId, analysis, extractions = [],
     body: `
       <p class="notice"><strong>${corpusIntake ? "Large file staged." : "Read complete."}</strong> Project State copied the selected file into managed staging, verified its exact bytes, and ${corpusIntake ? "identified material that needs indexed large-file processing before project candidates are reliable." : "completed the supported local extraction shown below."}</p>
       ${corpusIntake ? `<p class="notice"><strong>Large-file lane:</strong> ${Number(corpusIntake.totalEstimatedWords || 0).toLocaleString()} estimated words across ${corpusIntake.pendingFiles} file${corpusIntake.pendingFiles === 1 ? "" : "s"}. Suggested type: ${escapeDisplay((corpusIntake.corpusKinds || []).join(", ") || "large document", DISPLAY_META_LIMIT)}. Next step: ${escapeDisplay(corpusIntake.nextStep || "Index before promotion.", DISPLAY_META_LIMIT)}</p>` : ""}
-      ${folderIntent === "one_project_folder" ? `<p class="notice"><strong>Folder intent:</strong> Treat this folder as one project / evidence collection. Project State will keep the selected files together unless you choose to review several ideas separately below.</p>` : ""}
+      ${folderIntent === "one_project_folder" ? `<p class="notice"><strong>Folder intent:</strong> Treat this folder as one Discovery evidence collection. Project State will keep the selected files together unless you choose to review several ideas separately below.</p>` : ""}
       ${groupLabel ? `<p class="notice"><strong>Suggested group:</strong> ${escapeDisplay(groupLabel, DISPLAY_META_LIMIT)}</p>` : ""}
       <div class="field">
         <label>File reading result</label>
