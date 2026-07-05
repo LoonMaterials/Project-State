@@ -1952,7 +1952,8 @@ function chunkDeterministicText(text, targetCharacters) {
   return chunks;
 }
 
-const DISCOVERY_DESTINATIONS = new Set(["existing_project", "additional_project_link", "proposed_new_project", "general_reference", "orphaned_idea", "unassigned", "rejected", "multiple_routes"]);
+const DISCOVERY_DESTINATIONS = new Set(["existing_project", "additional_project_link", "proposed_new_project", "general_reference", "orphaned_idea", "ai_work_order", "large_ai_work_order", "unassigned", "rejected", "multiple_routes"]);
+const DISCOVERY_NON_INTAKE_DESTINATIONS = new Set(["unassigned", "rejected", "ai_work_order", "large_ai_work_order"]);
 
 async function analyzeDiscoveryCase({ storageRoot, dbPath, payload = {} }) {
   await ensureSpine(storageRoot);
@@ -1973,8 +1974,8 @@ async function analyzeDiscoveryCase({ storageRoot, dbPath, payload = {} }) {
   } finally { db.close(); }
   if (!versions.length) throw new Error("Discovery Case has no File Versions to analyze.");
   const baseNames = versions.map((version) => path.basename(version.originalName || "", path.extname(version.originalName || ""))).filter(Boolean);
-  const caseTitleName = String(discoveryCase.title || "").replace(/^Project folder:\s*/i, "").trim();
-  const genericCaseTitle = !caseTitleName || ["selected folder", "folder root", "selected file", "selected files", "discovery case"].includes(caseTitleName.toLowerCase());
+  const caseTitleName = String(discoveryCase.title || "").replace(/^(?:Project folder|Project folder candidate|Known project folder to check|Loose files in selected folder):\s*/i, "").trim();
+  const genericCaseTitle = !caseTitleName || ["selected folder", "folder root", "selected file", "selected files", "discovery case", "loose files in selected folder"].includes(caseTitleName.toLowerCase());
   const suggestedName = !genericCaseTitle && caseTitleName ? titleFromTokens(caseTitleName) : suggestDiscoveryName(baseNames) || "Unassigned material";
   const suggestionTokens = tokenSet(suggestedName);
   const projectCandidates = projects.map((project) => {
@@ -2033,7 +2034,7 @@ async function confirmDiscoveryRouting({ storageRoot, dbPath, payload = {} }) {
   const confirmedAt = requiredDiscoveryTimestamp(payload.confirmedAt || nowIso(), "Routing confirmedAt");
   const routeInputs = Array.isArray(payload.routes) && payload.routes.length
     ? payload.routes
-    : [{ id: "unit_1", title: payload.proposedProjectName || "Whole document", destination: payload.destination, projectId: payload.projectId, additionalProjectIds: payload.additionalProjectIds, proposedProjectName: payload.proposedProjectName, summary: payload.summary || "", fileVersionIds: payload.fileVersionIds, evidence: payload.evidence }];
+    : [{ id: "unit_1", title: payload.proposedProjectName || "Whole document", destination: payload.destination, projectId: payload.projectId, additionalProjectIds: payload.additionalProjectIds, proposedProjectName: payload.proposedProjectName, summary: payload.summary || "", reviewReason: payload.reviewReason || payload.routingReason || "", fileVersionIds: payload.fileVersionIds, evidence: payload.evidence }];
   if (routeInputs.length > DISCOVERY_REVIEW_UNIT_LIMIT) throw new Error(`A Discovery routing confirmation may contain at most ${DISCOVERY_REVIEW_UNIT_LIMIT} document units.`);
   const routes = routeInputs.map((input, index) => {
     const id = requiredDiscoveryId(input.id || `unit_${index + 1}`, "Document unit ID");
@@ -2217,7 +2218,7 @@ async function promoteDiscoveryToIntake({ storageRoot, dbPath, payload = {} }) {
   if (discoveryCase.status !== "ready_for_intake" || !discoveryCase.confirmedRouting || !discoveryCase.routingInteractionId) throw new Error("Discovery Case is not ready for Intake promotion.");
   const routing = discoveryCase.confirmedRouting;
   const routes = Array.isArray(routing.routes) && routing.routes.length ? routing.routes : [routing];
-  const promotableRoutes = routes.filter((route) => !["unassigned", "rejected"].includes(route.destination));
+  const promotableRoutes = routes.filter((route) => !DISCOVERY_NON_INTAKE_DESTINATIONS.has(route.destination));
   if (!promotableRoutes.length) throw new Error("Discovery routing contains no document units eligible for Intake promotion.");
   for (const version of caseView.fileVersions) await authorizeDiscoveryContentAccess({ storageRoot, dbPath, reference: { managedPath: version.managedPath } });
   const intakeBatchId = payload.intakeBatchId || makeId("intake_batch");

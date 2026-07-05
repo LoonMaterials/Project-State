@@ -41,25 +41,36 @@ async function main() {
       "function openDiscoveryReviewSequence",
       "How should this unknown folder be reviewed?",
       "Review subfolders as project/container candidates first",
-      "Folder candidate:",
+      "Folder candidate",
       "Project folder candidate:",
-      "Treat entire folder as one Discovery evidence collection",
-      "Review every file separately",
+      "Emergency: review every file separately",
+      "Loose files in selected folder",
+      "Loose root files are kept as loose evidence, not parent-folder project proposals.",
       "data.folderGroupingMode || \"folder_groups\"",
-      "mode === \"one_project_folder\"",
+      "function existingProjectMatchForFolderName",
+      "Known project folder to check:",
       "const folderCollectionIntent = [\"one_project_folder\", \"folder_groups\"].includes(folderIntent)",
-      "const suggestedMode = folderCollectionIntent ? \"one_item\"",
-      "const defaultUnitDestination = folderCollectionIntent ? \"unassigned\"",
+      "const folderDiscoveryIntent = [\"one_project_folder\", \"folder_groups\", \"each_file\"].includes(folderIntent)",
+      "const folderContainerFirst = folderIntent === \"folder_groups\"",
+      "const suggestedUnits = folderContainerFirst ? []",
+      "const suggestedMode = folderDiscoveryIntent ? \"one_item\"",
+      "const defaultSingleDestination = folderDiscoveryIntent ? \"unassigned\"",
+      "const defaultUnitDestination = folderDiscoveryIntent ? \"unassigned\"",
+      "discoveryDestinationOptions(defaultSingleDestination)",
       "project/container candidate first",
+      "Container-first review:",
+      "Needs Attention is created only if you deliberately choose an Intake route.",
       "Folder intent:",
+      "Known folder check:",
       "Suggested group:",
       "sequencePosition"
     ];
     for (const text of required) assert(app.includes(text), `Folder Discovery UI is missing: ${text}`);
+    assert(!app.includes('<option value="one_project_folder">Treat entire folder as one Discovery evidence collection</option>'), "Unknown-folder Discovery still exposes the parent-folder project/blob option.");
     assert(app.includes('caseTitle: candidateGroup.label'), "Folder grouping rationale is not passed into Discovery Case creation.");
     assert(app.includes('externalSecurityAcknowledged: data.externalSecurityAcknowledged === "on"'), "Folder grouping bypasses the external-security boundary.");
     console.log("Folder Discovery Flow Check");
-    console.log(JSON.stringify({ recursivelyInspected: inspected.candidates.length, unsupportedReported: inspected.skipped.length, groupingChoices: 3, unknownFolderDefaultsToGroups: true, oneProjectFolderLane: true, mixedEvidenceClassified: true, sequentialReview: true, externalSecurityBoundaryPreserved: true }, null, 2));
+    console.log(JSON.stringify({ recursivelyInspected: inspected.candidates.length, unsupportedReported: inspected.skipped.length, groupingChoices: 2, unknownFolderDefaultsToGroups: true, parentFolderBlobRouteRemoved: true, looseRootFilesNotProjectCandidates: true, mixedEvidenceClassified: true, sequentialReview: true, externalSecurityBoundaryPreserved: true }, null, 2));
     console.log("Folder Discovery flow: ok");
   } finally {
     await fsp.rm(tempRoot, { recursive: true, force: true });

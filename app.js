@@ -4919,6 +4919,7 @@ function normalizeAiWorkOrder(workOrder, context) {
     createdAt: workOrder.createdAt || nowIso(),
     createdBy: workOrder.createdBy || "",
     reason: workOrder.reason || "",
+    source: workOrder.source && typeof workOrder.source === "object" ? cloneRecord(workOrder.source) : null,
     comments: normalizeComments(workOrder.comments, context)
   };
 }
@@ -6158,11 +6159,16 @@ function renderAiWorkOrders() {
 
 function renderAiWorkOrderItem(order) {
   const projectName = order.projectId ? projectNameById(order.projectId) || t("missingProject") : t("noTargetProject");
+  const source = order.source || {};
+  const sourceMeta = source.discoveryCaseId
+    ? `Discovery case: ${source.discoveryCaseId}${source.sourceFiles?.length ? ` · Sources: ${source.sourceFiles.length}` : ""}${source.folderIntent ? ` · ${source.folderIntent}` : ""}`
+    : "";
   return `
     <article class="item">
       <p class="item-title">${escapeDisplay(order.title, DISPLAY_META_LIMIT)}</p>
       <p class="item-meta">${escapeHtml(t("project"))}: ${escapeDisplay(projectName, DISPLAY_META_LIMIT)} · ${escapeHtml(t("status"))}: ${escapeHtml(aiWorkOrderStatusLabel(order.status))}</p>
       <p class="item-meta">${escapeHtml(t("contextPackPreset"))}: ${escapeHtml(contextPackPresetLabel(order.contextPreset))} · ${escapeHtml(t("outputType"))}: ${escapeDisplay(order.outputType || t("notRecorded"), DISPLAY_META_LIMIT)}</p>
+      ${sourceMeta ? `<p class="item-meta">${escapeDisplay(sourceMeta, DISPLAY_META_LIMIT)}</p>` : ""}
       <p class="item-body">${escapeDisplay(order.task, DISPLAY_TEXT_LIMIT)}</p>
       <p class="item-meta">${escapeHtml(t("created"))}: ${escapeHtml(formatDate(order.createdAt))} · ${escapeHtml(t("actor"))}: ${escapeHtml(actorDisplay(order.createdBy))}</p>
       ${order.canCreateIntake ? `<p class="notice">${escapeHtml(t("canCreateIntake"))}</p>` : ""}
@@ -8005,6 +8011,31 @@ function folderRelativeGroup(localPath = "", rootPath = "") {
   return parts.length > 1 ? parts[0] : "Folder root";
 }
 
+function normalizeProjectMatchText(value = "") {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/[_-]+/g, " ")
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function existingProjectMatchForFolderName(folderName = "") {
+  const normalized = normalizeProjectMatchText(folderName);
+  if (!normalized || normalized === "folder root") return null;
+  return (store?.projects || [])
+    .filter((project) => !project.archived)
+    .find((project) => normalizeProjectMatchText(project.name || "") === normalized) || null;
+}
+
+function folderGroupReviewLabel(folderGroup = "") {
+  const label = folderGroup || "Folder root";
+  if (normalizeProjectMatchText(label) === "folder root") return "Loose files in selected folder";
+  return existingProjectMatchForFolderName(label)
+    ? `Known project folder to check: ${label}`
+    : `Project folder candidate: ${label}`;
+}
+
 function partitionDiscoveryCandidates(candidates = [], mode = "folder_groups", rootPath = "") {
   const grouped = new Map();
   const folderName = pathFolderName(rootPath) || "Selected folder";
@@ -8016,16 +8047,16 @@ function partitionDiscoveryCandidates(candidates = [], mode = "folder_groups", r
         ? "Selected folder"
         : mode === "each_file"
           ? candidate.name || "Selected file"
-          : `Project folder candidate: ${folderGroup}`;
+          : folderGroupReviewLabel(folderGroup);
     if (!grouped.has(label)) grouped.set(label, []);
     grouped.get(label).push(candidate);
   }
   const groups = [];
   for (const [label, files] of grouped.entries()) {
-    const chunkSize = mode === "one_project_folder" ? files.length || 1 : 24;
+    const chunkSize = mode === "each_file" ? 1 : files.length || 1;
     for (let index = 0; index < files.length; index += chunkSize) {
-      const chunk = files.slice(index, index + 24);
-      const part = mode !== "one_project_folder" && files.length > 24 ? ` · part ${Math.floor(index / 24) + 1}` : "";
+      const chunk = files.slice(index, index + chunkSize);
+      const part = chunkSize < files.length ? ` · part ${Math.floor(index / chunkSize) + 1}` : "";
       groups.push({ label: `${label}${part}`, candidates: mode === "one_project_folder" ? files : chunk, folderIntent: mode, folderRootPath: rootPath });
     }
   }
@@ -8355,12 +8386,12 @@ function openFileImportReviewModal(selection) {
           ${selection.candidates.map((file) => `
             <label class="check-field">
               <input type="checkbox" data-import-path="${escapeHtml(file.localPath)}" checked>
-              <span><strong>${escapeDisplay(file.name, DISPLAY_META_LIMIT)}</strong><br>${escapeDisplay(file.localPath, DISPLAY_META_LIMIT)} · ${escapeHtml(formatBytes(file.size))} · ${escapeHtml(sourceTypeForProjectFile(file))}${readModeLabel(file) ? ` · ${escapeHtml(readModeLabel(file))}` : ""}${file.fileType?.routingHint ? `<br>${escapeDisplay(file.fileType.routingHint, DISPLAY_META_LIMIT)}` : ""}${isFolderImport ? `<br>Folder candidate: ${escapeDisplay(folderRelativeGroup(file.localPath, selection.rootPath), DISPLAY_META_LIMIT)}` : ""}</span>
+              <span><strong>${escapeDisplay(file.name, DISPLAY_META_LIMIT)}</strong><br>${escapeDisplay(file.localPath, DISPLAY_META_LIMIT)} · ${escapeHtml(formatBytes(file.size))} · ${escapeHtml(sourceTypeForProjectFile(file))}${readModeLabel(file) ? ` · ${escapeHtml(readModeLabel(file))}` : ""}${file.fileType?.routingHint ? `<br>${escapeDisplay(file.fileType.routingHint, DISPLAY_META_LIMIT)}` : ""}${isFolderImport ? `<br>${escapeDisplay(existingProjectMatchForFolderName(folderRelativeGroup(file.localPath, selection.rootPath)) ? "Known project folder to check" : "Folder candidate", DISPLAY_META_LIMIT)}: ${escapeDisplay(folderRelativeGroup(file.localPath, selection.rootPath), DISPLAY_META_LIMIT)}` : ""}</span>
             </label>
           `).join("")}
         </div>
       </div>
-      ${isFolderImport ? `<div class="field"><label for="folderGroupingMode">How should this unknown folder be reviewed?</label><select id="folderGroupingMode" name="folderGroupingMode"><option value="folder_groups" selected>Review subfolders as project/container candidates first (${suggestedFolderGroups.length})</option><option value="one_project_folder">Treat entire folder as one Discovery evidence collection</option><option value="each_file">Review every file separately</option></select><p class="item-meta">Recommended for unknown folders: treat each subfolder as a possible project or container first. Split a group only when you want Project State to scan deeper inside it.</p></div>` : ""}
+      ${isFolderImport ? `<div class="field"><label for="folderGroupingMode">How should this unknown folder be reviewed?</label><select id="folderGroupingMode" name="folderGroupingMode"><option value="folder_groups" selected>Review subfolders as project/container candidates first (${suggestedFolderGroups.length})</option><option value="each_file">Emergency: review every file separately</option></select><p class="item-meta">Recommended for unknown folders: read every selected file, then review the first-level subfolders as possible project/container candidates. Loose root files are kept as loose evidence, not parent-folder project proposals.</p></div>` : ""}
       <div class="field"><label for="privacyClass">Privacy</label><select id="privacyClass" name="privacyClass"><option value="local_only">Keep local only</option><option value="personal">Personal</option><option value="confidential">Confidential</option><option value="restricted">Restricted</option><option value="provider_allowed">Configured provider allowed later</option></select></div>
       ${confirmationField("externalSecurityAcknowledged", "I understand Project State does not scan files. I trust these files and accept responsibility for checking them with my own security tools.")}
       ${selection.skipped?.length ? `<p class="notice">${escapeHtml(t("unsupportedFilesSkipped"))}: ${selection.skipped.length}</p>` : ""}
@@ -8429,9 +8460,62 @@ function discoveryDestinationOptions(selected = "proposed_new_project") {
     ["proposed_new_project", "Propose a new project"],
     ["general_reference", "General reference"],
     ["orphaned_idea", "Orphaned idea"],
+    ["ai_work_order", "Create AI Work Order"],
+    ["large_ai_work_order", "Create Large-file/folder AI Work Order"],
     ["unassigned", "Leave unassigned"],
     ["rejected", "Reject"]
   ].map(([value, label]) => `<option value="${value}"${value === selected ? " selected" : ""}>${label}</option>`).join("");
+}
+
+function discoveryRouteCreatesAiWorkOrder(route = {}) {
+  return ["ai_work_order", "large_ai_work_order"].includes(route.destination);
+}
+
+function discoveryRoutePromotesToIntake(route = {}) {
+  return !["unassigned", "rejected", "ai_work_order", "large_ai_work_order"].includes(route.destination);
+}
+
+function discoveryRouteReasonFallback(route = {}) {
+  const destination = String(route.destination || "");
+  if (destination === "existing_project") return "Routed to an existing project after Discovery triage.";
+  if (destination === "proposed_new_project") return "Kept as a new project candidate after Discovery triage.";
+  if (destination === "general_reference") return "Kept as reference or supporting material.";
+  if (destination === "orphaned_idea") return "Kept as an orphaned idea for later connection.";
+  if (destination === "ai_work_order") return "Queued for AI follow-up after first-pass Discovery triage.";
+  if (destination === "large_ai_work_order") return "Queued large file or folder for later AI digestion.";
+  if (destination === "rejected") return "Rejected during Discovery triage.";
+  if (destination === "unassigned") return "Left unassigned after Discovery triage.";
+  return "Reviewed during Discovery triage.";
+}
+
+const DISCOVERY_AUTO_QUESTION_IDS = new Set(["privacy_confirmation", "routing_existing_project", "routing_new_or_unassigned", "grouping_confirmation", "large_corpus_intake_mode"]);
+
+function discoveryAutoQuestionAnswer(question = {}, { data = {}, confirmedRoutes = [], privacyClass = "local_only", unitReviewMode = "" } = {}) {
+  const id = String(question.id || "");
+  const directAnswer = String(data[`answer_${id}`] || "").trim();
+  if (directAnswer) return directAnswer;
+  const routes = Array.isArray(confirmedRoutes) ? confirmedRoutes : [];
+  const destinations = new Set(routes.map((route) => route.destination).filter(Boolean));
+  if (id === "privacy_confirmation") return privacyClass === "local_only" ? "Keep local only" : "Configured provider may receive selected content later";
+  if (id === "grouping_confirmation") return (data.unitReviewMode || unitReviewMode) === "multiple_units" ? "No, split into separate ideas" : "Yes, keep together";
+  if (id === "routing_existing_project") {
+    if (destinations.has("existing_project")) return "Yes, use the suggested existing project";
+    if (destinations.has("proposed_new_project")) return "No, propose a new project";
+    return "Not sure";
+  }
+  if (id === "routing_new_or_unassigned") {
+    if (destinations.has("proposed_new_project")) return "Propose a new project";
+    if (destinations.has("general_reference")) return "General reference";
+    if (destinations.has("orphaned_idea")) return "Orphaned idea";
+    if (destinations.has("ai_work_order") || destinations.has("large_ai_work_order")) return "Create AI Work Order";
+    if (destinations.has("unassigned")) return "Leave unassigned for now";
+    return "Not sure";
+  }
+  if (id === "large_corpus_intake_mode") {
+    if (destinations.has("large_ai_work_order") || destinations.has("ai_work_order")) return "Index first before project candidates";
+    return "Treat as one large document for now";
+  }
+  return "Not sure";
 }
 
 function discoveryQuestionOptions(question = {}, { privacyClass = "local_only" } = {}) {
@@ -8451,6 +8535,7 @@ function discoveryQuestionOptions(question = {}, { privacyClass = "local_only" }
       ["Propose a new project", "Propose a new project"],
       ["General reference", "General reference"],
       ["Orphaned idea", "Orphaned idea"],
+      ["Create AI Work Order", "Create AI Work Order"],
       ["Leave unassigned for now", "Leave unassigned for now"],
       ["Not sure", "Not sure"]
     ];
@@ -8531,7 +8616,7 @@ function renderDiscoveryUnitEditor(unit, index, { included = false, defaultDesti
       ${corpusPreflight.reasons?.length ? `<p class="item-meta">${corpusPreflight.reasons.map((item) => escapeDisplay(item, DISPLAY_META_LIMIT)).join(" ")}</p>` : ""}
       <div class="field"><label for="unit_destination_${index}">Where should this unit go?</label><select id="unit_destination_${index}" name="unit_destination_${index}">${discoveryDestinationOptions(destination)}</select></div>
       <div class="field"><label for="unit_project_${index}">Existing project, if selected</label><select id="unit_project_${index}" name="unit_project_${index}"><option value="">None</option>${projectOptions()}</select></div>
-      <div class="field"><label for="unit_reason_${index}">Reason for this route</label><select name="unit_reason_preset_${index}" data-unit-reason-preset="${index}"><option value="">Choose a common reason or write your own</option><option value="Keep as a separate project candidate">Keep as a separate project candidate</option><option value="Keep with parent folder/project, not a standalone project">Keep with parent folder/project</option><option value="Keep as licensing or app reference, not a standalone project">Keep as licensing/app reference</option><option value="Reject duplicate intra-folder idea">Reject duplicate intra-folder idea</option><option value="Reject supporting note as standalone idea">Reject supporting note as standalone idea</option><option value="Leave unassigned until more context is available">Leave unassigned until more context is available</option><option value="Unrelated test material">Unrelated test material</option><option value="custom">Other / custom</option></select><textarea id="unit_reason_${index}" name="unit_reason_${index}" rows="2" placeholder="Why this idea should be kept, rejected, deferred, or left unassigned">${escapeHtml(reviewReason)}</textarea></div>
+      <div class="field"><label for="unit_reason_${index}">Optional route note</label><select name="unit_reason_preset_${index}" data-unit-reason-preset="${index}"><option value="">Choose a common reason or write your own</option><option value="Keep as a separate project candidate">Keep as a separate project candidate</option><option value="Keep with parent folder/project, not a standalone project">Keep with parent folder/project</option><option value="Queue for AI follow-up after first-pass Discovery triage">Queue for AI follow-up</option><option value="Queue large file or folder for later AI digestion">Queue large file/folder for AI</option><option value="Keep as licensing or app reference, not a standalone project">Keep as licensing/app reference</option><option value="Reject duplicate intra-folder idea">Reject duplicate intra-folder idea</option><option value="Reject supporting note as standalone idea">Reject supporting note as standalone idea</option><option value="Leave unassigned until more context is available">Leave unassigned until more context is available</option><option value="Unrelated test material">Unrelated test material</option><option value="custom">Other / custom</option></select><textarea id="unit_reason_${index}" name="unit_reason_${index}" rows="2" placeholder="Optional note. Project State will auto-record a plain reason from the selected route if this is blank.">${escapeHtml(reviewReason)}</textarea></div>
     </article>
   `;
 }
@@ -8604,31 +8689,115 @@ async function runFakeIdeaAnalysis(discoveryCaseId, actor, reason = "") {
   return { ...result, analysisChunkWindow: { analyzedChunks: analysisChunks.length, totalIndexedChunks: chunks.length } };
 }
 
+async function createDiscoveryAiWorkOrders({ discoveryCaseId, routes = [], extractions = [], analysis = {}, actor = currentActor(), groupLabel = "", folderIntent = "", privacyClass = "local_only", reason = "" } = {}) {
+  const aiRoutes = routes.filter(discoveryRouteCreatesAiWorkOrder);
+  if (!aiRoutes.length) return [];
+  const createdAt = nowIso();
+  const corpusIntake = analysis.corpusIntake || {};
+  const allExtractions = Array.isArray(extractions) ? extractions : [];
+  store.aiWorkOrders = Array.isArray(store.aiWorkOrders) ? store.aiWorkOrders : [];
+  const orders = aiRoutes.map((route, index) => {
+    const routeVersionIds = new Set(Array.isArray(route.fileVersionIds) ? route.fileVersionIds : []);
+    const sourceExtractions = routeVersionIds.size
+      ? allExtractions.filter((extraction) => routeVersionIds.has(extraction.fileVersionId))
+      : allExtractions;
+    const largeSource = route.destination === "large_ai_work_order" || corpusIntake.recommended || sourceExtractions.some((extraction) => ["large_file_pending", "large_corpus_pending"].includes(extraction.status));
+    const sourceFiles = sourceExtractions.map((extraction) => ({
+      fileVersionId: extraction.fileVersionId || "",
+      originalName: extraction.originalName || "Discovery source",
+      status: extraction.status || "",
+      textBytes: extraction.textBytes || 0,
+      chunkCount: extraction.chunkCount || 0
+    }));
+    const sourceNames = sourceFiles.map((file) => file.originalName).filter(Boolean);
+    const titleBase = route.title || route.proposedProjectName || sourceNames[0] || groupLabel || `Discovery follow-up ${index + 1}`;
+    const task = [
+      largeSource ? "Large-file/folder AI follow-up queued from Discovery triage." : "AI follow-up queued from Discovery triage.",
+      "Do not create Core truth directly. Analyze staged source evidence later and return suggestions through human review and the Airlock.",
+      route.summary ? `Discovery summary: ${route.summary}` : "",
+      route.reviewReason ? `Human routing reason: ${route.reviewReason}` : "",
+      groupLabel ? `Discovery group: ${groupLabel}` : "",
+      sourceNames.length ? `Sources: ${sourceNames.join(", ")}` : "",
+      corpusIntake.recommended ? `Large-file preflight: ${Number(corpusIntake.totalEstimatedWords || 0).toLocaleString()} estimated words; ${corpusIntake.nextStep || "index before project candidates."}` : ""
+    ].filter(Boolean).join("\n");
+    return {
+      id: uid("ai_work_order"),
+      projectId: route.projectId || "",
+      title: `${largeSource ? "Large AI follow-up" : "AI follow-up"}: ${titleFromFileName(titleBase)}`,
+      task,
+      contextPreset: largeSource ? "source_research" : "handoff",
+      outputType: largeSource ? "Large-file/folder digestion and project-candidate suggestions" : "Discovery digestion and project-candidate suggestions",
+      canCreateIntake: true,
+      status: "submitted",
+      createdAt,
+      createdBy: actor.id,
+      reason: route.reviewReason || reason || "Queued from Discovery for later AI follow-up.",
+      source: {
+        origin: "discovery",
+        discoveryCaseId,
+        discoveryUnitId: route.id || "",
+        discoveryUnitTitle: route.title || "",
+        destination: route.destination,
+        privacyClass,
+        folderIntent,
+        groupLabel,
+        sourceFiles,
+        corpusIntake: corpusIntake.recommended ? cloneRecord(corpusIntake) : null
+      },
+      comments: []
+    };
+  });
+  for (const order of orders) {
+    store.aiWorkOrders.unshift(order);
+    const project = getProject(order.projectId);
+    if (project) {
+      recordChange(project, actor, order.reason, "AI work order created from Discovery", {
+        objectType: "Project",
+        objectId: project.id,
+        objectText: project.name,
+        fields: {
+          workOrderId: order.id,
+          title: order.title,
+          discoveryCaseId,
+          contextPreset: contextPackPresetLabel(order.contextPreset),
+          canCreateIntake: order.canCreateIntake ? t("yes") : t("no")
+        }
+      });
+    }
+  }
+  await saveStore({ allowWithoutCoreApproval: true, reason: "discovery-ai-work-order-created" });
+  return orders;
+}
+
 function openDiscoveryReviewModal({ discoveryCaseId, analysis, extractions = [], actor, reason, groupLabel = "", privacyClass = "local_only", folderIntent = "", folderRootPath = "", sequencePosition = null, onConfirmed = null }) {
   const folderCollectionIntent = ["one_project_folder", "folder_groups"].includes(folderIntent);
-  const cleanFolderGroupLabel = String(groupLabel || "").replace(/^(?:Project folder|Project folder candidate):\s*/i, "").trim();
+  const folderDiscoveryIntent = ["one_project_folder", "folder_groups", "each_file"].includes(folderIntent);
+  const folderContainerFirst = folderIntent === "folder_groups";
+  const looseFolderGroup = /^Loose files in selected folder/i.test(String(groupLabel || ""));
+  const cleanFolderGroupLabel = String(groupLabel || "").replace(/^(?:Project folder|Project folder candidate|Known project folder to check|Loose files in selected folder):\s*/i, "").trim();
+  const knownFolderProject = folderIntent === "folder_groups" ? existingProjectMatchForFolderName(cleanFolderGroupLabel) : null;
   const folderProjectName = folderIntent === "one_project_folder"
     ? pathFolderName(folderRootPath) || cleanFolderGroupLabel
     : folderIntent === "folder_groups"
-      ? cleanFolderGroupLabel
+      ? looseFolderGroup ? "" : cleanFolderGroupLabel
       : "";
   const bestName = folderProjectName || analysis.suggestedProjectNames?.[0]?.name || "";
-  const suggestedUnits = (analysis.documentUnits || []).slice(0, DISCOVERY_REVIEW_UNIT_LIMIT);
-  const visibleQuestions = (analysis.questions || []).filter((question) => !(privacyClass === "local_only" && question.id === "privacy_confirmation"));
-  const automaticQuestionAnswers = privacyClass === "local_only" ? { privacy_confirmation: "Keep local only" } : {};
+  const suggestedUnits = folderContainerFirst ? [] : (analysis.documentUnits || []).slice(0, DISCOVERY_REVIEW_UNIT_LIMIT);
+  const visibleQuestions = (analysis.questions || []).filter((question) => !DISCOVERY_AUTO_QUESTION_IDS.has(String(question.id || "")));
   const suggestedProjectNames = folderProjectName
     ? [folderProjectName, ...discoverySuggestedProjectNames(analysis, suggestedUnits)].filter(Boolean)
     : discoverySuggestedProjectNames(analysis, suggestedUnits);
   const slotCount = Math.min(DISCOVERY_REVIEW_UNIT_LIMIT, Math.max(3, suggestedUnits.length + 2));
   let unitSlots = Array.from({ length: slotCount }, (_, index) => suggestedUnits[index] || { id: `manual_unit_${index + 1}`, title: "", summary: "", fileVersionIds: [], evidence: [], suggested: false });
-  const suggestedMode = folderCollectionIntent ? "one_item" : analysis.unitModeSuggestion === "multiple_units" ? "multiple_units" : "one_item";
-  const defaultUnitDestination = folderCollectionIntent ? "unassigned" : "proposed_new_project";
+  const suggestedMode = folderDiscoveryIntent ? "one_item" : analysis.unitModeSuggestion === "multiple_units" ? "multiple_units" : "one_item";
+  const defaultSingleDestination = folderDiscoveryIntent ? "unassigned" : "proposed_new_project";
+  const defaultUnitDestination = folderDiscoveryIntent ? "unassigned" : "proposed_new_project";
   const corpusIntake = analysis.corpusIntake?.recommended ? analysis.corpusIntake : null;
   let corpusReadyForAi = false;
   const ideaAnalysisPanel = platformAdapter.analysis?.available
     ? corpusIntake
-      ? `<section class="panel" data-idea-analysis-panel data-corpus-index-required><p class="meta-label">Idea analysis</p><p class="notice">This large file was staged and preflighted, but no readable index chunks exist yet. Local AI needs indexed chunks with exact evidence before it can suggest Idea Candidates.</p><button class="btn secondary" type="button" data-index-corpus>Index large file for local AI</button><div data-idea-analysis-output><p class="item-meta">This first indexing pass creates bounded local chunks and keeps Core unchanged.</p></div></section>`
-      : `<section class="panel" data-idea-analysis-panel><p class="meta-label">Idea analysis</p><p class="notice">For long documents, review content-backed ideas before project naming. If Qwen3 8B is installed, analysis runs locally through Ollama. Otherwise Project State uses the local deterministic fixture. Either way, it sends nothing to cloud and creates no Core authority.</p><button class="btn secondary" type="button" data-run-idea-analysis>Run local AI idea analysis</button><div data-idea-analysis-output></div></section>`
+      ? `<section class="panel" data-idea-analysis-panel data-corpus-index-required><p class="meta-label">AI follow-up</p><p class="notice">Large-file digestion now belongs in AI Work Orders. Choose <strong>Create Large-file/folder AI Work Order</strong> above to park this safely for later indexing and review.</p><div data-idea-analysis-output><p class="item-meta">Discovery stays fast; AI Work Orders handle the slow bench.</p></div></section>`
+      : `<section class="panel" data-idea-analysis-panel><p class="meta-label">AI follow-up</p><p class="notice">AI follow-up now belongs in AI Work Orders. Choose <strong>Create AI Work Order</strong> above when this material needs slower digestion after first-pass Discovery triage.</p><div data-idea-analysis-output><p class="item-meta">No AI is called from this Discovery screen.</p></div></section>`
     : "";
   showModal({
     title: sequencePosition ? `Review Discovery (${sequencePosition.index} of ${sequencePosition.total})` : "Review Discovery",
@@ -8637,6 +8806,10 @@ function openDiscoveryReviewModal({ discoveryCaseId, analysis, extractions = [],
       <p class="notice"><strong>${corpusIntake ? "Large file staged." : "Read complete."}</strong> Project State copied the selected file into managed staging, verified its exact bytes, and ${corpusIntake ? "identified material that needs indexed large-file processing before project candidates are reliable." : "completed the supported local extraction shown below."}</p>
       ${corpusIntake ? `<p class="notice"><strong>Large-file lane:</strong> ${Number(corpusIntake.totalEstimatedWords || 0).toLocaleString()} estimated words across ${corpusIntake.pendingFiles} file${corpusIntake.pendingFiles === 1 ? "" : "s"}. Suggested type: ${escapeDisplay((corpusIntake.corpusKinds || []).join(", ") || "large document", DISPLAY_META_LIMIT)}. Next step: ${escapeDisplay(corpusIntake.nextStep || "Index before promotion.", DISPLAY_META_LIMIT)}</p>` : ""}
       ${folderCollectionIntent ? `<p class="notice"><strong>Folder intent:</strong> Treat this folder group as a project/container candidate first. Project State will keep selected files together by default and will not make child projects unless you explicitly split and route them.</p>` : ""}
+      ${looseFolderGroup ? `<p class="notice"><strong>Loose files:</strong> These files are directly inside the selected folder. They were staged and read, but Project State will not treat the parent folder name as a project candidate.</p>` : ""}
+      ${folderContainerFirst ? `<p class="notice"><strong>Container-first review:</strong> Files inside this folder were staged and read as evidence, but they are not treated as separate project proposals in this pass. Confirming with <strong>Leave unassigned</strong> records the check without sending anything to Needs Attention.</p>` : ""}
+      ${folderIntent === "each_file" ? `<p class="notice"><strong>Individual file review:</strong> This came from an unknown folder scan. It will stay unassigned unless you deliberately choose an Intake route.</p>` : ""}
+      ${knownFolderProject ? `<p class="notice"><strong>Known folder check:</strong> This folder name matches existing project <strong>${escapeDisplay(knownFolderProject.name, DISPLAY_META_LIMIT)}</strong>. Review the folder contents before deciding whether to route it into that project, create a proposal, or park it for AI follow-up.</p>` : ""}
       ${groupLabel ? `<p class="notice"><strong>Suggested group:</strong> ${escapeDisplay(groupLabel, DISPLAY_META_LIMIT)}</p>` : ""}
       <div class="field">
         <label>File reading result</label>
@@ -8669,7 +8842,7 @@ function openDiscoveryReviewModal({ discoveryCaseId, analysis, extractions = [],
         </div>
       </div>
       <p class="notice">Project State found a possible name and routing. These are suggestions, not decisions.</p>
-      <div class="field"><label for="unitReviewMode">How should this material be reviewed?</label><select id="unitReviewMode" name="unitReviewMode"><option value="one_item"${suggestedMode === "one_item" ? " selected" : ""}>Treat it as one item</option><option value="multiple_units"${suggestedMode === "multiple_units" ? " selected" : ""}>Review several ideas separately</option></select></div>
+      <div class="field"><label for="unitReviewMode">How should this material be reviewed?</label><select id="unitReviewMode" name="unitReviewMode"><option value="one_item"${suggestedMode === "one_item" ? " selected" : ""}>Treat it as one item</option>${folderDiscoveryIntent ? "" : `<option value="multiple_units"${suggestedMode === "multiple_units" ? " selected" : ""}>Review several ideas separately</option>`}</select>${folderDiscoveryIntent ? `<p class="item-meta">Folder-sourced Discovery starts container-first. Use a later deeper scan when you want to split contents into separate ideas.</p>` : ""}</div>
       <div data-single-discovery-route>
         <div class="field"><label for="suggestedProjectNameChoice">Suggested new project name</label><select id="suggestedProjectNameChoice" name="suggestedProjectNameChoice">${suggestedProjectNameOptions(suggestedProjectNames, bestName)}</select></div>
         <div class="field"><label>Working file-based name, only if treated as one item</label><input name="proposedProjectName" value="${escapeHtml(bestName)}"></div>
@@ -8680,46 +8853,52 @@ function openDiscoveryReviewModal({ discoveryCaseId, analysis, extractions = [],
         <div class="list">${unitSlots.map((unit, index) => renderDiscoveryUnitEditor(unit, index, { included: index < suggestedUnits.length, defaultDestination: defaultUnitDestination })).join("")}</div>
       </div>
       ${analysis.projectCandidates?.length ? `<div class="field"><label>Possible existing projects</label><div class="list">${analysis.projectCandidates.map((item) => `<p>${escapeDisplay(item.name, DISPLAY_META_LIMIT)} · ${Math.round(item.confidence * 100)}%</p>`).join("")}</div></div>` : ""}
-      ${privacyClass === "local_only" && (analysis.questions || []).some((question) => question.id === "privacy_confirmation") ? `<p class="notice">Privacy question answered from the previous page: <strong>Keep local only</strong>.</p>` : ""}
+      ${(analysis.questions || []).some((question) => DISCOVERY_AUTO_QUESTION_IDS.has(String(question.id || ""))) ? `<p class="notice">Routing questions are answered from your route checklist so this confirmation step does not ask twice.</p>` : ""}
       ${visibleQuestions.map((question) => renderDiscoveryQuestionSelect(question, { privacyClass })).join("")}
       <div data-single-discovery-route>
-        <div class="field"><label for="destination">Where should this go?</label><select id="destination" name="destination" required>${discoveryDestinationOptions("proposed_new_project")}</select></div>
+        <div class="field"><label for="destination">Where should this go?</label><select id="destination" name="destination" required>${discoveryDestinationOptions(defaultSingleDestination)}</select></div>
         <div class="field"><label for="projectId">Existing project, if selected</label><select id="projectId" name="projectId"><option value="">None</option>${projectOptions()}</select></div>
       </div>
-      <p class="notice">Confirming creates Intake proposals only. Core still requires separate human approval.</p>
+      <p class="notice">${folderDiscoveryIntent ? "Confirming records this Discovery review. Needs Attention is created only if you deliberately choose an Intake route." : "Confirming creates Intake proposals only. Core still requires separate human approval."}</p>
     `,
     async onSubmit(data) {
       for (const question of visibleQuestions) {
         const answer = String(data[`answer_${question.id}`] || "").trim();
         if (!answer) { window.alert("Answer each Discovery question before continuing."); return false; }
       }
-      for (const question of analysis.questions || []) await platformAdapter.discovery.recordAnswer({ discoveryCaseId, actorId: actor.id, questionId: question.id, answer: automaticQuestionAnswers[question.id] || data[`answer_${question.id}`] || "Not sure" });
       let routing;
       if (data.unitReviewMode === "multiple_units") {
-        const routes = unitSlots.map((unit, index) => ({
-          id: unit.id || `manual_unit_${index + 1}`,
-          included: data[`unit_include_${index}`] === "on",
-          title: String(data[`unit_title_${index}`] || "").trim(),
-          summary: String(data[`unit_summary_${index}`] || "").trim(),
-          destination: data[`unit_destination_${index}`] || "unassigned",
-          projectId: data[`unit_project_${index}`] || null,
-          proposedProjectName: String(data[`unit_title_${index}`] || "").trim(),
-          reviewReason: String(data[`unit_reason_${index}`] || "").trim(),
-          fileVersionIds: unit.fileVersionIds || [],
-          evidence: unit.evidence || []
-        })).filter((route) => route.included && route.title);
+        const routes = unitSlots.map((unit, index) => {
+          const destination = data[`unit_destination_${index}`] || "unassigned";
+          const route = {
+            id: unit.id || `manual_unit_${index + 1}`,
+            included: data[`unit_include_${index}`] === "on",
+            title: String(data[`unit_title_${index}`] || "").trim(),
+            summary: String(data[`unit_summary_${index}`] || "").trim(),
+            destination,
+            projectId: data[`unit_project_${index}`] || null,
+            proposedProjectName: String(data[`unit_title_${index}`] || "").trim(),
+            fileVersionIds: unit.fileVersionIds || [],
+            evidence: unit.evidence || []
+          };
+          route.reviewReason = String(data[`unit_reason_${index}`] || "").trim() || discoveryRouteReasonFallback(route);
+          return route;
+        }).filter((route) => route.included && route.title);
         if (!routes.length) { window.alert("Include and name at least one document unit, or review the material as one item."); return false; }
         if (routes.some((route) => route.destination === "existing_project" && !route.projectId)) { window.alert("Choose an existing project for every unit routed to an existing project."); return false; }
-        if (routes.some((route) => route.destination === "rejected" && !route.reviewReason)) { window.alert("Record a reason for each rejected idea."); return false; }
         routing = await platformAdapter.discovery.confirmRouting({ discoveryCaseId, actorId: actor.id, routes });
       } else {
         if (data.destination === "existing_project" && !data.projectId) { window.alert("Choose an existing project or select a different destination."); return false; }
         if (data.destination === "proposed_new_project" && !String(data.proposedProjectName || bestName).trim()) { window.alert("Choose or enter a proposed project name before continuing."); return false; }
-        routing = await platformAdapter.discovery.confirmRouting({ discoveryCaseId, actorId: actor.id, destination: data.destination, projectId: data.projectId || null, proposedProjectName: data.proposedProjectName || bestName });
+        routing = await platformAdapter.discovery.confirmRouting({ discoveryCaseId, actorId: actor.id, destination: data.destination, projectId: data.projectId || null, proposedProjectName: data.proposedProjectName || bestName, reviewReason: discoveryRouteReasonFallback({ destination: data.destination }) });
       }
       const confirmedRoutes = routing.routing.routes?.length ? routing.routing.routes : [routing.routing];
+      for (const question of analysis.questions || []) {
+        await platformAdapter.discovery.recordAnswer({ discoveryCaseId, actorId: actor.id, questionId: question.id, answer: discoveryAutoQuestionAnswer(question, { data, confirmedRoutes, privacyClass, unitReviewMode: data.unitReviewMode }) });
+      }
+      const createdAiWorkOrders = await createDiscoveryAiWorkOrders({ discoveryCaseId, routes: confirmedRoutes, extractions, analysis, actor, groupLabel, folderIntent, privacyClass, reason });
       let promotedReadyItemId = "";
-      if (confirmedRoutes.some((route) => !["unassigned", "rejected"].includes(route.destination))) {
+      if (confirmedRoutes.some(discoveryRoutePromotesToIntake)) {
         const promotion = await platformAdapter.discovery.promoteToIntake({ discoveryCaseId, actorId: actor.id, reason: reason || "Confirmed Discovery routing." });
         store = await loadStore() || store;
         const promotedItems = (promotion.intakeItemIds || []).map((id) => findIntakeItem(id)).filter(Boolean);
@@ -8728,9 +8907,9 @@ function openDiscoveryReviewModal({ discoveryCaseId, analysis, extractions = [],
       }
       store = await loadStore() || store;
       await refreshDiscoveryWorkspace();
-      activeRootView = confirmedRoutes.every((route) => ["unassigned", "rejected"].includes(route.destination)) ? "files" : "intake";
+      activeRootView = confirmedRoutes.some(discoveryRoutePromotesToIntake) ? "intake" : createdAiWorkOrders.length ? "work-orders" : "files";
       activeProjectId = null;
-      setSaveStatus("saved", promotedReadyItemId ? "Discovery accepted. Final Core approval is ready." : "Discovery confirmed.");
+      setSaveStatus("saved", promotedReadyItemId ? "Discovery accepted. Final Core approval is ready." : createdAiWorkOrders.length ? "Discovery queued to AI Work Orders." : "Discovery confirmed.");
       const hasNextDiscoveryReview = typeof onConfirmed === "function" && sequencePosition?.index < sequencePosition?.total;
       if (hasNextDiscoveryReview) queuePostModalAction(onConfirmed);
       else if (promotedReadyItemId) queuePostModalAction(() => openApproveIntakeModal(promotedReadyItemId));
@@ -8788,7 +8967,7 @@ function openDiscoveryReviewModal({ discoveryCaseId, analysis, extractions = [],
           indexButton.dataset.continueIndex = "true";
         } else {
           ideaOutput.innerHTML = `<p class="notice"><strong>Large file index ready.</strong> Indexed ${Number(result.indexed?.totalIndexedChunks || result.chunks?.length || 0).toLocaleString()} local evidence chunks. Local AI can now analyze the indexed evidence.</p>`;
-          indexButton.textContent = "Run local AI idea analysis";
+          indexButton.textContent = "Queue indexed evidence in AI Work Orders";
           indexButton.removeAttribute("data-index-corpus");
           indexButton.removeAttribute("data-continue-index");
           indexButton.setAttribute("data-run-idea-analysis", "true");

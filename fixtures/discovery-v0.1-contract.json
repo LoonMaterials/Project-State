@@ -52,6 +52,8 @@
     "proposed_new_project",
     "general_reference",
     "orphaned_idea",
+    "ai_work_order",
+    "large_ai_work_order",
     "unassigned",
     "rejected"
   ],
@@ -85,6 +87,7 @@
     "Discovery does not require a project.",
     "Machine suggestions are never user confirmations or Core authority.",
     "A user may leave a case unassigned or answer not sure.",
+    "AI follow-up routes create AI Work Orders and do not promote directly to Intake.",
     "Intake promotion requires confirmed routing or an explicit new-project proposal.",
     "Core writes still require human approval.",
     "One File Asset may link to multiple projects without duplicating immutable bytes.",

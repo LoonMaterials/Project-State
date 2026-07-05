@@ -121,13 +121,14 @@ async function main() {
 
     const appSource = fs.readFileSync(path.join(__dirname, "..", "app.js"), "utf8");
     assert(appSource.includes("data-corpus-index-required"), "Large corpus review UI should show that indexing is required before local AI.");
-    assert(appSource.includes("data-index-corpus"), "Large corpus review UI should expose indexing before normal local AI.");
+    assert(appSource.includes("Create Large-file/folder AI Work Order"), "Large corpus review UI should route slow digestion to AI Work Orders.");
+    assert(appSource.includes("Large-file digestion now belongs in AI Work Orders"), "Large corpus review UI should explain the AI Work Order bench.");
     assert(appSource.includes("continueIndex"), "Large corpus review UI should support resumable indexing.");
-    assert(appSource.includes("Index next large-file batch"), "Large corpus review UI should expose the next indexing batch.");
+    assert(appSource.includes("Queue indexed evidence in AI Work Orders"), "Large corpus UI should not steer users into inline Discovery AI.");
     assert(appSource.includes("Partial analysis window"), "Large corpus AI path should disclose bounded local-analysis windows.");
     assert(appSource.includes("maximumChunks"), "Large corpus AI path should obey local analysis arm chunk limits.");
-    assert(appSource.includes("Index large file for local AI"), "Large-file review UI should make the indexing action explicit.");
-    assert(appSource.includes("Build a large-file index before running local AI idea analysis."), "Chunkless large-file AI path should explain the required next step.");
+    assert(appSource.includes("No AI is called from this Discovery screen."), "Discovery should not run AI inline for large-file review.");
+    assert(appSource.includes("Build a large-file index before running local AI idea analysis."), "Chunkless large-file AI guard should still explain the required backend next step.");
 
     console.log("Large Corpus Intake Flow Check");
     console.log(JSON.stringify({

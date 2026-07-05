@@ -25,12 +25,13 @@ function main() {
   const missingObjects = includesAll(contract.requiredFoundationObjects, ["FileAsset", "FileVersion", "DiscoveryCase", "Interaction", "ExternalSecurityAcknowledgment", "DiscoveryEvent"]);
   assert.deepEqual(missingObjects, [], "Discovery foundation objects drifted.");
 
-  const missingDestinations = includesAll(contract.destinations, ["existing_project", "additional_project_link", "proposed_new_project", "general_reference", "orphaned_idea", "unassigned", "rejected"]);
+  const missingDestinations = includesAll(contract.destinations, ["existing_project", "additional_project_link", "proposed_new_project", "general_reference", "orphaned_idea", "ai_work_order", "large_ai_work_order", "unassigned", "rejected"]);
   assert.deepEqual(missingDestinations, [], "Discovery destination model drifted.");
 
   for (const text of [
     "Project State does not scan files or claim they are safe.",
     "Discovery does not require a project.",
+    "AI follow-up routes create AI Work Orders",
     "Human approval is required before Core changes.",
     "One File Asset may link to multiple projects"
   ]) assert(design.includes(text) || contract.invariants.some((item) => item.includes(text)), `Missing Discovery invariant: ${text}`);
