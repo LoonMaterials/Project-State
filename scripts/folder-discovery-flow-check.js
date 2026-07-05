@@ -40,17 +40,24 @@ async function main() {
       "function partitionDiscoveryCandidates",
       "function openDiscoveryReviewSequence",
       "How should this unknown folder be reviewed?",
-      "Review subfolders as project/container candidates first",
+      "Use unknown-folder flow: subfolders to AI follow-up, loose files through Discovery",
       "Folder candidate",
       "Project folder candidate:",
       "Emergency: review every file separately",
       "Loose files in selected folder",
-      "Loose root files are kept as loose evidence, not parent-folder project proposals.",
+      "Subfolders are packaged for AI follow-up.",
+      "Loose files continue through Discovery",
+      "subfolder_ai_followup",
+      "loose_files_discovery",
+      "Subfolder moved to AI follow-up so its contents can be cataloged before project decisions.",
+      "subfolder_catalog_source",
+      "activeStatuses.has(discoveryCase.status || \"\")",
+      "Project folder candidate:\\s*Folder root",
       "data.folderGroupingMode || \"folder_groups\"",
       "function existingProjectMatchForFolderName",
       "Known project folder to check:",
       "const folderCollectionIntent = [\"one_project_folder\", \"folder_groups\"].includes(folderIntent)",
-      "const folderDiscoveryIntent = [\"one_project_folder\", \"folder_groups\", \"each_file\"].includes(folderIntent)",
+      "const folderDiscoveryIntent = [\"one_project_folder\", \"folder_groups\", \"each_file\", \"loose_files_discovery\", \"subfolder_ai_followup\"].includes(folderIntent)",
       "const folderContainerFirst = folderIntent === \"folder_groups\"",
       "const suggestedUnits = folderContainerFirst ? []",
       "const suggestedMode = folderDiscoveryIntent ? \"one_item\"",
@@ -66,11 +73,13 @@ async function main() {
       "sequencePosition"
     ];
     for (const text of required) assert(app.includes(text), `Folder Discovery UI is missing: ${text}`);
+    const bridgeSource = fs.readFileSync(path.join(__dirname, "..", "desktop", "project-state-desktop-bridge.cjs"), "utf8");
+    for (const text of ["splitMeta.aiWorkOrders = store.aiWorkOrders || []", "aiWorkOrders: store.aiWorkOrders || []"]) assert(bridgeSource.includes(text), `Folder Discovery bridge persistence is missing: ${text}`);
     assert(!app.includes('<option value="one_project_folder">Treat entire folder as one Discovery evidence collection</option>'), "Unknown-folder Discovery still exposes the parent-folder project/blob option.");
     assert(app.includes('caseTitle: candidateGroup.label'), "Folder grouping rationale is not passed into Discovery Case creation.");
     assert(app.includes('externalSecurityAcknowledged: data.externalSecurityAcknowledged === "on"'), "Folder grouping bypasses the external-security boundary.");
     console.log("Folder Discovery Flow Check");
-    console.log(JSON.stringify({ recursivelyInspected: inspected.candidates.length, unsupportedReported: inspected.skipped.length, groupingChoices: 2, unknownFolderDefaultsToGroups: true, parentFolderBlobRouteRemoved: true, looseRootFilesNotProjectCandidates: true, mixedEvidenceClassified: true, sequentialReview: true, externalSecurityBoundaryPreserved: true }, null, 2));
+    console.log(JSON.stringify({ recursivelyInspected: inspected.candidates.length, unsupportedReported: inspected.skipped.length, groupingChoices: 2, unknownFolderDefaultsToGroups: true, parentFolderBlobRouteRemoved: true, subfoldersCatalogToAiFollowUp: true, looseFilesContinueDiscovery: true, aiWorkOrdersPersisted: true, mixedEvidenceClassified: true, sequentialReview: true, externalSecurityBoundaryPreserved: true }, null, 2));
     console.log("Folder Discovery flow: ok");
   } finally {
     await fsp.rm(tempRoot, { recursive: true, force: true });

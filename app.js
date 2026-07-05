@@ -7827,7 +7827,19 @@ function discoveryProgressCases() {
     .filter((extraction) => largeProgressStatuses.has(extraction.status))
     .map((extraction) => extraction.discoveryCaseId)
     .filter(Boolean));
-  return (discoveryWorkspace.cases || []).filter((discoveryCase) => extractionCaseIds.has(discoveryCase.id));
+  const activeStatuses = new Set(["created", "security_pending", "extracting", "questioning"]);
+  const seen = new Set();
+  return (discoveryWorkspace.cases || [])
+    .filter((discoveryCase) => extractionCaseIds.has(discoveryCase.id))
+    .filter((discoveryCase) => activeStatuses.has(discoveryCase.status || ""))
+    .filter((discoveryCase) => !/^Project folder candidate:\s*Folder root$/i.test(String(discoveryCase.title || discoveryCase.suggestedName || "")))
+    .sort((a, b) => dateSortValue(b.updatedAt || b.createdAt) - dateSortValue(a.updatedAt || a.createdAt))
+    .filter((discoveryCase) => {
+      const key = normalizeProjectMatchText(discoveryCase.suggestedName || discoveryCase.title || discoveryCase.id);
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
 }
 
 function renderDiscoveryProgressPanel() {
@@ -8057,7 +8069,14 @@ function partitionDiscoveryCandidates(candidates = [], mode = "folder_groups", r
     for (let index = 0; index < files.length; index += chunkSize) {
       const chunk = files.slice(index, index + chunkSize);
       const part = chunkSize < files.length ? ` · part ${Math.floor(index / chunkSize) + 1}` : "";
-      groups.push({ label: `${label}${part}`, candidates: mode === "one_project_folder" ? files : chunk, folderIntent: mode, folderRootPath: rootPath });
+      const folderReviewLane = mode === "folder_groups"
+        ? /^Loose files in selected folder/i.test(label)
+          ? "loose_files_discovery"
+          : "subfolder_ai_followup"
+        : mode === "each_file"
+          ? "file_discovery"
+          : "discovery_review";
+      groups.push({ label: `${label}${part}`, candidates: mode === "one_project_folder" ? files : chunk, folderIntent: mode, folderReviewLane, folderRootPath: rootPath });
     }
   }
   return groups;
@@ -8391,7 +8410,7 @@ function openFileImportReviewModal(selection) {
           `).join("")}
         </div>
       </div>
-      ${isFolderImport ? `<div class="field"><label for="folderGroupingMode">How should this unknown folder be reviewed?</label><select id="folderGroupingMode" name="folderGroupingMode"><option value="folder_groups" selected>Review subfolders as project/container candidates first (${suggestedFolderGroups.length})</option><option value="each_file">Emergency: review every file separately</option></select><p class="item-meta">Recommended for unknown folders: read every selected file, then review the first-level subfolders as possible project/container candidates. Loose root files are kept as loose evidence, not parent-folder project proposals.</p></div>` : ""}
+      ${isFolderImport ? `<div class="field"><label for="folderGroupingMode">How should this unknown folder be reviewed?</label><select id="folderGroupingMode" name="folderGroupingMode"><option value="folder_groups" selected>Use unknown-folder flow: subfolders to AI follow-up, loose files through Discovery (${suggestedFolderGroups.length})</option><option value="each_file">Emergency: review every file separately</option></select><p class="item-meta">Recommended for unknown folders: catalog every selected file. Subfolders are packaged for AI follow-up. Loose files continue through Discovery so known/checked files can move to Intake and large files can become AI Work Orders.</p></div>` : ""}
       <div class="field"><label for="privacyClass">Privacy</label><select id="privacyClass" name="privacyClass"><option value="local_only">Keep local only</option><option value="personal">Personal</option><option value="confidential">Confidential</option><option value="restricted">Restricted</option><option value="provider_allowed">Configured provider allowed later</option></select></div>
       ${confirmationField("externalSecurityAcknowledged", "I understand Project State does not scan files. I trust these files and accept responsibility for checking them with my own security tools.")}
       ${selection.skipped?.length ? `<p class="notice">${escapeHtml(t("unsupportedFilesSkipped"))}: ${selection.skipped.length}</p>` : ""}
@@ -8411,6 +8430,7 @@ function openFileImportReviewModal(selection) {
             : "Selected folder staged for grouped Discovery scan."
         : "Selected files staged for Discovery review.";
       const discoveryReviews = [];
+      let aiFollowUpCount = 0;
       for (const candidateGroup of candidateGroups) {
         let discoveryCaseId = "";
         const stagedFiles = [];
@@ -8430,12 +8450,38 @@ function openFileImportReviewModal(selection) {
           extractions.push({ fileVersionId: staged.fileVersionId, originalName: staged.originalName, deduplicated: staged.deduplicated === true, status: result.extraction?.status || "failed", text, textBytes: result.extraction?.textBytes || 0, chunkCount: result.extraction?.chunkCount || 0, error: result.extraction?.error || null });
         }
         const analysis = await platformAdapter.discovery.analyzeCase({ discoveryCaseId, actorId: "project_state_deterministic" });
-        discoveryReviews.push({ discoveryCaseId, analysis, extractions, actor, reason: reviewReason, groupLabel: candidateGroup.label, privacyClass: data.privacyClass || "local_only", folderIntent: candidateGroup.folderIntent || groupingMode, folderRootPath: candidateGroup.folderRootPath || selection.rootPath || "" });
+        if (candidateGroup.folderReviewLane === "subfolder_ai_followup") {
+          const title = String(candidateGroup.label || "").replace(/^(?:Project folder candidate|Known project folder to check):\s*/i, "").trim() || "Subfolder follow-up";
+          const routing = await platformAdapter.discovery.confirmRouting({
+            discoveryCaseId,
+            actorId: actor.id,
+            routes: [{
+              id: uid("subfolder_unit"),
+              title,
+              summary: `Cataloged ${stagedFiles.length} file${stagedFiles.length === 1 ? "" : "s"} from this subfolder for AI follow-up before project decisions.`,
+              destination: "large_ai_work_order",
+              proposedProjectName: "",
+              reviewReason: "Subfolder moved to AI follow-up so its contents can be cataloged before project decisions.",
+              fileVersionIds: stagedFiles.map((file) => file.fileVersionId).filter(Boolean),
+              evidence: stagedFiles.map((file) => ({ fileVersionId: file.fileVersionId, fileName: file.originalName, role: "subfolder_catalog_source" }))
+            }]
+          });
+          const confirmedRoutes = routing.routing.routes?.length ? routing.routing.routes : [routing.routing];
+          await createDiscoveryAiWorkOrders({ discoveryCaseId, routes: confirmedRoutes, extractions, analysis, actor, groupLabel: candidateGroup.label, folderIntent: "subfolder_ai_followup", privacyClass: data.privacyClass || "local_only", reason: reviewReason });
+          aiFollowUpCount += 1;
+        } else {
+          const reviewIntent = candidateGroup.folderReviewLane === "loose_files_discovery" ? "loose_files_discovery" : candidateGroup.folderIntent || groupingMode;
+          discoveryReviews.push({ discoveryCaseId, analysis, extractions, actor, reason: reviewReason, groupLabel: candidateGroup.label, privacyClass: data.privacyClass || "local_only", folderIntent: reviewIntent, folderRootPath: candidateGroup.folderRootPath || selection.rootPath || "" });
+        }
       }
-      if (!discoveryReviews.length) { window.alert(t("fileImportFailed")); return false; }
+      if (!discoveryReviews.length && !aiFollowUpCount) { window.alert(t("fileImportFailed")); return false; }
       pendingFileImportReviewSelection = null;
-      setFileImportFlowState("review_started", "Discovery review opened.", selection.importKind || "");
-      queuePostModalAction(() => openDiscoveryReviewSequence(discoveryReviews));
+      setFileImportFlowState("review_started", aiFollowUpCount ? `Cataloged ${aiFollowUpCount} subfolder${aiFollowUpCount === 1 ? "" : "s"} to AI Work Orders${discoveryReviews.length ? " and opened loose-file Discovery review." : "."}` : "Discovery review opened.", selection.importKind || "");
+      if (discoveryReviews.length) queuePostModalAction(() => openDiscoveryReviewSequence(discoveryReviews));
+      else {
+        activeRootView = "work-orders";
+        queuePostModalAction(render);
+      }
       return true;
     }
   });
@@ -8771,7 +8817,7 @@ async function createDiscoveryAiWorkOrders({ discoveryCaseId, routes = [], extra
 
 function openDiscoveryReviewModal({ discoveryCaseId, analysis, extractions = [], actor, reason, groupLabel = "", privacyClass = "local_only", folderIntent = "", folderRootPath = "", sequencePosition = null, onConfirmed = null }) {
   const folderCollectionIntent = ["one_project_folder", "folder_groups"].includes(folderIntent);
-  const folderDiscoveryIntent = ["one_project_folder", "folder_groups", "each_file"].includes(folderIntent);
+  const folderDiscoveryIntent = ["one_project_folder", "folder_groups", "each_file", "loose_files_discovery", "subfolder_ai_followup"].includes(folderIntent);
   const folderContainerFirst = folderIntent === "folder_groups";
   const looseFolderGroup = /^Loose files in selected folder/i.test(String(groupLabel || ""));
   const cleanFolderGroupLabel = String(groupLabel || "").replace(/^(?:Project folder|Project folder candidate|Known project folder to check|Loose files in selected folder):\s*/i, "").trim();

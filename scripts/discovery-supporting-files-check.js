@@ -88,16 +88,14 @@ async function main() {
       promotedAt: "2026-06-26T21:01:00.000Z",
       reason
     });
-    assert(promotion.intakeItemIds.length === 3, "Two text units plus one supporting file should become visible Intake proposals.", promotion);
+    assert(promotion.intakeItemIds.length === 2, "Only text-backed units should become visible Intake proposals; supporting metadata-only files stay attached as evidence.", promotion);
     const db = new DatabaseSync(path.join(storageRoot, "project-state.db"));
     const items = db.prepare("SELECT record_json FROM intake_items ORDER BY rowid").all().map((row) => JSON.parse(row.record_json)).filter((item) => item.discoveryCaseId === discoveryCaseId);
     db.close();
     const supportingItem = items.find((item) => item.evidence?.supportRole === "supporting_file_without_text");
-    assert(supportingItem, "Supporting image should keep a visible supporting-file Intake identity.", items);
-    assert(supportingItem.title === "Add supporting file: supporting-sketch", "Supporting image should not reuse the document-unit title.", supportingItem);
-    assert(supportingItem.proposedChange?.text === "supporting-sketch", "Supporting image proposal text should preserve the image basename.", supportingItem);
-    assert(supportingItem.evidence?.managedFile?.fileName === "supporting-sketch.png", "Supporting image managed-file evidence should preserve the original filename.", supportingItem);
-    assert(supportingItem.evidence?.supportsDiscoveryUnitTitle === "Platters of Food", "Supporting image should point back to the unit it supports.", supportingItem);
+    assert(!supportingItem, "Supporting image should not become its own Intake approval.", items);
+    const firstTextItem = items.find((item) => item.evidence?.discoveryUnit?.title === "Platters of Food");
+    assert(firstTextItem?.evidence?.discoveryUnit?.evidence?.some((item) => item.fileName === "supporting-sketch.png" && item.role === "supporting_file_without_text"), "Supporting image should remain attached to the text-backed Discovery unit evidence.", firstTextItem);
     assert(items.filter((item) => item.title === "Add source unit: Platters of Food").length === 1, "Supporting image should not look like a duplicate copy of the first document unit.", items);
 
     console.log("Discovery Supporting Files Check");
@@ -107,7 +105,7 @@ async function main() {
       supportingFilesAttached: supportingEvidence.length,
       intakeProposals: items.length,
       imageNoLongerOrphaned: true,
-      supportingFileKeepsOwnTitle: true
+      supportingFileStaysEvidenceOnly: true
     }, null, 2));
     console.log("Discovery supporting files: ok");
   } finally {

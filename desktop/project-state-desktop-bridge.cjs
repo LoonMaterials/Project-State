@@ -2234,20 +2234,16 @@ async function promoteDiscoveryToIntake({ storageRoot, dbPath, payload = {} }) {
       const isSupportingFile = Boolean(supportingFileEvidence);
       let extractedText = "";
       if (extraction?.textPath) extractedText = (await readDiscoveryExtractionText({ storageRoot, dbPath, payload: { extractionId: extraction.id } })).text || "";
+      const extractionStatus = extraction?.status || "metadata_only";
+      const textBacked = Boolean(String(extractedText || "").trim()) || ["complete", "partial"].includes(extractionStatus);
+      if (isSupportingFile || !textBacked) continue;
       const sourceTitle = path.basename(version.originalName || "Discovery source", path.extname(version.originalName || "")) || version.originalName || "Discovery source";
-      const itemTitle = isSupportingFile
-        ? `Add supporting file: ${sourceTitle}`
-        : routes.length > 1
+      const itemTitle = routes.length > 1
           ? `Add source unit: ${route.title}`
           : `Add source: ${version.originalName || sourceTitle}`;
-      const proposedText = isSupportingFile
-        ? sourceTitle
-        : routes.length > 1
+      const proposedText = routes.length > 1
           ? route.title
           : sourceTitle;
-      const supportingSummary = supportingFileEvidence
-        ? `Supporting file for "${route.title || sourceTitle}". ${supportingFileEvidence.note || "Metadata-only file from the same Discovery case."}`
-        : "";
       const routeReviewReason = String(route.reviewReason || "").trim();
       const routeHasCoreTarget = targetProjectIds.length > 0 || (route.destination === "proposed_new_project" && String(route.proposedProjectName || "").trim());
       const proposedObjectType = "Source";
@@ -2268,8 +2264,8 @@ async function promoteDiscoveryToIntake({ storageRoot, dbPath, payload = {} }) {
       proposedObjectType,
       proposedChange: {
         text: proposedText,
-        summary: String(isSupportingFile ? supportingSummary : route.summary || extractedText).slice(0, 2000),
-        extractionStatus: extraction?.status || "metadata_only"
+        summary: String(route.summary || extractedText).slice(0, 2000),
+        extractionStatus
       },
       evidence: {
         discoveryCaseId,
@@ -2277,7 +2273,7 @@ async function promoteDiscoveryToIntake({ storageRoot, dbPath, payload = {} }) {
         fileVersionId: version.id,
         sourceSha256: version.sha256,
         extractionId: extraction?.id || "",
-        supportRole: isSupportingFile ? "supporting_file_without_text" : "primary_source",
+        supportRole: "primary_source",
         supportsDiscoveryUnitId: route.id || "unit_1",
         supportsDiscoveryUnitTitle: route.title || sourceTitle,
         discoveryUnit: { id: route.id || "unit_1", title: route.title || sourceTitle, summary: route.summary || "", reviewReason: routeReviewReason, evidence: cloneJson(route.evidence || []) },
@@ -2310,6 +2306,7 @@ async function promoteDiscoveryToIntake({ storageRoot, dbPath, payload = {} }) {
     });
     }
   }
+  if (!intakeItems.length) throw new Error("Discovery routing contains no text-backed document units eligible for Intake promotion.");
   const batch = { id: intakeBatchId, status: "pending", createdAt: promotedAt, createdBy: actorId, reason, origin: "discovery", discoveryCaseId, routingInteractionId: discoveryCase.routingInteractionId, destination: routing.destination, itemIds: intakeItems.map((item) => item.id) };
   const db = openDatabase(dbPath);
   try {
@@ -2469,6 +2466,7 @@ async function saveStore({ storageRoot, dbPath, payload }) {
   const splitMeta = Array.isArray(split.meta) ? split.meta[0] : split.meta;
   splitMeta.intakeBatches = store.intakeBatches || [];
   splitMeta.intakeItems = store.intakeItems || [];
+  splitMeta.aiWorkOrders = store.aiWorkOrders || [];
   const snapshot = JSON.stringify(store);
   let committed = false;
 
@@ -3871,7 +3869,8 @@ function splitStoreRecordsForBridge(store, manifest = {}) {
       settings: store.settings || {},
       actors: store.actors || [],
       intakeBatches: store.intakeBatches || [],
-      intakeItems: store.intakeItems || []
+      intakeItems: store.intakeItems || [],
+      aiWorkOrders: store.aiWorkOrders || []
     },
     projects: (store.projects || []).map((project) => ({
       ...project,

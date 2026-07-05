@@ -225,7 +225,7 @@ The next Discovery flow layer is governed by `MULTI_IDEA_DOCUMENT_FLOW.md`.
 - Each confirmed unit becomes a separate pending Intake proposal while retaining the same immutable source-file lineage.
 - Folder-scale grouping follows only after this unit flow passes its isolated live acceptance gate.
 
-Folder-scale continuation is governed by `FOLDER_DISCOVERY_FLOW.md`. The v0.1 foundation exposes deterministic relative-folder grouping, one-case and per-file correction choices, 24-file continuation parts with no silent omission, and sequential governed review of every resulting Discovery Case.
+Folder-scale continuation is governed by `FOLDER_DISCOVERY_FLOW.md`. The repaired unknown-folder flow treats the selected folder as a selection boundary, routes subfolders to AI Work Orders for catalog follow-up, and sends only loose files through Discovery review unless the user deliberately chooses the emergency per-file path.
 
 ## Idea Candidate continuation — 2026-06-20
 

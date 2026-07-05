@@ -101,22 +101,26 @@ async function main() {
     await bridge.discoveryStorage.confirmRouting({
       discoveryCaseId: staged.discoveryCaseId,
       actorId: "actor_owner",
-      routes: [{ ...analysis.documentUnits[0], destination: "proposed_new_project", proposedProjectName: analysis.documentUnits[0].title }],
+      routes: [{ ...analysis.documentUnits[0], destination: "large_ai_work_order", proposedProjectName: analysis.documentUnits[0].title }],
       confirmedAt: "2026-07-02T09:03:00.000Z"
     });
-    const promotion = await bridge.discoveryStorage.promoteToIntake({
-      discoveryCaseId: staged.discoveryCaseId,
-      actorId: "actor_owner",
-      promotedAt: "2026-07-02T09:04:00.000Z",
-      reason: "Route staged corpus as a pending project candidate."
-    });
-    assert(promotion.intakeItemIds.length === 1, "Large corpus should promote to one Intake proposal pending human approval.", promotion);
+    let promotionBlocked = false;
+    try {
+      await bridge.discoveryStorage.promoteToIntake({
+        discoveryCaseId: staged.discoveryCaseId,
+        actorId: "actor_owner",
+        promotedAt: "2026-07-02T09:04:00.000Z",
+        reason: "Route staged corpus as a pending project candidate."
+      });
+    } catch {
+      promotionBlocked = true;
+    }
+    assert(promotionBlocked, "Large corpus should not promote directly to Intake; it belongs in AI Work Orders first.");
     const db = new DatabaseSync(path.join(storageRoot, "project-state.db"));
     const intake = db.prepare("SELECT record_json FROM intake_items ORDER BY rowid").all().map((row) => JSON.parse(row.record_json)).find((item) => item.discoveryCaseId === staged.discoveryCaseId);
     const coreProjects = db.prepare("SELECT COUNT(*) AS count FROM projects").get().count;
     db.close();
-    assert(intake?.proposedChange?.extractionStatus === "large_corpus_pending", "Intake proposal did not preserve large-corpus extraction status.", intake);
-    assert(intake.evidence?.discoveryUnit?.evidence?.[0]?.role === "large_corpus_pending", "Intake evidence lost corpus provenance.", intake.evidence);
+    assert(!intake, "Large corpus should not create an Intake item before AI follow-up.", intake);
     assert(coreProjects === 0, "Large corpus Intake promotion must not create Core projects.", { coreProjects });
 
     const appSource = fs.readFileSync(path.join(__dirname, "..", "app.js"), "utf8");
@@ -138,7 +142,8 @@ async function main() {
       immediateChunks: extracted.chunks.length,
       indexedChunks: continued.chunks.length,
       corpusUnit: analysis.documentUnits[0].title,
-      intakeProposals: promotion.intakeItemIds.length,
+      intakeProposals: 0,
+      directIntakeBlocked: promotionBlocked,
       coreChanged: false
     }, null, 2));
     console.log("Large corpus intake flow: ok");

@@ -1,6 +1,6 @@
 # Project State v0.1 Complete Implementation Inventory
 
-Generated: 2026-06-18; Discovery-stage boundary recorded 2026-06-19; intake fast-lane update recorded 2026-07-03
+Generated: 2026-06-18; Discovery-stage boundary recorded 2026-06-19; intake fast-lane update recorded 2026-07-03; unknown-folder flow repair recorded 2026-07-05
 
 This inventory describes the implementation currently present in this repository. It distinguishes completed behavior from future or deliberately excluded work.
 
@@ -813,19 +813,21 @@ This work must not duplicate source bytes, turn machine suggestions into facts, 
 
 ## 23. Folder Discovery Flow
 
-Status: v0.1 foundation implemented and verified 2026-06-20.
+Status: v0.1 foundation implemented and verified 2026-06-20; unknown-folder end-user flow repaired 2026-07-05.
 
 The governing specification is `FOLDER_DISCOVERY_FLOW.md`.
 
 - Recursive folder selection shows each supported file, skipped count, relative path, and suggested first-folder group before staging.
-- The user chooses suggested folder groups, one combined case, or one case per file.
-- Groups larger than 24 files continue as numbered parts so no selected file is silently omitted.
-- Every resulting group is staged into a separate Discovery Case and reviewed sequentially.
-- Each group reuses document-unit review and independent routing; approval remains one Intake item at a time.
+- The current end-user unknown-folder flow separates subfolders from loose files instead of treating every group as an immediate project candidate.
+- Subfolders are cataloged and routed to AI Work Orders for later follow-up.
+- Loose files continue through Discovery review and safe routing.
+- The old end-user option to treat the entire selected unknown folder as one combined case is removed from the Add Intake UI.
+- The emergency end-user fallback is per-file review.
+- Each eligible Discovery route still preserves exact file provenance and approval remains one Intake item at a time.
 - The isolated live test produced two sequential reviews, two Discovery Cases, two File Versions, and two pending Intake proposals from Alpha and Beta groups with zero renderer exceptions.
 - All 34 of 34 non-live regression checks and syntax checks passed after the combined document/folder implementation.
 
-The next folder improvements are usability extensions rather than authority changes: drag-and-drop movement between suggested groups, pause/resume for large processing queues, richer similarity evidence, and optional provider-neutral analysis suggestions.
+The next folder improvements are usability extensions rather than authority changes: clearer Work Order review, pause/resume for large processing queues, richer folder-map evidence, and optional provider-neutral analysis suggestions.
 
 ## 24. Idea Candidate Model v0.1
 
@@ -881,7 +883,7 @@ AI Analysis Arm v0.1 deliberately does not request project names or routes. Thos
 
 ### Human Idea Review implementation and verification
 
-- Discovery review offers **Run local test idea analysis** and explicitly states that the installed arm is deterministic, local, non-authoritative, and performs no external transmission.
+- Discovery review now routes local/AI follow-up into AI Work Orders rather than running inline AI from the Discovery screen.
 - Candidate review shows editable working labels and neutral summaries, confidence, uncertainty, exact evidence, and provider/model provenance.
 - Known human actor and reason are required for review.
 - Selected candidates may remain separate, merge, reject, defer, or remain unresolved.
@@ -903,7 +905,9 @@ The governing product decision is now:
 
 and separately:
 
-`Unknown or large material → Discovery progress/cases → questions/routing → Intake → human approval → Core`
+`Unknown loose files → Discovery review → safe routing default → Intake only when deliberately routed → human approval → Core`
+
+`Unknown subfolders / large or no-text material → catalog/stage/read → AI Work Orders → later human-reviewed output`
 
 ### What changed
 
@@ -934,9 +938,11 @@ and separately:
 ### Discovery lane retained
 
 - Discovery Cases are still part of the system, but they now belong to unknown, large, or exploratory scans rather than known project imports.
-- The Add Intake page may show **Discovery progress** only for long/large Discovery work, such as pending large-file or large-corpus processing.
-- Unknown files/folders still use Discovery staging, extraction, questions, grouping/routing, Intake promotion, and human approval before Core.
-- Large files and folders remain planned/active test targets for the next flow round, especially mixed folders, huge ChatGPT exports, images/sketches, PDFs, code, notebooks, and patent-style files.
+- The Add Intake page may show **Discovery progress** only for active long/large Discovery work, such as pending large-file or large-corpus processing; stale routed/promoted cases and old `Project folder candidate: Folder root` entries are hidden from the active progress panel.
+- Unknown loose files still use Discovery staging, extraction, questions, grouping/routing, Intake promotion, and human approval before Core.
+- Unknown subfolders are cataloged, staged, and routed to AI Work Orders for follow-up rather than being treated as immediate project proposals.
+- Large files, large corpora, images/sketches, plots, and metadata-only/no-text material do not directly become ready Intake approvals; they stay evidence-only or move to AI Work Orders first.
+- Supporting image/plot files may attach to a text-backed Discovery unit as evidence, but they do not create separate ready project approvals.
 
 ### Verification added or updated
 
@@ -965,3 +971,51 @@ Live testing outcome:
 - Known project folder import became much faster and cleaner.
 - The app no longer showed unrelated parent-folder Discovery cases on the Add Intake page during known-folder testing.
 - The remaining next test area is the unknown/large Discovery lane.
+
+## 27. Unknown-Folder Discovery Repair and Deep-Scan Checkpoint
+
+Status: implementation and regression sweep recorded 2026-07-05 after live testing showed unknown-folder Discovery was still over-classifying material as projects.
+
+### Corrected governing flow
+
+Unknown folder handling now follows two lanes:
+
+1. **Subfolders**: catalog everything inside the subfolder, stage/read supported files, then create an AI Work Order for follow-up. A subfolder is not automatically a project and is not sent straight to Needs Attention as a project proposal.
+2. **Loose files**: catalog/stage/read, continue through Discovery review, then route as known/checked Intake, rejection, unassigned, general reference, or AI Work Order.
+
+### Current behavior after repair
+
+- The parent selected folder is a selection boundary only, not a project candidate.
+- The former unknown-folder option to treat the whole selected folder as one Discovery evidence collection is removed from the UI.
+- Unknown-folder review defaults to **Use unknown-folder flow: subfolders to AI follow-up, loose files through Discovery**.
+- The emergency fallback is **review every file separately**.
+- Folder groups are no longer split into artificial 24-file parts during the normal unknown-folder flow.
+- `loose_files_discovery` and `subfolder_ai_followup` are recognized as safe folder-derived lanes.
+- Loose-file Discovery no longer defaults detected units to **Propose a new project**.
+- AI-follow-up routes create AI Work Orders and those Work Orders are now included in the desktop storage split/rebuild path so they survive save/load.
+- Metadata-only image/plot/supporting files remain attached as evidence where possible but are not independently promoted to ready Intake/project approval items.
+- Large corpus routes are blocked from direct Intake promotion and must go through AI follow-up first.
+- The Discovery progress panel filters stale/routed/promoted cases, collapses duplicate active long-scan cases, and hides old `Project folder candidate: Folder root` entries.
+
+### Deep scan findings from 2026-07-05
+
+- Active product code no longer exposes the old unknown-folder “treat entire folder as one case” UI option.
+- Browser/dev runtime language is still present by design as a locked migration/development gate; it is not an authoritative runtime path.
+- API folder submission tooling still supports `one-case` for connector/backward-compatibility use; this is separate from the end-user unknown-folder UI and should be reviewed before public connector packaging.
+- The AI follow-up cutover is not fully complete. `app.js` still contains the older inline/local Idea Analysis branch after large-file indexing (`runFakeIdeaAnalysis`, `data-run-idea-analysis`, and retry/analyzing labels). This conflicts with the newer intended flow where slow AI digestion should be parked in AI Work Orders.
+- `scripts/run-idea-review-live-ui-check.js` and `scripts/idea-review-ui-check.js` still validate parts of that older inline Idea Review/analysis path. They should be updated or retired when the AI Work Order flow becomes the sole supported path.
+- `DISCOVERY_FIRST_SYSTEM.md` and `FOLDER_DISCOVERY_FLOW.md` were updated to reflect the repaired subfolder/loose-file split.
+
+### Verification after repair
+
+Passed on 2026-07-05:
+
+- `node --check app.js`
+- `node --check desktop/project-state-desktop-bridge.cjs`
+- `pnpm run check:folder-discovery`
+- `node scripts/discovery-supporting-files-check.js`
+- `pnpm run check:large-corpus`
+- `pnpm run check:flow-hardening`
+- `pnpm run check:api-arm`
+
+No installer was rebuilt during this checkpoint. The next live test should start from a cleaned test dataset and verify: AI Work Order count after subfolder/AI routing, no image/plot-only ready approvals, and no stale Folder Root entries in active Discovery progress.
