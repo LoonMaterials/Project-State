@@ -49,8 +49,13 @@ async function main() {
       "What I'd recommend",
       "Simple intuition",
       "Why your instinct was correct",
-      "One last grounding point"
+      "One last grounding point",
+      "What to hand the kids",
+      "Scene hookup",
+      "Operational guardrails",
+      "Decisions I can convert into immediate outputs"
     ]) assert(providerSource.includes(noisyHeading), `Local AI assistant-heading filter missing: ${noisyHeading}`);
+    assert(providerSource.includes("titleSource") && providerSource.includes("conceptTitle") && providerSource.includes("conceptTitleForCandidate"), "Local AI must separate source headings from normalized concept titles.");
     assert(providerSource.includes("ASSISTANT_SCAFFOLDING_HEADING_PATTERN") && providerSource.includes("GENERIC_ASSISTANT_HEADING_PATTERN"), "Local AI must filter generic assistant-answer headings.");
     assert(providerSource.includes("KNOWN_PROJECT_ANCHORS") && providerSource.includes("GIBM") && providerSource.includes("EQ Wheel") && providerSource.includes("Aether"), "Local AI must run known-project anchor matching before new-project classification.");
     assert(bridgeSource.includes("extractReadableDiscoveryText") && bridgeSource.includes("windowed ? \"\" : await extractReadableDiscoveryText(physicalPath)"), "Large-corpus indexing must use format-aware text extraction instead of raw UTF-8 reads.");

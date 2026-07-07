@@ -31,6 +31,11 @@ function main() {
     "Candidate Map entries",
     "Raw AI candidates",
     "Project State classification",
+    "title_source",
+    "concept_title",
+    "Title source / heading",
+    "Linked raw candidate IDs",
+    "rawCandidatesNotRepresentedByMap",
     "project_candidate, existing_project_support, reference_note, personal_context_note, assistant_scaffolding_noise, rejected_noise",
     "export-chatgpt-review-pack",
     "chatgpt-review-pack",
@@ -44,7 +49,7 @@ function main() {
     "source_thread",
     "source_date",
     "source_title",
-    "Treat chat/thread/conversation starts as source metadata only"
+    "Treat chat/thread/conversation starts, chunk boundaries, and assistant answer headings as source metadata/provenance only"
   ], "app.js");
 
   requireMarkers(inventory, [

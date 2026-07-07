@@ -5,8 +5,8 @@ const OLLAMA_BASE_URL = process.env.PROJECT_STATE_OLLAMA_BASE_URL || "http://127
 const OLLAMA_GENERATE_TIMEOUT_MS = positiveInteger(process.env.PROJECT_STATE_LOCAL_AI_TIMEOUT_MS, 300000);
 const OLLAMA_NUM_PREDICT = positiveInteger(process.env.PROJECT_STATE_LOCAL_AI_NUM_PREDICT, 2400);
 const PROJECT_STATE_CLASSIFICATIONS = ["project_candidate", "existing_project_support", "reference_note", "personal_context_note", "assistant_scaffolding_noise", "rejected_noise"];
-const ASSISTANT_SCAFFOLDING_HEADING_PATTERN = /^(?:#{1,6}\s*)?(?:\d+[.)]\s*)?(?:short answer|important|bottom line|where this (?:all )?leaves us|the right mental model|ground rule for next steps|what i(?:'|’)d recommend|simple intuition|why your instinct was correct|one last grounding point|what happened|why it matters|the big caution|simple timeline|next steps|here(?:'|’)s the point|the key point|in plain english|quick answer|quick note|my honest recommendation)\s*[:.!-]*$/i;
-const GENERIC_ASSISTANT_HEADING_PATTERN = /^(?:#{1,6}\s*)?(?:\d+[.)]\s*)?(?:short answer|important|bottom line|where this|the right|ground rule|what i|simple|why your|one last|what happened|why it matters|big caution|timeline|next steps|recommendation|intuition|mental model)\b/i;
+const ASSISTANT_SCAFFOLDING_HEADING_PATTERN = /^(?:#{1,6}\s*)?(?:\d+[.)]\s*)?(?:short answer|important|bottom line|where this (?:all )?leaves us|the right mental model|ground rule for next steps|what i(?:'|’)d recommend|simple intuition|why your instinct was correct|one last grounding point|what happened|why (?:.+?\s+)?matters|the big caution|simple timeline|next steps|here(?:'|’)s (?:what i propose|the point)|the key point|in plain english|quick answer|quick note|my honest recommendation|what to hand the kids|scene hookup|cases with (?:weaker|more speculative|weaker\s*\/\s*more speculative) support|operational guardrails|decisions i can convert into immediate outputs)\s*[:.!-]*$/i;
+const GENERIC_ASSISTANT_HEADING_PATTERN = /^(?:#{1,6}\s*)?(?:\d+[.)]\s*)?(?:short answer|important|bottom line|where this|the right|ground rule|what i|simple|why your|why .+ matters|one last|what happened|what to hand|scene hookup|cases with|operational guardrails|decisions i can|big caution|timeline|next steps|recommendation|intuition|mental model|here(?:'|’)s what)\b/i;
 const KNOWN_PROJECT_ANCHORS = [
   { id: "gibm", label: "GIBM", patterns: [/\bgibm\b/i] },
   { id: "eq_wheel", label: "EQ Wheel / earthquake analog detector", patterns: [/\beq\s*wheel\b/i, /\bearthquake\s+detector\b/i, /\banalog\s+detector\b/i] },
@@ -146,7 +146,14 @@ function firstMeaningfulHeading(text = "") {
 }
 
 function titleLooksAssistantScaffolding(value = "") {
-  const cleaned = cleanArchiveMarkupArtifacts(value, 220).replace(/^needs review:\s*/i, "").replace(/^#{1,6}\s+/, "").trim();
+  const cleaned = cleanArchiveMarkupArtifacts(value, 220)
+    .replace(/^needs review:\s*/i, "")
+    .replace(/^[-*•>\s]+/, "")
+    .replace(/^\d+[.)]\s+/, "")
+    .replace(/^#{1,6}\s+/, "")
+    .replace(/^\*{1,3}(.+?)\*{1,3}$/g, "$1")
+    .replace(/^["'“”‘’]+|["'“”‘’]+$/g, "")
+    .trim();
   return ASSISTANT_SCAFFOLDING_HEADING_PATTERN.test(cleaned) || GENERIC_ASSISTANT_HEADING_PATTERN.test(cleaned);
 }
 
@@ -158,12 +165,65 @@ function knownProjectAnchorMatches(text = "") {
     .slice(0, 8);
 }
 
+function knownProjectConceptLabel(anchors = [], text = "", title = "") {
+  const haystack = `${title}\n${text}`.slice(0, 50000);
+  if (/\b(?:host\s+control\s+layer|project\s+state)\b/i.test(haystack) && /\baether\b/i.test(haystack)) return "Aether / Project State";
+  if (/\bsuperconductors?\b/i.test(haystack) && /\bfusion\b/i.test(haystack)) return "Superconductor / Fusion";
+  if (/\btier[-\s]?0\b/i.test(haystack) && /\b(?:wheel|general\s+physics|first\s+test)\b/i.test(haystack)) return "Wheel / General Physics Platform";
+  if (/\bpython\b|\bpygame\b/i.test(haystack) && /\b(?:game|software|prototype)\b/i.test(haystack)) return "Software / Games";
+  const first = anchors[0]?.label || "";
+  return first
+    .replace(/\s*\/\s*(?:agency|identity|continuity|desal|thermal battery|software|human-first|governance|outreach|LMC).*$/i, "")
+    .replace(/\s*\/\s*earthquake analog detector\s*$/i, "")
+    .replace(/\s*\/\s*exosome diagnostic\s*\/\s*GPC1\s*$/i, "")
+    .trim() || "Known project";
+}
+
+function supportTypeForContent(text = "", title = "", legal = null) {
+  const haystack = `${title}\n${text}`.slice(0, 50000);
+  if (legal?.isLegalReference || legalReferenceSignals(haystack).isLegalReference) return "licensing/reference support";
+  if (/\btier[-\s]?0\b|\bfirst\s+test\b|\btest\s+pack\b/i.test(haystack)) return "Tier-0 test support";
+  if (/\bsafety\s+architecture\b|\bsafety\b/i.test(haystack) && /\barchitecture\b/i.test(haystack)) return "safety architecture support";
+  if (/\bhost\s+control\s+layer\b/i.test(haystack)) return "host control layer support";
+  if (/\bpython\b|\bpygame\b|\bprototype\b/i.test(haystack)) return "prototype support";
+  if (/\bsuperconductors?\b|\bfusion\b|\breference\b|\bwhy\b/i.test(haystack)) return "reference support";
+  if (/\bdecision|guardrail|requirement|next step\b/i.test(haystack)) return "decision/support note";
+  return "support";
+}
+
+function namedConceptFromContent(text = "", title = "") {
+  const haystack = `${title}\n${text}`.slice(0, 50000);
+  const named = haystack.match(/\b([A-Z][A-Za-z0-9 '&-]{2,80}\s+(?:Project|System|Framework|Architecture|Platform|Prototype|Model|Engine|Device|Detector|Diagnostic|Battery|Theory|Plan|Patent|Game|App|Protocol|Layer))\b/);
+  if (named) return cleanArchiveMarkupArtifacts(named[1], 160);
+  return "";
+}
+
+function conceptTitleForCandidate({ titleSource = "", text = "", sourceName = "", classification = "reference_note", anchors = [], legal = null } = {}) {
+  const cleanTitle = cleanArchiveMarkupArtifacts(titleSource, 180).replace(/^needs review:\s*/i, "").trim();
+  const supportType = supportTypeForContent(text, titleSource, legal);
+  if (anchors.length || classification === "existing_project_support") return `${knownProjectConceptLabel(anchors, text, titleSource)} — ${supportType}`;
+  if (classification === "project_candidate") {
+    if (cleanTitle && !titleLooksAssistantScaffolding(cleanTitle)) return cleanTitle;
+    return namedConceptFromContent(text, titleSource) || cleanArchiveMarkupArtifacts(sourceName, 120) || "New project candidate";
+  }
+  if (classification === "personal_context_note") return "Personal context note";
+  if (classification === "assistant_scaffolding_noise") return "Assistant scaffolding note";
+  if (classification === "rejected_noise") return "Rejected noise";
+  if (legal?.isLegalReference) return "Reference note — licensing/reference material";
+  return namedConceptFromContent(text, titleSource) || `Reference note — ${supportType}`;
+}
+
 function strongNamedProjectSignal(text = "", title = "") {
   const haystack = `${title}\n${text}`.slice(0, 50000);
   if (knownProjectAnchorMatches(haystack).length) return true;
   if (/\b[A-Z][A-Za-z0-9 '&-]{2,80}\s+(?:Project|System|Framework|Architecture|Platform|Prototype|Model|Engine|Device|Detector|Diagnostic|Battery|Theory|Plan|Patent|Game|App|Protocol)\b/.test(haystack)) return true;
-  if (/\b(?:business\s+plan|prototype|patent|invention|white\s+paper|simulation|device|detector|diagnostic|architecture|platform|software|game|publishable|buildable)\b/i.test(haystack)) return true;
   return false;
+}
+
+function concreteProjectSignal(text = "", title = "") {
+  const haystack = `${title}\n${text}`.slice(0, 50000);
+  return strongNamedProjectSignal(text, title)
+    || /\b(?:business\s+plan|prototype|patent|invention|white\s+paper|simulation|device|detector|diagnostic|architecture|platform|software|game|publishable|buildable)\b/i.test(haystack);
 }
 
 function classifyProjectStateCandidate({ text = "", title = "", sourceName = "", legal = null } = {}) {
@@ -171,13 +231,14 @@ function classifyProjectStateCandidate({ text = "", title = "", sourceName = "",
   const anchors = knownProjectAnchorMatches(combined);
   const assistantHeading = titleLooksAssistantScaffolding(title) || titleLooksAssistantScaffolding(firstMeaningfulHeading(text));
   const strongSignal = strongNamedProjectSignal(text, title);
+  const concreteSignal = concreteProjectSignal(text, title);
   const legalSignals = legal || legalReferenceSignals(text);
   if (textLooksBinaryOrGibberish(text)) return { classification: "rejected_noise", knownProjectAnchors: anchors, reason: "Unreadable binary/container text." };
   if (anchors.length) return { classification: "existing_project_support", knownProjectAnchors: anchors, reason: "Matched a known Project State project anchor before new-project creation." };
   if (assistantHeading && !strongSignal) return { classification: "assistant_scaffolding_noise", knownProjectAnchors: anchors, reason: "Generic ChatGPT response heading without a strong named project signal." };
   if (legalSignals.isLegalReference) return { classification: "reference_note", knownProjectAnchors: anchors, reason: "Legal/licensing/reference material." };
-  if (/\b(?:i feel|my life|personal|emotionally|mental|family|home|health|stress|fear|hope|identity|therapy)\b/i.test(combined) && !strongSignal) return { classification: "personal_context_note", knownProjectAnchors: anchors, reason: "Personal context without a concrete buildable/publishable project signal." };
-  if (strongSignal) return { classification: "project_candidate", knownProjectAnchors: anchors, reason: "Concrete named/buildable or publishable idea signal not matched to known projects." };
+  if (/\b(?:i feel|my life|personal|emotionally|mental|family|home|health|stress|fear|hope|identity|therapy)\b/i.test(combined) && !concreteSignal) return { classification: "personal_context_note", knownProjectAnchors: anchors, reason: "Personal context without a concrete buildable/publishable project signal." };
+  if (concreteSignal) return { classification: "project_candidate", knownProjectAnchors: anchors, reason: "Concrete named/buildable or publishable idea signal not matched to known projects." };
   return { classification: "reference_note", knownProjectAnchors: anchors, reason: "Weak material preserved as reference, not a project candidate." };
 }
 
@@ -290,6 +351,7 @@ function deterministicRescueCandidates({ validated, allowedTypes, maxCandidates,
     const title = titleFromText(item.text, sourceName, index);
     const chatMetadata = extractChatThreadMetadata(item.text, sourceName);
     const classification = classifyProjectStateCandidate({ text: item.text, title, sourceName });
+    const conceptTitle = conceptTitleForCandidate({ titleSource: title, text: item.text, sourceName, classification: classification.classification, anchors: classification.knownProjectAnchors });
     const candidateType = classification.classification === "project_candidate"
       ? fallbackCandidateType(item.text, allowedTypes)
       : classification.classification === "existing_project_support" || classification.classification === "reference_note"
@@ -297,7 +359,9 @@ function deterministicRescueCandidates({ validated, allowedTypes, maxCandidates,
         : "observation";
     return {
       clientCandidateId: `qwen3_rescue_${String(index + 1).padStart(4, "0")}`,
-      workingLabel: `Needs review: ${title}`,
+      workingLabel: conceptTitle,
+      conceptTitle,
+      titleSource: title,
       neutralSummary: normalizeText(`Qwen returned no candidates for this substantive window, so Project State preserved this low-confidence review candidate instead of silently dropping the signal. Source excerpt: ${compact}`, 2000),
       candidateType: allowedTypes.has(candidateType) ? candidateType : "other",
       scope: classification.classification === "project_candidate" ? "unknown" : "supporting",
@@ -326,7 +390,7 @@ function deterministicRescueCandidates({ validated, allowedTypes, maxCandidates,
       projectStateClassification: classification.classification,
       knownProjectAnchors: classification.knownProjectAnchors,
       classificationReason: classification.reason,
-      provenance: { providerId: QWEN3_8B_PROVIDER_ID, modelId: QWEN3_8B_MODEL_ID, externalJobId: "local_rescue_candidate", responseAttempts: attempts, deterministicRescue: true, projectStateClassification: classification.classification, knownProjectAnchors: classification.knownProjectAnchors, ...chatMetadata }
+      provenance: { providerId: QWEN3_8B_PROVIDER_ID, modelId: QWEN3_8B_MODEL_ID, externalJobId: "local_rescue_candidate", responseAttempts: attempts, deterministicRescue: true, titleSource: title, conceptTitle, projectStateClassification: classification.classification, knownProjectAnchors: classification.knownProjectAnchors, ...chatMetadata }
     };
   });
 }
@@ -360,16 +424,21 @@ function buildAnalysisPrompt({ chunks, candidateTypes, maxCandidates, priorDiges
     "Base candidate generation on substantive repeated topic signals, named entities, project names, filenames, user-confirmed labels, and semantic clustering across chunks.",
     "Classify each candidate using projectStateClassification with one of: project_candidate, existing_project_support, reference_note, personal_context_note, assistant_scaffolding_noise, rejected_noise.",
     "Generic ChatGPT assistant-answer headings are assistant_scaffolding_noise unless surrounding text has a strong named project signal. Examples: Short answer, IMPORTANT, Bottom line, Where this leaves us, The right mental model, Ground rule for next steps, What I'd recommend, Simple intuition, Why your instinct was correct, One last grounding point.",
+    "Separate titleSource from conceptTitle. titleSource is the heading found in the text. conceptTitle is the normalized project/support label inferred from content. If the heading is generic or assistant-style, do not use it as conceptTitle.",
+    "Demote assistant section headings such as What happened, Why X matters, What to hand the kids, Scene hookup, Cases with weaker support, Here's what I propose, Operational guardrails, and Decisions I can convert into immediate outputs.",
     "Run known-project matching before new-project creation. Known anchors include GIBM; EQ Wheel/earthquake detector/analog detector; lattice insulation/DRL/LTC; cancer tube/exosome diagnostic/GPC1; Aether/agency/identity/continuity; fusion/desal/thermal battery; Mirror Earth/games/software; SHAW/human-first/governance; patents/licensing/outreach/LMC.",
+    "Candidate promotion hierarchy: known_project_match -> existing_project_support -> reference_note -> personal_context_note -> assistant_scaffolding_noise -> rejected_noise -> only then project_candidate.",
     "If a chunk matches a known project anchor, classify it as existing_project_support, not project_candidate.",
     "Only classify project_candidate when the chunk has a concrete buildable or publishable idea, a meaningful named concept/title, is not merely a ChatGPT heading, is repeated or strongly described, and does not match an existing known project.",
+    "When content matches a known project, retitle conceptTitle using the known project name plus support type, for example: Aether - safety architecture support, Superconductor / Fusion - reference support, Software / Games - prototype support.",
+    "Chat/thread/chunk boundaries and assistant headings are provenance, not project boundaries.",
     "Licensing agreements, EULAs, terms, privacy policies, developer/app-store agreements, SDK/API terms, and third-party notices are reference/supporting material. Do not split them into project ideas unless the text clearly describes a buildable project.",
     "When a chunk is mostly legal/app agreement material, return at most one reference candidate with scope supporting.",
     "Return an empty candidates array only when the supplied chunks are pure boilerplate, duplicate legal text, or unreadable metadata. If there are named projects, headings, business plans, code/test evidence, story drafts, simulations, requirements, risks, tasks, or questions, return at least one candidate.",
     "If a current chunk supports or continues an existing Candidate Map entry, still return a candidate with that current chunk evidence so Project State can update the map.",
     "Every candidate must cite at least one supplied discoveryChunkId.",
     "Return strict JSON only with this shape:",
-    '{"candidates":[{"workingLabel":"short label","neutralSummary":"plain evidence-based summary","candidateType":"other","projectStateClassification":"reference_note","scope":"standalone|supporting|cross_cutting|unknown","keyTerms":["term"],"evidence":[{"discoveryChunkId":"chunk id","relationship":"supports|mentions|contrasts|limits|depends_on|context_only","excerpt":"short quote or paraphrase from the chunk"}],"confidence":{"score":0.0,"basis":"why","uncertaintyNotes":"what is unclear"},"clarificationQuestions":[{"text":"question","affects":"meaning|scope|routing|priority|grouping","allowNotSure":true}]}]}',
+    '{"candidates":[{"workingLabel":"normalized concept/support label","conceptTitle":"normalized concept/support label","titleSource":"heading found in text, if any","neutralSummary":"plain evidence-based summary","candidateType":"other","projectStateClassification":"reference_note","scope":"standalone|supporting|cross_cutting|unknown","keyTerms":["term"],"evidence":[{"discoveryChunkId":"chunk id","relationship":"supports|mentions|contrasts|limits|depends_on|context_only","excerpt":"short quote or paraphrase from the chunk"}],"confidence":{"score":0.0,"basis":"why","uncertaintyNotes":"what is unclear"},"clarificationQuestions":[{"text":"question","affects":"meaning|scope|routing|priority|grouping","allowNotSure":true}]}]}',
     `Allowed candidateType values: ${candidateTypes.join(", ")}`,
     `Maximum candidates: ${maxCandidates}`,
     "Keep the response extremely compact. Prefer one strong candidate over several weak candidates.",
@@ -491,9 +560,10 @@ async function generateQwenIdeaCandidates({ validated, envelope, ideaContract, m
     const legalTerms = [...new Set(legalEvidenceSignals.flatMap((signals) => signals.terms || []))].slice(0, 8);
     const firstEvidenceSource = normalizedEvidence[0] ? chunkById.get(normalizedEvidence[0].discoveryChunkId) : null;
     const chatMetadata = extractChatThreadMetadata(firstEvidenceSource?.text || "", firstEvidenceSource?.extraction?.fileName || firstEvidenceSource?.extraction?.originalName || "");
+    const titleSource = candidate.titleSource || candidate.workingLabel || candidate.title || "";
     const classification = classifyProjectStateCandidate({
       text: [firstEvidenceSource?.text || "", candidate.neutralSummary || candidate.summary || "", (candidate.keyTerms || []).join(" ")].join("\n"),
-      title: candidate.workingLabel || candidate.title || "",
+      title: titleSource,
       sourceName: firstEvidenceSource?.extraction?.fileName || firstEvidenceSource?.extraction?.originalName || "",
       legal: isLegalReference ? { isLegalReference: true, terms: legalTerms } : null
     });
@@ -510,9 +580,19 @@ async function generateQwenIdeaCandidates({ validated, envelope, ideaContract, m
       ? (allowedScopes.has(candidate.scope) ? candidate.scope : "unknown")
       : "supporting";
     const neutralSummary = cleanArchiveMarkupArtifacts(candidate.neutralSummary || candidate.summary || "", 2000);
+    const conceptTitle = conceptTitleForCandidate({
+      titleSource,
+      text: [firstEvidenceSource?.text || "", neutralSummary, (candidate.keyTerms || []).join(" ")].join("\n"),
+      sourceName: firstEvidenceSource?.extraction?.fileName || firstEvidenceSource?.extraction?.originalName || "",
+      classification: projectStateClassification,
+      anchors: classification.knownProjectAnchors,
+      legal: isLegalReference ? { isLegalReference: true, terms: legalTerms } : null
+    });
     return {
       clientCandidateId: normalizeText(candidate.clientCandidateId || `qwen3_candidate_${String(index + 1).padStart(4, "0")}`, 120).replace(/[^a-zA-Z0-9_-]/g, "_") || `qwen3_candidate_${index + 1}`,
-      workingLabel: cleanArchiveMarkupArtifacts(candidate.workingLabel || candidate.title || `Idea candidate ${index + 1}`, 200),
+      workingLabel: conceptTitle,
+      conceptTitle,
+      titleSource: cleanArchiveMarkupArtifacts(titleSource, 200),
       neutralSummary: isLegalReference
         ? normalizeText(`Licensing/app agreement/reference material. Keep as supporting context unless a human confirms it is the project. Signals: ${legalTerms.join(", ") || "legal reference"}. ${neutralSummary}`, 2000)
         : neutralSummary,
@@ -535,7 +615,7 @@ async function generateQwenIdeaCandidates({ validated, envelope, ideaContract, m
       projectStateClassification,
       knownProjectAnchors: classification.knownProjectAnchors,
       classificationReason: classification.reason,
-      provenance: { ...(candidate.provenance || {}), ...chatMetadata, providerId: QWEN3_8B_PROVIDER_ID, modelId: QWEN3_8B_MODEL_ID, externalJobId: candidate.provenance?.externalJobId || `local_ollama_${envelope.requestId}`, responseAttempts: candidate.provenance?.responseAttempts || attempts, responseInvalidRescue: candidate.provenance?.responseInvalidRescue || responseInvalid, projectStateClassification, knownProjectAnchors: classification.knownProjectAnchors }
+      provenance: { ...(candidate.provenance || {}), ...chatMetadata, providerId: QWEN3_8B_PROVIDER_ID, modelId: QWEN3_8B_MODEL_ID, externalJobId: candidate.provenance?.externalJobId || `local_ollama_${envelope.requestId}`, responseAttempts: candidate.provenance?.responseAttempts || attempts, responseInvalidRescue: candidate.provenance?.responseInvalidRescue || responseInvalid, titleSource: cleanArchiveMarkupArtifacts(titleSource, 200), conceptTitle, projectStateClassification, knownProjectAnchors: classification.knownProjectAnchors }
     };
   });
 }

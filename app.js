@@ -6228,10 +6228,10 @@ function renderCandidateMapEntries(candidateMap = null) {
   if (!entries.length) return emptyText("Candidate Map is empty. Run local AI digestion to begin building the pre-Airlock idea ledger.");
   return `<section class="list">${entries.map((entry) => `
     <article class="item">
-      <p class="item-title">${escapeDisplay(displaySafeAiTitle(entry.title), DISPLAY_META_LIMIT)}</p>
+      <p class="item-title">${escapeDisplay(displaySafeAiTitle(entry.conceptTitle || entry.title), DISPLAY_META_LIMIT)}</p>
       <p class="item-meta">${escapeHtml(entry.candidateType || "unknown")} · ${escapeHtml(String(entry.projectStateClassification || classifyProjectStateCandidate(entry)).replaceAll("_", " "))} · ${escapeHtml(entry.scope || "unknown")} · ${escapeHtml(String(entry.status || "active").replaceAll("_", " "))} · confidence ${Math.round(Number(entry.confidenceScore || 0) * 100)}%</p>
       <p class="item-body">${escapeDisplay(displaySafeAiText(entry.summary || "", DISPLAY_TEXT_LIMIT), DISPLAY_TEXT_LIMIT)}</p>
-      <p class="item-meta">${Number(entry.evidence?.length || 0).toLocaleString()} evidence link${Number(entry.evidence?.length || 0) === 1 ? "" : "s"} · ${Number(entry.sourceCandidateIds?.length || 0).toLocaleString()} source candidate${Number(entry.sourceCandidateIds?.length || 0) === 1 ? "" : "s"}${displaySafeAiTerms(entry.keyTerms) ? ` · ${displaySafeAiTerms(entry.keyTerms)}` : ""}${entry.knownProjectMatches?.length ? ` · possible existing project: ${escapeDisplay(entry.knownProjectMatches[0].name, DISPLAY_META_LIMIT)}` : ""}</p>
+      <p class="item-meta">${entry.titleSource ? `source heading: ${escapeDisplay(entry.titleSource, DISPLAY_META_LIMIT)} · ` : ""}${Number(entry.evidence?.length || 0).toLocaleString()} evidence link${Number(entry.evidence?.length || 0) === 1 ? "" : "s"} · ${Number(entry.sourceCandidateIds?.length || 0).toLocaleString()} linked raw candidate${Number(entry.sourceCandidateIds?.length || 0) === 1 ? "" : "s"}${displaySafeAiTerms(entry.keyTerms) ? ` · ${displaySafeAiTerms(entry.keyTerms)}` : ""}${entry.knownProjectMatches?.length ? ` · possible existing project: ${escapeDisplay(entry.knownProjectMatches[0].name, DISPLAY_META_LIMIT)}` : ""}</p>
       <details class="technical-details">
         <summary>Map evidence and history</summary>
         ${(entry.evidence || []).slice(0, 12).map((evidence) => `<p class="item-meta">${escapeDisplay(displaySafeAiText(evidence.excerpt || evidence.discoveryChunkId, 500), 500)}<br>Chunk: ${escapeDisplay(evidence.discoveryChunkId, DISPLAY_META_LIMIT)} · ${escapeDisplay(evidence.relationship || "supports", DISPLAY_META_LIMIT)}</p>`).join("") || `<p class="item-meta">No evidence links recorded.</p>`}
@@ -12175,8 +12175,8 @@ function textLooksBinaryOrGibberish(text = "") {
 }
 
 const PROJECT_STATE_CLASSIFICATIONS = ["project_candidate", "existing_project_support", "reference_note", "personal_context_note", "assistant_scaffolding_noise", "rejected_noise"];
-const ASSISTANT_SCAFFOLDING_HEADING_PATTERN = /^(?:#{1,6}\s*)?(?:\d+[.)]\s*)?(?:short answer|important|bottom line|where this (?:all )?leaves us|the right mental model|ground rule for next steps|what i(?:'|’)d recommend|simple intuition|why your instinct was correct|one last grounding point|what happened|why it matters|the big caution|simple timeline|next steps|here(?:'|’)s the point|the key point|in plain english|quick answer|quick note|my honest recommendation)\s*[:.!-]*$/i;
-const GENERIC_ASSISTANT_HEADING_PATTERN = /^(?:#{1,6}\s*)?(?:\d+[.)]\s*)?(?:short answer|important|bottom line|where this|the right|ground rule|what i|simple|why your|one last|what happened|why it matters|big caution|timeline|next steps|recommendation|intuition|mental model)\b/i;
+const ASSISTANT_SCAFFOLDING_HEADING_PATTERN = /^(?:#{1,6}\s*)?(?:\d+[.)]\s*)?(?:short answer|important|bottom line|where this (?:all )?leaves us|the right mental model|ground rule for next steps|what i(?:'|’)d recommend|simple intuition|why your instinct was correct|one last grounding point|what happened|why (?:.+?\s+)?matters|the big caution|simple timeline|next steps|here(?:'|’)s (?:what i propose|the point)|the key point|in plain english|quick answer|quick note|my honest recommendation|what to hand the kids|scene hookup|cases with (?:weaker|more speculative|weaker\s*\/\s*more speculative) support|operational guardrails|decisions i can convert into immediate outputs)\s*[:.!-]*$/i;
+const GENERIC_ASSISTANT_HEADING_PATTERN = /^(?:#{1,6}\s*)?(?:\d+[.)]\s*)?(?:short answer|important|bottom line|where this|the right|ground rule|what i|simple|why your|why .+ matters|one last|what happened|what to hand|scene hookup|cases with|operational guardrails|decisions i can|big caution|timeline|next steps|recommendation|intuition|mental model|here(?:'|’)s what)\b/i;
 const KNOWN_PROJECT_ANCHORS = [
   { id: "gibm", label: "GIBM", patterns: [/\bgibm\b/i] },
   { id: "eq_wheel", label: "EQ Wheel / earthquake analog detector", patterns: [/\beq\s*wheel\b/i, /\bearthquake\s+detector\b/i, /\banalog\s+detector\b/i] },
@@ -12195,7 +12195,14 @@ function candidateMapTokenSet(value = "") {
 }
 
 function titleLooksAssistantScaffolding(value = "") {
-  const cleaned = cleanAiDisplayText(value, 220).replace(/^needs review:\s*/i, "").replace(/^#{1,6}\s+/, "").trim();
+  const cleaned = cleanAiDisplayText(value, 220)
+    .replace(/^needs review:\s*/i, "")
+    .replace(/^[-*•>\s]+/, "")
+    .replace(/^\d+[.)]\s+/, "")
+    .replace(/^#{1,6}\s+/, "")
+    .replace(/^\*{1,3}(.+?)\*{1,3}$/g, "$1")
+    .replace(/^["'“”‘’]+|["'“”‘’]+$/g, "")
+    .trim();
   return ASSISTANT_SCAFFOLDING_HEADING_PATTERN.test(cleaned) || GENERIC_ASSISTANT_HEADING_PATTERN.test(cleaned);
 }
 
@@ -12211,25 +12218,78 @@ function strongNamedProjectSignal(value = "") {
   const haystack = String(value || "").slice(0, 50000);
   if (knownProjectAnchorMatches(haystack).length) return true;
   if (/\b[A-Z][A-Za-z0-9 '&-]{2,80}\s+(?:Project|System|Framework|Architecture|Platform|Prototype|Model|Engine|Device|Detector|Diagnostic|Battery|Theory|Plan|Patent|Game|App|Protocol)\b/.test(haystack)) return true;
-  if (/\b(?:business\s+plan|prototype|patent|invention|white\s+paper|simulation|device|detector|diagnostic|architecture|platform|publishable|buildable)\b/i.test(haystack)) return true;
   return false;
 }
 
+function knownProjectConceptLabel(matches = [], text = "", title = "") {
+  const haystack = `${title}\n${text}`.slice(0, 50000);
+  if (/\b(?:host\s+control\s+layer|project\s+state)\b/i.test(haystack) && /\baether\b/i.test(haystack)) return "Aether / Project State";
+  if (/\bsuperconductors?\b/i.test(haystack) && /\bfusion\b/i.test(haystack)) return "Superconductor / Fusion";
+  if (/\btier[-\s]?0\b/i.test(haystack) && /\b(?:wheel|general\s+physics|first\s+test)\b/i.test(haystack)) return "Wheel / General Physics Platform";
+  if (/\bpython\b|\bpygame\b/i.test(haystack) && /\b(?:game|software|prototype)\b/i.test(haystack)) return "Software / Games";
+  const first = matches[0]?.name || "";
+  return first
+    .replace(/\s*\/\s*(?:agency|identity|continuity|desal|thermal battery|software|human-first|governance|outreach|LMC).*$/i, "")
+    .replace(/\s*\/\s*earthquake analog detector\s*$/i, "")
+    .replace(/\s*\/\s*exosome diagnostic\s*\/\s*GPC1\s*$/i, "")
+    .trim() || "Known project";
+}
+
+function supportTypeForCandidate(candidate = {}) {
+  const haystack = [candidate.titleSource, candidate.workingLabel, candidate.title, candidate.neutralSummary, candidate.summary, ...(candidate.keyTerms || []), ...(candidate.evidence || []).map((evidence) => evidence.excerpt || "")].join("\n").slice(0, 50000);
+  if (candidate.candidateType === "reference" && /\blicen[cs]|agreement|terms|privacy|eula|third[-\s]party/i.test(haystack)) return "licensing/reference support";
+  if (/\btier[-\s]?0\b|\bfirst\s+test\b|\btest\s+pack\b/i.test(haystack)) return "Tier-0 test support";
+  if (/\bsafety\s+architecture\b|\bsafety\b/i.test(haystack) && /\barchitecture\b/i.test(haystack)) return "safety architecture support";
+  if (/\bhost\s+control\s+layer\b/i.test(haystack)) return "host control layer support";
+  if (/\bpython\b|\bpygame\b|\bprototype\b/i.test(haystack)) return "prototype support";
+  if (/\bsuperconductors?\b|\bfusion\b|\breference\b|\bwhy\b/i.test(haystack)) return "reference support";
+  if (/\bdecision|guardrail|requirement|next step\b/i.test(haystack)) return "decision/support note";
+  return "support";
+}
+
+function namedConceptFromCandidate(candidate = {}) {
+  const haystack = [candidate.titleSource, candidate.workingLabel, candidate.title, candidate.neutralSummary, candidate.summary, ...(candidate.keyTerms || []), ...(candidate.evidence || []).map((evidence) => evidence.excerpt || "")].join("\n").slice(0, 50000);
+  const named = haystack.match(/\b([A-Z][A-Za-z0-9 '&-]{2,80}\s+(?:Project|System|Framework|Architecture|Platform|Prototype|Model|Engine|Device|Detector|Diagnostic|Battery|Theory|Plan|Patent|Game|App|Protocol|Layer))\b/);
+  return named ? cleanAiDisplayText(named[1], 160) : "";
+}
+
+function conceptTitleForCandidate(candidate = {}, classification = "") {
+  if (candidate.conceptTitle && !titleLooksAssistantScaffolding(candidate.conceptTitle)) return cleanAiDisplayText(candidate.conceptTitle, 220);
+  const projectMatches = knownProjectMatchesForCandidate(candidate);
+  const effectiveClassification = classification || (projectMatches.length ? "existing_project_support" : classifyProjectStateCandidate(candidate));
+  const supportType = supportTypeForCandidate(candidate);
+  const titleSource = cleanAiDisplayText(candidate.titleSource || candidate.provenance?.titleSource || candidate.workingLabel || candidate.title || "", 180).replace(/^needs review:\s*/i, "").trim();
+  const combined = [candidate.neutralSummary, candidate.summary, ...(candidate.keyTerms || []), ...(candidate.evidence || []).map((evidence) => evidence.excerpt || "")].join("\n");
+  if (projectMatches.length || effectiveClassification === "existing_project_support") return `${knownProjectConceptLabel(projectMatches, combined, titleSource)} — ${supportType}`;
+  if (effectiveClassification === "project_candidate") {
+    if (titleSource && !titleLooksAssistantScaffolding(titleSource)) return titleSource;
+    return namedConceptFromCandidate(candidate) || "New project candidate";
+  }
+  if (effectiveClassification === "personal_context_note") return "Personal context note";
+  if (effectiveClassification === "assistant_scaffolding_noise") return "Assistant scaffolding note";
+  if (effectiveClassification === "rejected_noise") return "Rejected noise";
+  if (candidate.candidateType === "reference") return "Reference note — licensing/reference material";
+  return namedConceptFromCandidate(candidate) || `Reference note — ${supportType}`;
+}
+
 function classifyProjectStateCandidate(candidate = {}) {
-  if (PROJECT_STATE_CLASSIFICATIONS.includes(candidate.projectStateClassification)) return candidate.projectStateClassification;
-  const combined = [candidate.workingLabel, candidate.title, candidate.neutralSummary, candidate.summary, ...(candidate.keyTerms || []), ...(candidate.evidence || []).map((evidence) => evidence.excerpt || "")].join("\n");
+  const combined = [candidate.titleSource, candidate.provenance?.titleSource, candidate.workingLabel, candidate.title, candidate.neutralSummary, candidate.summary, ...(candidate.keyTerms || []), ...(candidate.evidence || []).map((evidence) => evidence.excerpt || "")].join("\n");
+  const modelClassification = PROJECT_STATE_CLASSIFICATIONS.includes(candidate.projectStateClassification) ? candidate.projectStateClassification : "";
+  const strongSignal = strongNamedProjectSignal(combined);
+  const concreteSignal = strongSignal || /\b(?:business\s+plan|prototype|patent|invention|white\s+paper|simulation|device|detector|diagnostic|architecture|platform|publishable|buildable)\b/i.test(combined);
   if (textLooksBinaryOrGibberish(combined)) return "rejected_noise";
   if (knownProjectAnchorMatches(combined).length || (candidate.knownProjectAnchors || []).length) return "existing_project_support";
-  if (titleLooksAssistantScaffolding(candidate.workingLabel || candidate.title || "") && !strongNamedProjectSignal(combined)) return "assistant_scaffolding_noise";
+  if (titleLooksAssistantScaffolding(candidate.workingLabel || candidate.title || "") && !strongSignal) return "assistant_scaffolding_noise";
+  if (modelClassification && modelClassification !== "project_candidate") return modelClassification;
   if (candidate.candidateType === "reference") return "reference_note";
-  if (/\b(?:i feel|my life|personal|emotionally|mental|family|home|health|stress|fear|hope|therapy)\b/i.test(combined) && !strongNamedProjectSignal(combined)) return "personal_context_note";
-  if (strongNamedProjectSignal(combined) && !knownProjectAnchorMatches(combined).length) return "project_candidate";
+  if (/\b(?:i feel|my life|personal|emotionally|mental|family|home|health|stress|fear|hope|therapy)\b/i.test(combined) && !concreteSignal) return "personal_context_note";
+  if (concreteSignal && !knownProjectAnchorMatches(combined).length) return "project_candidate";
   return "reference_note";
 }
 
 function candidateMapSimilarity(a = {}, b = {}) {
-  const left = candidateMapTokenSet([a.workingLabel, a.neutralSummary, ...(a.keyTerms || [])].join(" "));
-  const right = candidateMapTokenSet([b.title || b.workingLabel, b.summary || b.neutralSummary, ...(b.keyTerms || [])].join(" "));
+  const left = candidateMapTokenSet([a.conceptTitle, a.workingLabel, a.neutralSummary, ...(a.keyTerms || [])].join(" "));
+  const right = candidateMapTokenSet([b.conceptTitle, b.title || b.workingLabel, b.summary || b.neutralSummary, ...(b.keyTerms || [])].join(" "));
   if (!left.size || !right.size) return 0;
   const overlap = [...left].filter((token) => right.has(token)).length;
   return overlap / Math.max(left.size, right.size);
@@ -12240,7 +12300,7 @@ function candidateMapEvidenceKey(evidence = {}) {
 }
 
 function candidateDistinctivenessScore(candidate = {}) {
-  const terms = candidateMapTokenSet([candidate.workingLabel, candidate.neutralSummary, ...(candidate.keyTerms || [])].join(" "));
+  const terms = candidateMapTokenSet([candidate.conceptTitle, candidate.workingLabel, candidate.neutralSummary, ...(candidate.keyTerms || [])].join(" "));
   const evidenceCount = Array.isArray(candidate.evidence) ? candidate.evidence.length : 0;
   const confidence = Number(candidate.confidence?.score || candidate.confidenceScore || 0);
   const type = String(candidate.candidateType || "unknown");
@@ -12252,7 +12312,7 @@ function isWeakSingleWindowCandidate(candidate = {}) {
   const evidenceCount = Array.isArray(candidate.evidence) ? candidate.evidence.length : 0;
   const confidence = Number(candidate.confidence?.score || candidate.confidenceScore || 0);
   const type = String(candidate.candidateType || "unknown");
-  const title = String(candidate.workingLabel || candidate.title || "");
+  const title = String(candidate.conceptTitle || candidate.workingLabel || candidate.title || "");
   return evidenceCount <= 1
     && confidence <= 0.46
     && !["project_concept", "design_concept"].includes(type)
@@ -12261,8 +12321,8 @@ function isWeakSingleWindowCandidate(candidate = {}) {
 }
 
 function knownProjectMatchesForCandidate(candidate = {}) {
-  const candidateTokens = candidateMapTokenSet([candidate.workingLabel, candidate.neutralSummary, ...(candidate.keyTerms || [])].join(" "));
-  const anchorMatches = knownProjectAnchorMatches([candidate.workingLabel, candidate.neutralSummary, ...(candidate.keyTerms || []), ...(candidate.evidence || []).map((evidence) => evidence.excerpt || "")].join("\n"));
+  const candidateTokens = candidateMapTokenSet([candidate.titleSource, candidate.conceptTitle, candidate.workingLabel, candidate.neutralSummary, ...(candidate.keyTerms || [])].join(" "));
+  const anchorMatches = knownProjectAnchorMatches([candidate.titleSource, candidate.conceptTitle, candidate.workingLabel, candidate.neutralSummary, ...(candidate.keyTerms || []), ...(candidate.evidence || []).map((evidence) => evidence.excerpt || "")].join("\n"));
   if (!candidateTokens.size) return anchorMatches;
   const storeMatches = (store.projects || []).filter((project) => project && !project.archived).map((project) => {
     const projectTokens = candidateMapTokenSet(project.name || "");
@@ -12286,27 +12346,34 @@ function normalizeCandidateMap(workOrder = {}) {
     totalPasses: Number(existing.totalPasses || 0),
     totalCandidatesObserved: Number(existing.totalCandidatesObserved || 0),
     totalEvidenceLinks: Number(existing.totalEvidenceLinks || 0),
-    entries: entries.map((entry) => ({
-      id: entry.id || uid("candidate_map_entry"),
-      title: String(entry.title || entry.workingLabel || "Candidate Map Entry").slice(0, 220),
-      summary: limitText(entry.summary || entry.neutralSummary || "", 3000),
-      candidateType: entry.candidateType || "unknown",
-      projectStateClassification: PROJECT_STATE_CLASSIFICATIONS.includes(entry.projectStateClassification) ? entry.projectStateClassification : classifyProjectStateCandidate(entry),
-      scope: entry.scope || "unknown",
-      status: entry.status || "active",
-      confidenceScore: Number.isFinite(Number(entry.confidenceScore)) ? Number(entry.confidenceScore) : 0.5,
-      keyTerms: Array.isArray(entry.keyTerms) ? [...new Set(entry.keyTerms.map(String).filter(Boolean))].slice(0, 40) : [],
-      sourceCandidateIds: Array.isArray(entry.sourceCandidateIds) ? [...new Set(entry.sourceCandidateIds.map(String).filter(Boolean))] : [],
-      evidence: Array.isArray(entry.evidence) ? entry.evidence.slice(0, 120) : [],
-      relatedEntryIds: Array.isArray(entry.relatedEntryIds) ? [...new Set(entry.relatedEntryIds.map(String).filter(Boolean))] : [],
-      conflicts: Array.isArray(entry.conflicts) ? entry.conflicts.slice(0, 40) : [],
-      questions: Array.isArray(entry.questions) ? entry.questions.slice(0, 40) : [],
-      knownProjectMatches: Array.isArray(entry.knownProjectMatches) ? entry.knownProjectMatches.slice(0, 10) : [],
-      history: Array.isArray(entry.history) ? entry.history.slice(-80) : [],
-      firstSeenAt: entry.firstSeenAt || nowIso(),
-      lastSeenAt: entry.lastSeenAt || entry.firstSeenAt || nowIso(),
-      lastUpdatedAt: entry.lastUpdatedAt || entry.lastSeenAt || nowIso()
-    })),
+    entries: entries.map((entry) => {
+      const classification = PROJECT_STATE_CLASSIFICATIONS.includes(entry.projectStateClassification) ? entry.projectStateClassification : classifyProjectStateCandidate(entry);
+      const conceptTitle = conceptTitleForCandidate(entry, classification);
+      const originalTitle = String(entry.title || entry.workingLabel || "").slice(0, 220);
+      return {
+        id: entry.id || uid("candidate_map_entry"),
+        title: conceptTitle,
+        conceptTitle,
+        titleSource: String(entry.titleSource || entry.provenance?.titleSource || (originalTitle && originalTitle !== conceptTitle ? originalTitle : "")).slice(0, 220),
+        summary: limitText(entry.summary || entry.neutralSummary || "", 3000),
+        candidateType: entry.candidateType || "unknown",
+        projectStateClassification: classification,
+        scope: entry.scope || "unknown",
+        status: entry.status || "active",
+        confidenceScore: Number.isFinite(Number(entry.confidenceScore)) ? Number(entry.confidenceScore) : 0.5,
+        keyTerms: Array.isArray(entry.keyTerms) ? [...new Set(entry.keyTerms.map(String).filter(Boolean))].slice(0, 40) : [],
+        sourceCandidateIds: Array.isArray(entry.sourceCandidateIds) ? [...new Set(entry.sourceCandidateIds.map(String).filter(Boolean))] : [],
+        evidence: Array.isArray(entry.evidence) ? entry.evidence.slice(0, 120) : [],
+        relatedEntryIds: Array.isArray(entry.relatedEntryIds) ? [...new Set(entry.relatedEntryIds.map(String).filter(Boolean))] : [],
+        conflicts: Array.isArray(entry.conflicts) ? entry.conflicts.slice(0, 40) : [],
+        questions: Array.isArray(entry.questions) ? entry.questions.slice(0, 40) : [],
+        knownProjectMatches: Array.isArray(entry.knownProjectMatches) ? entry.knownProjectMatches.slice(0, 10) : [],
+        history: Array.isArray(entry.history) ? entry.history.slice(-80) : [],
+        firstSeenAt: entry.firstSeenAt || nowIso(),
+        lastSeenAt: entry.lastSeenAt || entry.firstSeenAt || nowIso(),
+        lastUpdatedAt: entry.lastUpdatedAt || entry.lastSeenAt || nowIso()
+      };
+    }),
     relationships: Array.isArray(existing.relationships) ? existing.relationships.slice(0, 500) : [],
     unresolvedQuestions: Array.isArray(existing.unresolvedQuestions) ? existing.unresolvedQuestions.slice(0, 200) : [],
     events: Array.isArray(existing.events) ? existing.events.slice(-500) : []
@@ -12338,12 +12405,17 @@ function mergeCandidateIntoMapEntry(entry, candidate, candidateRecordId, passNum
   const keyTerms = new Set([...(entry.keyTerms || []), ...(candidate.keyTerms || [])].map(String).filter(Boolean));
   const projectMatches = knownProjectMatchesForCandidate(candidate);
   const classification = classifyProjectStateCandidate(candidate);
+  const conceptTitle = conceptTitleForCandidate(candidate, projectMatches.length ? "existing_project_support" : classification);
+  const sourceHeading = cleanAiDisplayText(candidate.titleSource || candidate.provenance?.titleSource || candidate.workingLabel || candidate.title || "", 220);
   const oldSummary = entry.summary || "";
   const newSummary = candidate.neutralSummary || "";
   const mergedSummary = newSummary && newSummary.length > oldSummary.length * 0.8
     ? limitText(`${oldSummary ? `${oldSummary}\n\nUpdate from pass ${passNumber}: ` : ""}${newSummary}`, 3000)
     : oldSummary || newSummary;
   entry.summary = mergedSummary;
+  entry.title = conceptTitle;
+  entry.conceptTitle = conceptTitle;
+  if (sourceHeading && sourceHeading !== conceptTitle) entry.titleSource = entry.titleSource || sourceHeading;
   entry.candidateType = entry.candidateType === "unknown" || entry.candidateType === "other" ? candidate.candidateType || entry.candidateType : entry.candidateType;
   entry.projectStateClassification = projectMatches.length ? "existing_project_support" : classification;
   entry.scope = entry.scope === "unknown" ? candidate.scope || entry.scope : entry.scope;
@@ -12394,9 +12466,13 @@ function updateWorkOrderCandidateMap(workOrder, execution, analysisStateBefore =
       }
       map.events.push({ id: uid("candidate_map_event"), at: now, type: "candidate_updated_entry", passNumber, entryId: best.entry.id, candidateId, similarity: Number(best.score.toFixed(3)) });
     } else {
+      const conceptTitle = conceptTitleForCandidate(candidate, classification);
+      const sourceHeading = cleanAiDisplayText(candidate.titleSource || candidate.provenance?.titleSource || candidate.workingLabel || candidate.title || "", 220);
       const entry = {
         id: uid("candidate_map_entry"),
-        title: String(candidate.workingLabel || "Candidate Map Entry").slice(0, 220),
+        title: conceptTitle,
+        conceptTitle,
+        titleSource: sourceHeading && sourceHeading !== conceptTitle ? sourceHeading : "",
         summary: limitText(candidate.neutralSummary || "", 3000),
         candidateType: candidate.candidateType || "unknown",
         scope: candidate.scope || "unknown",
@@ -12559,6 +12635,19 @@ function candidateMatchesMapEntry(candidate = {}, entry = {}) {
   return (candidate.evidence || []).some((evidence) => entryChunks.has(evidence.discoveryChunkId));
 }
 
+function candidateDuplicateDisplayMapEntry(candidate = {}, entry = {}) {
+  const candidateTitle = normalizedReviewPackTitle(conceptTitleForCandidate(candidate) || candidate.workingLabel || candidate.title || "");
+  const entryTitle = normalizedReviewPackTitle(entry.conceptTitle || entry.title || entry.workingLabel || "");
+  if (!candidateTitle || candidateTitle !== entryTitle) return false;
+  const entryChunks = new Set((entry.evidence || []).map((evidence) => evidence.discoveryChunkId).filter(Boolean));
+  return (candidate.evidence || []).some((evidence) => evidence.discoveryChunkId && entryChunks.has(evidence.discoveryChunkId));
+}
+
+function rawCandidatesNotRepresentedByMap(candidates = [], candidateMap = {}) {
+  const entries = candidateMap?.entries || [];
+  return candidates.filter((candidate) => !entries.some((entry) => candidateDuplicateDisplayMapEntry(candidate, entry)));
+}
+
 function reviewPackFocusFileName(value = "cluster") {
   return safeFileName(cleanAiDisplayText(value, 80) || "cluster");
 }
@@ -12576,8 +12665,8 @@ function normalizedReviewPackTitle(value = "") {
 function buildReviewPackTitleClusters(workOrder = {}, candidates = []) {
   const mapEntries = workOrder.candidateMap?.entries || [];
   const items = [
-    ...mapEntries.map((entry) => ({ kind: "Candidate Map", title: entry.title, summary: entry.summary, id: entry.id, status: entry.status, evidenceCount: entry.evidence?.length || 0 })),
-    ...candidates.map((candidate) => ({ kind: "Raw Candidate", title: candidate.workingLabel, summary: candidate.neutralSummary, id: candidate.id || candidate.clientCandidateId, status: candidate.candidateType || "unknown", evidenceCount: candidate.evidence?.length || 0 }))
+    ...mapEntries.map((entry) => ({ kind: "Candidate Map", title: entry.conceptTitle || entry.title, summary: entry.summary, id: entry.id, status: entry.status, evidenceCount: entry.evidence?.length || 0 })),
+    ...rawCandidatesNotRepresentedByMap(candidates, workOrder.candidateMap).map((candidate) => ({ kind: "Raw Candidate", title: conceptTitleForCandidate(candidate), summary: candidate.neutralSummary, id: candidate.id || candidate.clientCandidateId, status: candidate.candidateType || "unknown", evidenceCount: candidate.evidence?.length || 0 }))
   ];
   const groups = new Map();
   for (const item of items) {
@@ -12615,7 +12704,7 @@ function buildReviewPackIndexMarkdown(workOrder = {}, state = {}, entries = [], 
     "## Cluster file list",
     "",
     entries.length
-      ? entries.map((entry, index) => `- ${String(index + 1).padStart(3, "0")} · ${markdownSafeLine(displaySafeAiTitle(entry.title))} · ${Number(entry.evidence?.length || 0).toLocaleString()} evidence links · status ${markdownSafeLine(entry.status || "active")}`).join("\n")
+      ? entries.map((entry, index) => `- ${String(index + 1).padStart(3, "0")} · ${markdownSafeLine(displaySafeAiTitle(entry.conceptTitle || entry.title))} · ${Number(entry.evidence?.length || 0).toLocaleString()} evidence links · status ${markdownSafeLine(entry.status || "active")}`).join("\n")
       : "- No Candidate Map entries were available to split."
   ].join("\n");
 }
@@ -12632,6 +12721,7 @@ function buildChatGptReviewPackMarkdown(workOrder = {}, state = {}, options = {}
   const candidates = Array.isArray(options.focusEntries) && options.focusEntries.length
     ? allCandidates.filter((candidate) => selectedMapEntries.some((entry) => candidateMatchesMapEntry(candidate, entry))).slice(-config.rawCandidateLimit)
     : allCandidates.slice(-config.rawCandidateLimit);
+  const displayRawCandidates = rawCandidatesNotRepresentedByMap(candidates, { entries: selectedMapEntries });
   const packWorkOrder = { ...workOrder, candidateMap: { ...candidateMap, entries: selectedMapEntries } };
   const titleClusters = buildReviewPackTitleClusters(packWorkOrder, candidates);
   const chunkTextById = options.chunkTextById || new Map();
@@ -12652,9 +12742,13 @@ function buildChatGptReviewPackMarkdown(workOrder = {}, state = {}, options = {}
     "",
     "- Merge repeated/same-title candidates into singular ideas when the evidence supports one shared project.",
     "- Keep different branches separate only when the evidence clearly proves they are different projects or subprojects.",
-    "- Treat chat/thread/conversation starts as source metadata only, not project boundaries.",
+    "- Treat chat/thread/conversation starts, chunk boundaries, and assistant answer headings as source metadata/provenance only, not project boundaries.",
+    "- Separate title_source from concept_title: preserve the original heading as title_source when useful, but use a normalized content-derived concept_title for review.",
+    "- Do not preserve ChatGPT answer headings as project names by default. Classify the underlying content instead.",
     "- Use source titles, filenames, repeated named entities, user-confirmed labels, and semantic continuity across chunks as the main grouping signals.",
     "- Mark licensing, app agreements, boilerplate, casual chat, and one-off weak signals as reference/noise/support unless they clearly describe buildable work.",
+    "- Prefer existing_project_support over project_candidate when content belongs to a known project.",
+    "- Before creating a new project candidate, ask: does this match a known project, is it only supporting material, is the title just assistant structure, is it personal/context, is it reference material, and only then is it a concrete new buildable/publishable idea?",
     "- Do not invent missing facts. Use TBD where the source is unclear.",
     "- Preserve chunk IDs when citing evidence.",
     "",
@@ -12725,9 +12819,11 @@ function buildChatGptReviewPackMarkdown(workOrder = {}, state = {}, options = {}
     "",
     selectedMapEntries.length
       ? selectedMapEntries.map((entry, index) => [
-        `### ${index + 1}. ${markdownSafeLine(displaySafeAiTitle(entry.title))}`,
+        `### ${index + 1}. ${markdownSafeLine(displaySafeAiTitle(entry.conceptTitle || entry.title))}`,
         "",
         `- Entry ID: \`${markdownSafeLine(entry.id)}\``,
+        entry.titleSource ? `- Title source / heading: ${markdownSafeLine(entry.titleSource)}` : "- Title source / heading: none recorded",
+        entry.sourceCandidateIds?.length ? `- Linked raw candidate IDs: ${entry.sourceCandidateIds.map((id) => `\`${markdownSafeLine(id)}\``).join(", ")}` : "- Linked raw candidate IDs: none recorded",
         `- Status: ${markdownSafeLine(entry.status || "active")}`,
         `- Project State classification: ${markdownSafeLine(entry.projectStateClassification || classifyProjectStateCandidate(entry))}`,
         `- Type/scope: ${markdownSafeLine(entry.candidateType || "unknown")} / ${markdownSafeLine(entry.scope || "unknown")}`,
@@ -12749,11 +12845,12 @@ function buildChatGptReviewPackMarkdown(workOrder = {}, state = {}, options = {}
     "",
     "## Raw AI candidates",
     "",
-    candidates.length
-      ? candidates.map((candidate, index) => [
-        `### Raw Candidate ${index + 1}: ${markdownSafeLine(displaySafeAiTitle(candidate.workingLabel || "Idea Candidate", "Idea Candidate"))}`,
+    displayRawCandidates.length
+      ? displayRawCandidates.map((candidate, index) => [
+        `### Raw Candidate ${index + 1}: ${markdownSafeLine(displaySafeAiTitle(conceptTitleForCandidate(candidate) || "Idea Candidate", "Idea Candidate"))}`,
         "",
         `- Candidate ID: \`${markdownSafeLine(candidate.id || candidate.clientCandidateId)}\``,
+        candidate.titleSource || candidate.provenance?.titleSource ? `- Title source / heading: ${markdownSafeLine(candidate.titleSource || candidate.provenance?.titleSource)}` : "- Title source / heading: none recorded",
         `- Type: ${markdownSafeLine(candidate.candidateType || "unknown")}`,
         `- Project State classification: ${markdownSafeLine(candidate.projectStateClassification || classifyProjectStateCandidate(candidate))}`,
         `- Confidence: ${Math.round(Number(candidate.confidence?.score || 0) * 100)}%`,
@@ -12770,7 +12867,7 @@ function buildChatGptReviewPackMarkdown(workOrder = {}, state = {}, options = {}
         "",
         markdownCandidateEvidence(candidate.evidence, config.rawEvidenceLimit, { chunkTextById, chunkTextLimit: config.chunkTextLimit })
       ].join("\n")).join("\n\n")
-      : "- No raw AI candidates are stored yet.",
+      : "- No separate raw AI candidates are stored outside the Candidate Map entries in this pack.",
     "",
     "## Codex update request",
     "",
@@ -13285,6 +13382,7 @@ async function openAiWorkOrderResultsModal(workOrderId) {
   if (!workOrder?.source?.discoveryCaseId) return;
   const state = await platformAdapter.analysis.readState({ discoveryCaseId: workOrder.source.discoveryCaseId });
   const candidates = state.candidates || [];
+  const displayRawCandidates = rawCandidatesNotRepresentedByMap(candidates, normalizeCandidateMap(workOrder));
   const noCandidatesFound = workOrder.lastAnalysis && Number(workOrder.lastAnalysis.candidateCount || 0) === 0;
   const moreSourceRemaining = workOrder.lastAnalysis && workOrder.lastAnalysis.sourceFullyAnalyzed !== true;
   showModal({
@@ -13305,15 +13403,16 @@ async function openAiWorkOrderResultsModal(workOrderId) {
       </div>
       <h3 class="section-title">Candidate Map</h3>
       ${renderCandidateMapEntries(workOrder.candidateMap)}
-      <h3 class="section-title">Raw AI Candidates</h3>
-      ${candidates.length ? `<div class="list">${candidates.map((candidate) => `
+      <h3 class="section-title">Raw AI Candidates not already represented in Candidate Map</h3>
+      ${displayRawCandidates.length ? `<div class="list">${displayRawCandidates.map((candidate) => `
         <article class="item">
-          <p class="item-title">${escapeDisplay(displaySafeAiTitle(candidate.workingLabel || "Idea Candidate", "Idea Candidate"), DISPLAY_META_LIMIT)}</p>
+          <p class="item-title">${escapeDisplay(displaySafeAiTitle(conceptTitleForCandidate(candidate) || "Idea Candidate", "Idea Candidate"), DISPLAY_META_LIMIT)}</p>
           <p class="item-meta">${escapeHtml(candidate.candidateType || "unknown")} · ${escapeHtml(String(candidate.projectStateClassification || classifyProjectStateCandidate(candidate)).replaceAll("_", " "))} · confidence ${Math.round(Number(candidate.confidence?.score || 0) * 100)}%</p>
+          ${candidate.titleSource || candidate.provenance?.titleSource ? `<p class="item-meta">source heading: ${escapeDisplay(candidate.titleSource || candidate.provenance?.titleSource, DISPLAY_META_LIMIT)}</p>` : ""}
           <p class="item-body">${escapeDisplay(displaySafeAiText(candidate.neutralSummary || "", DISPLAY_TEXT_LIMIT), DISPLAY_TEXT_LIMIT)}</p>
           <details class="technical-details"><summary>Evidence and provenance</summary>${(candidate.evidence || []).slice(0, 8).map((evidence) => `<p class="item-meta">${escapeDisplay(displaySafeAiText(evidence.excerpt || evidence.discoveryChunkId, 500), 500)}<br>Chunk: ${escapeDisplay(evidence.discoveryChunkId, DISPLAY_META_LIMIT)} · ${escapeDisplay(evidence.relationship || "supports", DISPLAY_META_LIMIT)}</p>`).join("")}<p class="item-meta">Provider: ${escapeDisplay(candidate.provenance?.providerId || "local", DISPLAY_META_LIMIT)} · Model: ${escapeDisplay(candidate.provenance?.modelId || "unknown", DISPLAY_META_LIMIT)}</p></details>
         </article>
-      `).join("")}</div>` : emptyText("No Idea Candidates have been produced for this Work Order yet.")}
+      `).join("")}</div>` : emptyText(candidates.length ? "All raw AI candidates are already linked to Candidate Map entries." : "No Idea Candidates have been produced for this Work Order yet.")}
     `,
     onSubmit() {}
   });
