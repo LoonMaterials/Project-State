@@ -30,11 +30,18 @@ async function main() {
     assert(indexSource.includes("connect-src http://127.0.0.1:11434 http://localhost:11434"), "CSP must permit local-only Ollama loopback checks.");
     assert(!/connect-src[^"]*(https?:\/\/(?!127\.0\.0\.1:11434|localhost:11434)[^"'\s;]+)/.test(indexSource), "CSP must not permit non-loopback provider connections.");
     assert(providerSource.includes("PROJECT_STATE_LOCAL_AI_TIMEOUT_MS"), "Local AI generation timeout must be configurable for offline models.");
-    assert(providerSource.includes("num_predict: 1200"), "Local AI generation should keep responses bounded for smoke/offline use.");
+    assert(providerSource.includes("PROJECT_STATE_LOCAL_AI_NUM_PREDICT") && providerSource.includes("num_predict: OLLAMA_NUM_PREDICT"), "Local AI generation should keep responses bounded but configurable for offline models.");
+    assert(providerSource.includes("PROJECT_STATE_LOCAL_AI_PROMPT_TEXT_BUDGET") && providerSource.includes("boundedChunkTextForPrompt"), "Local AI prompt text must be bounded for huge-file passes.");
+    assert(providerSource.includes("deterministicRescueCandidates") && providerSource.includes("Qwen returned no candidates"), "Local AI must preserve substantive chunk-window signals when Qwen returns an empty candidate list.");
+    assert(providerSource.includes("responseInvalidRescue") && providerSource.includes('error.code !== "PROVIDER_RESPONSE_INVALID"'), "Local AI must rescue malformed Qwen JSON instead of failing the entire Work Order pass.");
+    assert(providerSource.includes("textLooksBinaryOrGibberish") && providerSource.includes("Content_Types"), "Local AI rescue must not preserve binary/container garbage as candidates.");
+    assert(bridgeSource.includes("extractReadableDiscoveryText") && bridgeSource.includes("windowed ? \"\" : await extractReadableDiscoveryText(physicalPath)"), "Large-corpus indexing must use format-aware text extraction instead of raw UTF-8 reads.");
+    assert(bridgeSource.includes("extractDocxTextWindow") && bridgeSource.includes("streamingWindow") && bridgeSource.includes("createInflateRaw"), "Large DOCX corpus indexing must stream windowed text instead of creating one giant string.");
     assert(providerSource.includes("callQwenForJson"), "Local AI provider must retry malformed JSON locally before failing.");
     assert(providerSource.includes("responseAttempts"), "Local AI candidate provenance should record JSON retry attempts.");
     assert(providerSource.includes("Do not create project names"), "Local AI prompt must keep project naming out of the provider.");
     assert(providerSource.includes("priorDigestContext") && providerSource.includes("much larger file"), "Local AI prompt must carry rolling digest context across chunk windows.");
+    assert(providerSource.includes("candidateMapContext") && providerSource.includes("Candidate Map context"), "Local AI prompt must receive Candidate Map context.");
     assert(appSource.includes("creates no Core authority"), "UI does not explain local AI authority boundary.");
     for (const required of [
       "Start local AI digestion",
@@ -50,6 +57,12 @@ async function main() {
       "Work Order stays active",
       "buildWorkOrderDigestContext",
       "updateWorkOrderDigestContext",
+      "retryableEmptyRunIds",
+      "normalizeCandidateMap",
+      "buildCandidateMapContext",
+      "updateWorkOrderCandidateMap",
+      "renderCandidateMapEntries",
+      "Candidate Map:",
       "until_paused",
       "Stop after this pass",
       "Rolling digest context",
@@ -59,7 +72,7 @@ async function main() {
     assert(appSource.includes('workOrder.status = sourceFullyAnalyzed ? "completed" : "submitted";'), "AI Work Orders must complete only when source coverage is fully analyzed.");
     assert(appSource.includes("unanalyzedChunks") && appSource.includes("alreadyAnalyzedChunkIds"), "AI Work Order execution must continue through new chunk windows instead of repeating the first pass.");
     assert(appSource.includes("!capabilities.realProviderInstalled"), "AI Work Order execution should require a real local provider instead of the fake fixture arm.");
-    assert(appSource.includes("externalTransmission: execution.result.transmissionReceipt?.externalTransmission === true"), "AI Work Order execution should retain local/external transmission evidence.");
+    assert(appSource.includes("externalTransmission: execution.transmissionReceipt?.externalTransmission === true"), "AI Work Order execution should retain local/external transmission evidence.");
 
     console.log("Local AI Provider Plumbing Check");
     console.log(JSON.stringify({

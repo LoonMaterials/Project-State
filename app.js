@@ -4923,6 +4923,7 @@ function normalizeAiWorkOrder(workOrder, context) {
     analysisRunIds: Array.isArray(workOrder.analysisRunIds) ? workOrder.analysisRunIds : [],
     lastAnalysis: workOrder.lastAnalysis && typeof workOrder.lastAnalysis === "object" ? cloneRecord(workOrder.lastAnalysis) : null,
     digestContext: workOrder.digestContext && typeof workOrder.digestContext === "object" ? cloneRecord(workOrder.digestContext) : null,
+    candidateMap: workOrder.candidateMap && typeof workOrder.candidateMap === "object" ? cloneRecord(workOrder.candidateMap) : null,
     comments: normalizeComments(workOrder.comments, context)
   };
 }
@@ -6182,6 +6183,41 @@ function renderAiWorkOrders() {
   `);
 }
 
+function renderCandidateMapStats(candidateMap = null) {
+  if (!candidateMap?.entries?.length) return "";
+  const entries = candidateMap.entries || [];
+  const statusCounts = entries.reduce((counts, entry) => {
+    counts[entry.status || "active"] = (counts[entry.status || "active"] || 0) + 1;
+    return counts;
+  }, {});
+  const statusText = Object.entries(statusCounts).map(([status, count]) => `${count} ${status.replaceAll("_", " ")}`).join(" · ");
+  return `<p class="notice"><strong>Candidate Map:</strong> ${entries.length.toLocaleString()} mapped entr${entries.length === 1 ? "y" : "ies"} · ${Number(candidateMap.totalEvidenceLinks || 0).toLocaleString()} evidence link${Number(candidateMap.totalEvidenceLinks || 0) === 1 ? "" : "s"} · ${Number(candidateMap.totalPasses || 0).toLocaleString()} pass${Number(candidateMap.totalPasses || 0) === 1 ? "" : "es"}${statusText ? ` · ${escapeDisplay(statusText, DISPLAY_META_LIMIT)}` : ""}</p>`;
+}
+
+function displaySafeAiText(value = "", limit = DISPLAY_TEXT_LIMIT) {
+  const text = String(value || "");
+  if (textLooksBinaryOrGibberish(text)) return "[Unreadable binary/container text hidden from display]";
+  return text.slice(0, limit);
+}
+
+function renderCandidateMapEntries(candidateMap = null) {
+  const entries = candidateMap?.entries || [];
+  if (!entries.length) return emptyText("Candidate Map is empty. Run local AI digestion to begin building the pre-Airlock idea ledger.");
+  return `<section class="list">${entries.map((entry) => `
+    <article class="item">
+      <p class="item-title">${escapeDisplay(entry.title, DISPLAY_META_LIMIT)}</p>
+      <p class="item-meta">${escapeHtml(entry.candidateType || "unknown")} · ${escapeHtml(entry.scope || "unknown")} · ${escapeHtml(String(entry.status || "active").replaceAll("_", " "))} · confidence ${Math.round(Number(entry.confidenceScore || 0) * 100)}%</p>
+      <p class="item-body">${escapeDisplay(displaySafeAiText(entry.summary || "", DISPLAY_TEXT_LIMIT), DISPLAY_TEXT_LIMIT)}</p>
+      <p class="item-meta">${Number(entry.evidence?.length || 0).toLocaleString()} evidence link${Number(entry.evidence?.length || 0) === 1 ? "" : "s"} · ${Number(entry.sourceCandidateIds?.length || 0).toLocaleString()} source candidate${Number(entry.sourceCandidateIds?.length || 0) === 1 ? "" : "s"}${entry.keyTerms?.length ? ` · ${escapeDisplay(entry.keyTerms.slice(0, 10).join(", "), DISPLAY_META_LIMIT)}` : ""}</p>
+      <details class="technical-details">
+        <summary>Map evidence and history</summary>
+        ${(entry.evidence || []).slice(0, 12).map((evidence) => `<p class="item-meta">${escapeDisplay(displaySafeAiText(evidence.excerpt || evidence.discoveryChunkId, 500), 500)}<br>Chunk: ${escapeDisplay(evidence.discoveryChunkId, DISPLAY_META_LIMIT)} · ${escapeDisplay(evidence.relationship || "supports", DISPLAY_META_LIMIT)}</p>`).join("") || `<p class="item-meta">No evidence links recorded.</p>`}
+        ${(entry.history || []).slice(-8).map((event) => `<p class="item-meta">${escapeHtml(formatDate(event.at))} · ${escapeDisplay(event.action || "map event", DISPLAY_META_LIMIT)} · pass ${Number(event.passNumber || 0).toLocaleString()}</p>`).join("")}
+      </details>
+    </article>
+  `).join("")}</section>`;
+}
+
 function renderAiWorkOrderItem(order) {
   const projectName = order.projectId ? projectNameById(order.projectId) || t("missingProject") : t("noTargetProject");
   const source = order.source || {};
@@ -6209,6 +6245,7 @@ function renderAiWorkOrderItem(order) {
       ${sourceMeta ? `<p class="item-meta">${escapeDisplay(sourceMeta, DISPLAY_META_LIMIT)}</p>` : ""}
       ${largeFileMeta ? `<p class="notice"><strong>Large-file follow-up:</strong> ${escapeDisplay(largeFileMeta, DISPLAY_META_LIMIT)}. Keep this parked here until a local/cloud AI arm is ready to digest it.</p>` : ""}
       ${lastAnalysis ? `<p class="notice"><strong>Last local AI run:</strong> ${escapeDisplay(lastAnalysis.providerLabel || lastAnalysis.providerId || "Local AI", DISPLAY_META_LIMIT)} · ${Number(lastAnalysis.candidateCount || 0).toLocaleString()} candidate${Number(lastAnalysis.candidateCount || 0) === 1 ? "" : "s"} · ${Number(lastAnalysis.analyzedChunks || 0).toLocaleString()} chunk${Number(lastAnalysis.analyzedChunks || 0) === 1 ? "" : "s"} in last pass · ${Number(lastAnalysis.analyzedUniqueChunks || lastAnalysis.analyzedChunks || 0).toLocaleString()} total analyzed${lastAnalysis.totalDetectedChunks ? ` of ${Number(lastAnalysis.totalDetectedChunks).toLocaleString()} detected` : ""} · ${escapeHtml(formatDate(lastAnalysis.completedAt || order.createdAt))}</p>` : ""}
+      ${renderCandidateMapStats(order.candidateMap)}
       ${order.digestContext?.passCount ? `<p class="item-meta">Rolling digest context: ${Number(order.digestContext.passCount).toLocaleString()} saved pass${Number(order.digestContext.passCount) === 1 ? "" : "es"} carried into future local AI windows.</p>` : ""}
       ${moreSourceRemaining ? `<p class="notice"><strong>More source remains.</strong> This Work Order stays active until Project State reaches the end of the file/folder evidence. Run local AI digestion again to continue with the next chunk window.</p>` : ""}
       ${noCandidatesFound ? `<p class="notice"><strong>No candidates found in the last pass.</strong> The AI job finished, but that only covers the last chunk window. Continue through the source before deciding archive/no-find.</p>` : ""}
@@ -12083,9 +12120,190 @@ function privacyClassForAnalysisChunks(chunks = [], extractionById = new Map(), 
 
 function analyzedChunkIdsFromAnalysisState(state = {}) {
   const ids = new Set();
-  for (const job of state.jobs || []) for (const chunkId of job.result?.coverage?.analyzedChunkIds || []) ids.add(chunkId);
-  for (const run of state.analysisRuns || []) for (const chunkId of run.coverage?.analyzedChunkIds || []) ids.add(chunkId);
+  const retryableEmptyRunIds = new Set();
+  for (const job of state.jobs || []) {
+    const candidateCount = Array.isArray(job.result?.candidates) ? job.result.candidates.length : 0;
+    if (candidateCount === 0 && job.providerId === "ollama_qwen3_8b_local") {
+      if (job.analysisRunId) retryableEmptyRunIds.add(job.analysisRunId);
+      continue;
+    }
+    for (const chunkId of job.result?.coverage?.analyzedChunkIds || []) ids.add(chunkId);
+  }
+  for (const run of state.analysisRuns || []) {
+    if (retryableEmptyRunIds.has(run.id)) continue;
+    for (const chunkId of run.coverage?.analyzedChunkIds || []) ids.add(chunkId);
+  }
   return ids;
+}
+
+function textLooksBinaryOrGibberish(text = "") {
+  const sample = String(text || "").slice(0, 6000);
+  if (!sample.trim()) return true;
+  const replacementCount = (sample.match(/\uFFFD/g) || []).length;
+  const controlCount = (sample.match(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g) || []).length;
+  const printableCount = (sample.match(/[A-Za-z0-9\s.,;:'"!?()[\]{}#/_-]/g) || []).length;
+  const printableRatio = printableCount / Math.max(1, sample.length);
+  const wordCount = (sample.match(/[A-Za-z][A-Za-z0-9_'-]{2,}/g) || []).length;
+  const zipContainerNoise = /^\s*PK[\x00-\x08\x0B\x0C\x0E-\x1F\uFFFD]/.test(sample) || /\[Content_Types\]\.xml|_rels\/\.rels/.test(sample);
+  return zipContainerNoise || replacementCount > 12 || controlCount > 20 || printableRatio < 0.58 || (sample.length > 500 && wordCount < 8);
+}
+
+function candidateMapTokenSet(value = "") {
+  const stop = new Set(["the", "and", "for", "with", "from", "this", "that", "into", "onto", "your", "about", "should", "would", "could", "project", "candidate", "idea"]);
+  return new Set(String(value || "").toLowerCase().replace(/[^a-z0-9\s]/g, " ").split(/\s+/).filter((token) => token.length > 2 && !stop.has(token)).slice(0, 80));
+}
+
+function candidateMapSimilarity(a = {}, b = {}) {
+  const left = candidateMapTokenSet([a.workingLabel, a.neutralSummary, ...(a.keyTerms || [])].join(" "));
+  const right = candidateMapTokenSet([b.title || b.workingLabel, b.summary || b.neutralSummary, ...(b.keyTerms || [])].join(" "));
+  if (!left.size || !right.size) return 0;
+  const overlap = [...left].filter((token) => right.has(token)).length;
+  return overlap / Math.max(left.size, right.size);
+}
+
+function candidateMapEvidenceKey(evidence = {}) {
+  return `${evidence.discoveryChunkId || ""}:${evidence.chunkTextSha256 || ""}:${evidence.relationship || ""}`;
+}
+
+function normalizeCandidateMap(workOrder = {}) {
+  const existing = workOrder.candidateMap && typeof workOrder.candidateMap === "object" ? cloneRecord(workOrder.candidateMap) : {};
+  const entries = Array.isArray(existing.entries) ? existing.entries : [];
+  return {
+    schemaVersion: "0.1",
+    mapId: existing.mapId || uid("candidate_map"),
+    status: existing.status || "building",
+    createdAt: existing.createdAt || nowIso(),
+    updatedAt: existing.updatedAt || nowIso(),
+    sourceDiscoveryCaseId: existing.sourceDiscoveryCaseId || workOrder.source?.discoveryCaseId || "",
+    totalPasses: Number(existing.totalPasses || 0),
+    totalCandidatesObserved: Number(existing.totalCandidatesObserved || 0),
+    totalEvidenceLinks: Number(existing.totalEvidenceLinks || 0),
+    entries: entries.map((entry) => ({
+      id: entry.id || uid("candidate_map_entry"),
+      title: String(entry.title || entry.workingLabel || "Candidate Map Entry").slice(0, 220),
+      summary: limitText(entry.summary || entry.neutralSummary || "", 3000),
+      candidateType: entry.candidateType || "unknown",
+      scope: entry.scope || "unknown",
+      status: entry.status || "active",
+      confidenceScore: Number.isFinite(Number(entry.confidenceScore)) ? Number(entry.confidenceScore) : 0.5,
+      keyTerms: Array.isArray(entry.keyTerms) ? [...new Set(entry.keyTerms.map(String).filter(Boolean))].slice(0, 40) : [],
+      sourceCandidateIds: Array.isArray(entry.sourceCandidateIds) ? [...new Set(entry.sourceCandidateIds.map(String).filter(Boolean))] : [],
+      evidence: Array.isArray(entry.evidence) ? entry.evidence.slice(0, 120) : [],
+      relatedEntryIds: Array.isArray(entry.relatedEntryIds) ? [...new Set(entry.relatedEntryIds.map(String).filter(Boolean))] : [],
+      conflicts: Array.isArray(entry.conflicts) ? entry.conflicts.slice(0, 40) : [],
+      questions: Array.isArray(entry.questions) ? entry.questions.slice(0, 40) : [],
+      history: Array.isArray(entry.history) ? entry.history.slice(-80) : [],
+      firstSeenAt: entry.firstSeenAt || nowIso(),
+      lastSeenAt: entry.lastSeenAt || entry.firstSeenAt || nowIso(),
+      lastUpdatedAt: entry.lastUpdatedAt || entry.lastSeenAt || nowIso()
+    })),
+    relationships: Array.isArray(existing.relationships) ? existing.relationships.slice(0, 500) : [],
+    unresolvedQuestions: Array.isArray(existing.unresolvedQuestions) ? existing.unresolvedQuestions.slice(0, 200) : [],
+    events: Array.isArray(existing.events) ? existing.events.slice(-500) : []
+  };
+}
+
+function buildCandidateMapContext(workOrder = {}) {
+  const map = normalizeCandidateMap(workOrder);
+  if (!map.entries.length) return "Candidate Map: empty. Create entries for genuinely distinct ideas; otherwise update the map later with supporting evidence.";
+  const lines = map.entries.slice(-50).map((entry, index) => [
+    `${index + 1}. [${entry.id}] ${entry.title}`,
+    `type=${entry.candidateType}; scope=${entry.scope}; status=${entry.status}; confidence=${Math.round(Number(entry.confidenceScore || 0) * 100)}%`,
+    `summary=${limitText(entry.summary || "", 450)}`,
+    entry.keyTerms?.length ? `terms=${entry.keyTerms.slice(0, 10).join(", ")}` : "",
+    entry.evidence?.length ? `evidenceLinks=${entry.evidence.length}` : ""
+  ].filter(Boolean).join(" | "));
+  return limitText([
+    "Candidate Map is the existing pre-Airlock idea ledger for this Work Order.",
+    "Use it to decide whether current chunks create a new idea, update an existing idea, suggest merge/duplicate/conflict, or add supporting evidence.",
+    "Do not treat map entries as Core truth. New candidate evidence must still cite current chunks.",
+    lines.join("\n")
+  ].join("\n\n"), 7000);
+}
+
+function mergeCandidateIntoMapEntry(entry, candidate, candidateRecordId, passNumber, now) {
+  const evidenceByKey = new Map((entry.evidence || []).map((item) => [candidateMapEvidenceKey(item), item]));
+  for (const evidence of candidate.evidence || []) if (!evidenceByKey.has(candidateMapEvidenceKey(evidence))) evidenceByKey.set(candidateMapEvidenceKey(evidence), cloneRecord(evidence));
+  const sourceCandidateIds = new Set([...(entry.sourceCandidateIds || []), candidateRecordId || candidate.id || candidate.clientCandidateId].filter(Boolean));
+  const keyTerms = new Set([...(entry.keyTerms || []), ...(candidate.keyTerms || [])].map(String).filter(Boolean));
+  const oldSummary = entry.summary || "";
+  const newSummary = candidate.neutralSummary || "";
+  const mergedSummary = newSummary && newSummary.length > oldSummary.length * 0.8
+    ? limitText(`${oldSummary ? `${oldSummary}\n\nUpdate from pass ${passNumber}: ` : ""}${newSummary}`, 3000)
+    : oldSummary || newSummary;
+  entry.summary = mergedSummary;
+  entry.candidateType = entry.candidateType === "unknown" || entry.candidateType === "other" ? candidate.candidateType || entry.candidateType : entry.candidateType;
+  entry.scope = entry.scope === "unknown" ? candidate.scope || entry.scope : entry.scope;
+  entry.confidenceScore = Math.max(Number(entry.confidenceScore || 0), Number(candidate.confidence?.score || 0));
+  entry.keyTerms = [...keyTerms].slice(0, 40);
+  entry.sourceCandidateIds = [...sourceCandidateIds];
+  entry.evidence = [...evidenceByKey.values()].slice(0, 120);
+  entry.questions = [...(entry.questions || []), ...(candidate.clarificationQuestions || []).map((question) => ({ ...cloneRecord(question), sourceCandidateId: candidateRecordId || candidate.clientCandidateId, addedAt: now }))].slice(-40);
+  entry.status = entry.status === "new" ? "updated" : entry.status === "supporting_reference" ? "supporting_reference" : "updated";
+  entry.lastSeenAt = now;
+  entry.lastUpdatedAt = now;
+  entry.history = [...(entry.history || []), { at: now, action: "updated_from_candidate", passNumber, sourceCandidateId: candidateRecordId || candidate.clientCandidateId, evidenceLinks: (candidate.evidence || []).length }].slice(-80);
+  return entry;
+}
+
+function updateWorkOrderCandidateMap(workOrder, execution, analysisStateBefore = {}) {
+  const now = nowIso();
+  const map = normalizeCandidateMap(workOrder);
+  const passNumber = Number(workOrder.digestContext?.passCount || map.totalPasses || 0) + 1;
+  const priorCandidateIds = new Set((analysisStateBefore.candidates || []).map((candidate) => candidate.id));
+  const stateAfterCandidates = execution.result?.candidates || [];
+  const durableCandidates = stateAfterCandidates.map((candidate) => {
+    const mapped = (execution.candidates || []).find((record) => record.clientCandidateId === candidate.clientCandidateId);
+    return { ...candidate, id: mapped?.id || candidate.id || candidate.clientCandidateId };
+  });
+  let newEntries = 0;
+  let updatedEntries = 0;
+  let duplicateHints = 0;
+  for (const candidate of durableCandidates) {
+    const candidateId = candidate.id || candidate.clientCandidateId;
+    const best = map.entries.map((entry) => ({ entry, score: candidateMapSimilarity(candidate, entry) })).sort((a, b) => b.score - a.score)[0];
+    if (best && best.score >= 0.42) {
+      mergeCandidateIntoMapEntry(best.entry, candidate, candidateId, passNumber, now);
+      updatedEntries += 1;
+      if (best.score >= 0.72) {
+        duplicateHints += 1;
+        best.entry.status = best.entry.status === "supporting_reference" ? "supporting_reference" : "possible_duplicate_or_continuation";
+      }
+      map.events.push({ id: uid("candidate_map_event"), at: now, type: "candidate_updated_entry", passNumber, entryId: best.entry.id, candidateId, similarity: Number(best.score.toFixed(3)) });
+    } else {
+      const entry = {
+        id: uid("candidate_map_entry"),
+        title: String(candidate.workingLabel || "Candidate Map Entry").slice(0, 220),
+        summary: limitText(candidate.neutralSummary || "", 3000),
+        candidateType: candidate.candidateType || "unknown",
+        scope: candidate.scope || "unknown",
+        status: candidate.candidateType === "reference" ? "supporting_reference" : "new",
+        confidenceScore: Number(candidate.confidence?.score || 0.5),
+        keyTerms: Array.isArray(candidate.keyTerms) ? [...new Set(candidate.keyTerms.map(String).filter(Boolean))].slice(0, 40) : [],
+        sourceCandidateIds: [candidateId].filter(Boolean),
+        evidence: Array.isArray(candidate.evidence) ? candidate.evidence.slice(0, 120) : [],
+        relatedEntryIds: [],
+        conflicts: [],
+        questions: (candidate.clarificationQuestions || []).map((question) => ({ ...cloneRecord(question), sourceCandidateId: candidateId, addedAt: now })).slice(0, 40),
+        history: [{ at: now, action: "created_from_candidate", passNumber, sourceCandidateId: candidateId, evidenceLinks: (candidate.evidence || []).length }],
+        firstSeenAt: now,
+        lastSeenAt: now,
+        lastUpdatedAt: now
+      };
+      map.entries.push(entry);
+      newEntries += 1;
+      map.events.push({ id: uid("candidate_map_event"), at: now, type: "candidate_created_entry", passNumber, entryId: entry.id, candidateId });
+    }
+  }
+  map.totalPasses = Math.max(Number(map.totalPasses || 0), passNumber);
+  map.totalCandidatesObserved += durableCandidates.length;
+  map.totalEvidenceLinks = map.entries.reduce((total, entry) => total + (entry.evidence?.length || 0), 0);
+  map.updatedAt = now;
+  map.status = execution.sourceFullyAnalyzed ? "source_complete_pending_human_review" : "building";
+  map.events = map.events.slice(-500);
+  map.unresolvedQuestions = map.entries.flatMap((entry) => (entry.questions || []).map((question) => ({ ...question, entryId: entry.id, entryTitle: entry.title }))).slice(-200);
+  workOrder.candidateMap = map;
+  return { map, newEntries, updatedEntries, duplicateHints, priorCandidateCount: priorCandidateIds.size, observedCandidates: durableCandidates.length };
 }
 
 function buildWorkOrderDigestContext(workOrder = {}, analysisState = {}) {
@@ -12192,6 +12410,7 @@ async function executeAiWorkOrderLocalAnalysis(workOrder, actor, reason, { maxCh
   if (!capabilities.realProviderInstalled) throw new Error(`No real local AI provider is available. ${analysisInstallSuggestion(capabilities)}`);
   const priorAnalysisState = await platformAdapter.analysis.readState({ discoveryCaseId: workOrder.source.discoveryCaseId });
   const alreadyAnalyzedChunkIds = analyzedChunkIdsFromAnalysisState(priorAnalysisState);
+  for (const chunkId of workOrder.localAiSkippedChunkIds || []) alreadyAnalyzedChunkIds.add(chunkId);
   const priorDigestContext = buildWorkOrderDigestContext(workOrder, priorAnalysisState);
   let caseView = await platformAdapter.discovery.getCase({ discoveryCaseId: workOrder.source.discoveryCaseId });
   const prepared = await ensureWorkOrderAnalysisChunks(workOrder, caseView, { maxChunks, onProgress, analyzedChunkIds: alreadyAnalyzedChunkIds });
@@ -12207,9 +12426,46 @@ async function executeAiWorkOrderLocalAnalysis(workOrder, actor, reason, { maxCh
   const extractionById = new Map((caseView.extractions || []).map((extraction) => [extraction.id, extraction]));
   const versionById = new Map((caseView.fileVersions || []).map((version) => [version.id, version]));
   const assetById = new Map((caseView.fileAssets || []).map((asset) => [asset.id, asset]));
-  const sourceScope = sourceScopeFromChunks(analysisChunks, extractionById);
+  const inputChunks = [];
+  const readableAnalysisChunks = [];
+  const skippedUnreadableChunkIds = [];
+  onProgress?.({ stage: "reading", title: "Reading selected chunks", detail: "Reading exact stored Discovery chunk text before handing it to local Qwen.", counters: { chunksSelected: analysisChunks.length, chunksSent: 0, candidatesFound: 0, externalTransmission: false } });
+  for (const [index, chunk] of analysisChunks.entries()) {
+    const extraction = extractionById.get(chunk.discoveryExtractionId);
+    const read = await platformAdapter.discovery.readChunkText({ discoveryChunkId: chunk.id });
+    if (!extraction || textLooksBinaryOrGibberish(read.text)) {
+      skippedUnreadableChunkIds.push(chunk.id);
+      continue;
+    }
+    readableAnalysisChunks.push(chunk);
+    inputChunks.push({
+      discoveryChunkId: chunk.id,
+      discoveryExtractionId: extraction.id,
+      fileVersionId: extraction.fileVersionId,
+      sourceSha256: extraction.sourceSha256,
+      chunkTextSha256: chunk.textSha256,
+      content: { type: "text", text: read.text },
+      redactionState: "original"
+    });
+    onProgress?.({ stage: "reading", title: "Reading selected chunks", detail: `Read ${Number(index + 1).toLocaleString()} of ${analysisChunks.length.toLocaleString()} selected chunk${analysisChunks.length === 1 ? "" : "s"}.`, counters: { chunksSelected: analysisChunks.length, chunksSent: 0, candidatesFound: 0, externalTransmission: false } });
+  }
+  if (skippedUnreadableChunkIds.length) {
+    workOrder.localAiSkippedChunkIds = [...new Set([...(workOrder.localAiSkippedChunkIds || []), ...skippedUnreadableChunkIds])];
+    workOrder.comments = Array.isArray(workOrder.comments) ? workOrder.comments : [];
+    workOrder.comments.unshift({
+      id: uid("comment"),
+      actorId: "project_state_deterministic",
+      actorName: "Project State deterministic reader",
+      createdAt: nowIso(),
+      text: `Skipped ${skippedUnreadableChunkIds.length.toLocaleString()} unreadable/binary chunk${skippedUnreadableChunkIds.length === 1 ? "" : "s"} before local AI digestion. These chunks remain in Discovery evidence but were not sent to Qwen.`,
+      reviewState: "needs_review",
+      visibilityNotice: "Project State comments are part of the project record and are not private."
+    });
+  }
+  if (!inputChunks.length) throw new Error("Selected chunks were unreadable binary/container text. They were skipped for local AI; run again to continue to the next readable chunk window.");
+  const sourceScope = sourceScopeFromChunks(readableAnalysisChunks, extractionById);
   if (!sourceScope.length) throw new Error("Could not build exact source scope for local AI digestion.");
-  const privacyClass = privacyClassForAnalysisChunks(analysisChunks, extractionById, versionById, assetById);
+  const privacyClass = privacyClassForAnalysisChunks(readableAnalysisChunks, extractionById, versionById, assetById);
   const analysisRunId = uid("idea_run");
   const modelId = capabilities.arm?.providerId === "ollama_qwen3_8b_local" ? "qwen3:8b" : capabilities.arm?.providerId || "local_ai";
   await platformAdapter.analysis.createRun({
@@ -12222,7 +12478,7 @@ async function executeAiWorkOrderLocalAnalysis(workOrder, actor, reason, { maxCh
     sourceScope,
     provenance: { providerId: capabilities.arm.providerId, modelId, workOrderId: workOrder.id }
   });
-  const chunkScopes = analysisChunks.map((chunk) => ({ discoveryChunkId: chunk.id, chunkTextSha256: chunk.textSha256 }));
+  const chunkScopes = readableAnalysisChunks.map((chunk) => ({ discoveryChunkId: chunk.id, chunkTextSha256: chunk.textSha256 }));
   const authorization = await platformAdapter.analysis.authorizeTransmission({
     id: uid("idea_privacy"),
     discoveryCaseId: workOrder.source.discoveryCaseId,
@@ -12235,27 +12491,12 @@ async function executeAiWorkOrderLocalAnalysis(workOrder, actor, reason, { maxCh
     redactionMode: "none",
     reason: reason || "Authorize exact local-only chunks for AI Work Order digestion."
   });
-  const inputChunks = [];
-  onProgress?.({ stage: "reading", title: "Reading selected chunks", detail: "Reading exact stored Discovery chunk text before handing it to local Qwen.", counters: { chunksSelected: analysisChunks.length, chunksSent: 0, candidatesFound: 0, externalTransmission: false } });
-  for (const [index, chunk] of analysisChunks.entries()) {
-    const extraction = extractionById.get(chunk.discoveryExtractionId);
-    const read = await platformAdapter.discovery.readChunkText({ discoveryChunkId: chunk.id });
-    inputChunks.push({
-      discoveryChunkId: chunk.id,
-      discoveryExtractionId: extraction.id,
-      fileVersionId: extraction.fileVersionId,
-      sourceSha256: extraction.sourceSha256,
-      chunkTextSha256: chunk.textSha256,
-      content: { type: "text", text: read.text },
-      redactionState: "original"
-    });
-    onProgress?.({ stage: "reading", title: "Reading selected chunks", detail: `Read ${Number(index + 1).toLocaleString()} of ${analysisChunks.length.toLocaleString()} selected chunk${analysisChunks.length === 1 ? "" : "s"}.`, counters: { chunksSelected: analysisChunks.length, chunksSent: 0, candidatesFound: 0, externalTransmission: false } });
-  }
   const requestId = uid("analysis_request");
   const submittedAt = nowIso();
-  onProgress?.({ stage: "sending", title: "Sending chunks to local Qwen", detail: "Submitting authorized chunks to the local Ollama runtime on this machine.", counters: { chunksSelected: analysisChunks.length, chunksSent: analysisChunks.length, candidatesFound: 0, externalTransmission: false } });
-  onProgress?.({ stage: "thinking", title: "AI thinking", detail: "Qwen is generating Idea Candidates. This can look quiet on large sources.", counters: { chunksSelected: analysisChunks.length, chunksSent: analysisChunks.length, candidatesFound: 0, externalTransmission: false } });
-  const result = await platformAdapter.analysis.submitAnalysisBatch({
+  const localCandidateBudget = Math.max(1, Math.min(3, Math.ceil(readableAnalysisChunks.length / 8)));
+  onProgress?.({ stage: "sending", title: "Sending chunks to local Qwen", detail: "Submitting authorized chunks to the local Ollama runtime on this machine.", counters: { chunksSelected: readableAnalysisChunks.length, chunksSent: readableAnalysisChunks.length, candidatesFound: 0, externalTransmission: false } });
+  onProgress?.({ stage: "thinking", title: "AI thinking", detail: "Qwen is generating Idea Candidates. This can look quiet on large sources.", counters: { chunksSelected: readableAnalysisChunks.length, chunksSent: readableAnalysisChunks.length, candidatesFound: 0, externalTransmission: false } });
+  const submitted = await platformAdapter.analysis.submitAnalysisBatch({
     contractVersion: "0.1",
     requestId,
     idempotencyKey: uid("analysis_idempotency"),
@@ -12279,10 +12520,11 @@ async function executeAiWorkOrderLocalAnalysis(workOrder, actor, reason, { maxCh
     analysisOptions: {
       language: currentLanguage(),
       candidateTypes: capabilities.supportedCandidateTypes || ["other"],
-      maxCandidates: capabilities.limits?.candidatesPerResultPage || 100,
+      maxCandidates: localCandidateBudget,
       includeRelationships: true,
       includeClarificationQuestions: true,
-      priorDigestContext
+      priorDigestContext,
+      candidateMapContext: buildCandidateMapContext(workOrder)
     },
     provenance: {
       projectStateContract: "ai-analysis-arm-v0.1",
@@ -12290,19 +12532,26 @@ async function executeAiWorkOrderLocalAnalysis(workOrder, actor, reason, { maxCh
       analysisStrategy: "ai_work_order_local_qwen3_8b",
       workOrderId: workOrder.id,
       indexedNow: prepared.indexedNow,
-      analyzedChunkWindow: { analyzedChunks: analysisChunks.length, totalIndexedChunks: (prepared.chunks || []).length, totalDetectedChunks: prepared.totalDetectedChunks, previouslyAnalyzedChunks: alreadyAnalyzedChunkIds.size }
+      analyzedChunkWindow: { analyzedChunks: readableAnalysisChunks.length, skippedUnreadableChunks: skippedUnreadableChunkIds.length, totalIndexedChunks: (prepared.chunks || []).length, totalDetectedChunks: prepared.totalDetectedChunks, previouslyAnalyzedChunks: alreadyAnalyzedChunkIds.size }
     }
   });
-  onProgress?.({ stage: "saving", title: "Saving results", detail: `Local AI returned ${(result.candidates?.length || 0).toLocaleString()} candidate${(result.candidates?.length || 0) === 1 ? "" : "s"}. Saving pre-Airlock results.`, counters: { chunksSelected: analysisChunks.length, chunksSent: analysisChunks.length, candidatesFound: result.candidates?.length || 0, externalTransmission: result.transmissionReceipt?.externalTransmission === true } });
-  const analyzedAfterThisPass = new Set([...alreadyAnalyzedChunkIds, ...analysisChunks.map((chunk) => chunk.id)]);
+  const analysisResult = submitted.result || submitted;
+  const candidateRecords = Array.isArray(submitted.candidates) ? submitted.candidates : [];
+  const candidateCount = analysisResult.candidates?.length || candidateRecords.length || 0;
+  const transmissionReceipt = submitted.transmissionReceipt || analysisResult.transmissionReceipt || null;
+  onProgress?.({ stage: "saving", title: "Saving results", detail: `Local AI returned ${candidateCount.toLocaleString()} candidate${candidateCount === 1 ? "" : "s"}. Saving pre-Airlock results.`, counters: { chunksSelected: readableAnalysisChunks.length, chunksSent: readableAnalysisChunks.length, candidatesFound: candidateCount, externalTransmission: transmissionReceipt?.externalTransmission === true } });
+  const analyzedAfterThisPass = new Set([...alreadyAnalyzedChunkIds, ...readableAnalysisChunks.map((chunk) => chunk.id), ...skippedUnreadableChunkIds]);
   const allIndexedChunksAnalyzed = (prepared.chunks || []).every((chunk) => analyzedAfterThisPass.has(chunk.id));
   const sourceFullyAnalyzed = Boolean(prepared.sourceComplete && allIndexedChunksAnalyzed);
   return {
     capabilities,
     requestId,
     analysisRunId,
-    result,
-    analyzedChunks: analysisChunks.length,
+    result: analysisResult,
+    candidates: candidateRecords,
+    transmissionReceipt,
+    analyzedChunks: readableAnalysisChunks.length,
+    skippedUnreadableChunks: skippedUnreadableChunkIds.length,
     totalChunks: (prepared.chunks || []).length,
     indexedNow: prepared.indexedNow,
     sourceComplete: prepared.sourceComplete,
@@ -12416,6 +12665,7 @@ async function openStartLocalAiWorkOrderModal(workOrderId) {
           const completedAt = nowIso();
           const foundCandidates = candidateCount > 0;
           sourceFullyAnalyzed = execution.sourceFullyAnalyzed === true;
+          const mapUpdate = updateWorkOrderCandidateMap(workOrder, execution, await platformAdapter.analysis.readState({ discoveryCaseId: workOrder.source.discoveryCaseId }));
           updateWorkOrderDigestContext(workOrder, execution, candidateCount);
           workOrder.status = sourceFullyAnalyzed ? "completed" : "submitted";
           workOrder.analysisRunIds = [...new Set([...(workOrder.analysisRunIds || []), execution.analysisRunId])];
@@ -12439,7 +12689,11 @@ async function openStartLocalAiWorkOrderModal(workOrderId) {
             outcome: sourceFullyAnalyzed
               ? (foundCandidates ? "source_complete_candidates_found" : "source_complete_no_candidates_found")
               : (foundCandidates ? "candidates_found_more_source_remaining" : "no_candidates_found"),
-            externalTransmission: execution.result.transmissionReceipt?.externalTransmission === true
+            mapEntries: mapUpdate.map.entries.length,
+            mapNewEntries: mapUpdate.newEntries,
+            mapUpdatedEntries: mapUpdate.updatedEntries,
+            mapDuplicateHints: mapUpdate.duplicateHints,
+            externalTransmission: execution.transmissionReceipt?.externalTransmission === true
           };
           workOrder.comments.unshift({
             id: uid("comment"),
@@ -12447,8 +12701,8 @@ async function openStartLocalAiWorkOrderModal(workOrderId) {
             actorName: execution.capabilities.arm.displayName,
             createdAt: completedAt,
             text: sourceFullyAnalyzed
-              ? `Local AI digestion reached the end of the indexed source. Produced ${candidateCount} Idea Candidate${candidateCount === 1 ? "" : "s"} in this pass; ${Number(execution.analyzedUniqueChunks || 0).toLocaleString()} total chunk${Number(execution.analyzedUniqueChunks || 0) === 1 ? "" : "s"} analyzed. Candidates remain non-authoritative and pre-Airlock.`
-              : `Local AI digestion pass ${passCount} complete. Produced ${candidateCount} Idea Candidate${candidateCount === 1 ? "" : "s"} from ${execution.analyzedChunks} next chunk${execution.analyzedChunks === 1 ? "" : "s"}. Rolling context was preserved for the next pass.`,
+            ? `Local AI digestion reached the end of the indexed source. Produced ${candidateCount} Idea Candidate${candidateCount === 1 ? "" : "s"} in this pass; ${Number(execution.analyzedUniqueChunks || 0).toLocaleString()} total chunk${Number(execution.analyzedUniqueChunks || 0) === 1 ? "" : "s"} analyzed. Candidates remain non-authoritative and pre-Airlock.`
+              : `Local AI digestion pass ${passCount} complete. Produced ${candidateCount} Idea Candidate${candidateCount === 1 ? "" : "s"} from ${execution.analyzedChunks} next chunk${execution.analyzedChunks === 1 ? "" : "s"}. Candidate Map: ${mapUpdate.newEntries} new, ${mapUpdate.updatedEntries} updated, ${mapUpdate.duplicateHints} duplicate/continuation hint${mapUpdate.duplicateHints === 1 ? "" : "s"}.`,
             reviewState: sourceFullyAnalyzed ? "completed" : "needs_review",
             visibilityNotice: "Project State comments are part of the project record and are not private."
           });
@@ -12466,7 +12720,7 @@ async function openStartLocalAiWorkOrderModal(workOrderId) {
               chunksSelected: execution.analyzedChunks,
               chunksSent: execution.analyzedChunks,
               candidatesFound: candidateCount,
-              externalTransmission: execution.result.transmissionReceipt?.externalTransmission === true
+              externalTransmission: execution.transmissionReceipt?.externalTransmission === true
             }
           });
           if (continuousMode && !sourceFullyAnalyzed && !stopRequested) await new Promise((resolve) => setTimeout(resolve, 350));
@@ -12497,7 +12751,7 @@ async function openStartLocalAiWorkOrderModal(workOrderId) {
             chunksSelected: lastExecution.analyzedChunks,
             chunksSent: lastExecution.analyzedChunks,
             candidatesFound: lastCandidateCount,
-            externalTransmission: lastExecution.result.transmissionReceipt?.externalTransmission === true
+            externalTransmission: lastExecution.transmissionReceipt?.externalTransmission === true
           }
         });
         await new Promise((resolve) => setTimeout(resolve, 650));
@@ -12520,7 +12774,12 @@ async function openStartLocalAiWorkOrderModal(workOrderId) {
           visibilityNotice: "Project State comments are part of the project record and are not private."
         });
         await saveStore({ allowWithoutCoreApproval: true, reason: "ai-work-order-local-analysis-failed" });
-        window.alert(error.message || "Local AI digestion failed.");
+        setProgress({
+          stage: "failed",
+          title: "Local AI digestion paused for retry",
+          detail: `${error.message || "Unknown error"} Try again with 6 or 12 chunks if this was a heavy pass.`,
+          counters: { externalTransmission: false }
+        });
         form.querySelectorAll("input, select, textarea").forEach((field) => { field.disabled = false; });
         return false;
       } finally {
@@ -12544,15 +12803,19 @@ async function openAiWorkOrderResultsModal(workOrderId) {
     body: `
       <p class="notice"><strong>Pre-Airlock results:</strong> These are Idea Candidates only. They are not projects, Intake approvals, or Core truth.</p>
       ${workOrder.lastAnalysis ? `<p class="item-meta">Last run: ${escapeDisplay(workOrder.lastAnalysis.providerLabel || workOrder.lastAnalysis.providerId || "Local AI", DISPLAY_META_LIMIT)} · ${Number(workOrder.lastAnalysis.analyzedChunks || 0).toLocaleString()} chunks in last pass · ${Number(workOrder.lastAnalysis.analyzedUniqueChunks || workOrder.lastAnalysis.analyzedChunks || 0).toLocaleString()} total analyzed${workOrder.lastAnalysis.totalDetectedChunks ? ` of ${Number(workOrder.lastAnalysis.totalDetectedChunks).toLocaleString()} detected` : ""} · ${escapeHtml(formatDate(workOrder.lastAnalysis.completedAt))}</p>` : ""}
+      ${renderCandidateMapStats(workOrder.candidateMap)}
       ${workOrder.digestContext?.passCount ? `<p class="item-meta">Rolling digest context saved across ${Number(workOrder.digestContext.passCount).toLocaleString()} pass${Number(workOrder.digestContext.passCount) === 1 ? "" : "es"}.</p>` : ""}
       ${moreSourceRemaining ? `<p class="notice"><strong>More source remains.</strong> These results are partial. Run local AI digestion again to continue through the next chunk window.</p>` : ""}
       ${noCandidatesFound ? `<p class="notice"><strong>No candidates found in the last pass.</strong> This is a completed AI attempt, not a completed source digestion.</p>` : ""}
+      <h3 class="section-title">Candidate Map</h3>
+      ${renderCandidateMapEntries(workOrder.candidateMap)}
+      <h3 class="section-title">Raw AI Candidates</h3>
       ${candidates.length ? `<div class="list">${candidates.map((candidate) => `
         <article class="item">
           <p class="item-title">${escapeDisplay(candidate.workingLabel || "Idea Candidate", DISPLAY_META_LIMIT)}</p>
           <p class="item-meta">${escapeHtml(candidate.candidateType || "unknown")} · confidence ${Math.round(Number(candidate.confidence?.score || 0) * 100)}%</p>
-          <p class="item-body">${escapeDisplay(candidate.neutralSummary || "", DISPLAY_TEXT_LIMIT)}</p>
-          <details class="technical-details"><summary>Evidence and provenance</summary>${(candidate.evidence || []).slice(0, 8).map((evidence) => `<p class="item-meta">${escapeDisplay(evidence.excerpt || evidence.discoveryChunkId, 500)}<br>Chunk: ${escapeDisplay(evidence.discoveryChunkId, DISPLAY_META_LIMIT)} · ${escapeDisplay(evidence.relationship || "supports", DISPLAY_META_LIMIT)}</p>`).join("")}<p class="item-meta">Provider: ${escapeDisplay(candidate.provenance?.providerId || "local", DISPLAY_META_LIMIT)} · Model: ${escapeDisplay(candidate.provenance?.modelId || "unknown", DISPLAY_META_LIMIT)}</p></details>
+          <p class="item-body">${escapeDisplay(displaySafeAiText(candidate.neutralSummary || "", DISPLAY_TEXT_LIMIT), DISPLAY_TEXT_LIMIT)}</p>
+          <details class="technical-details"><summary>Evidence and provenance</summary>${(candidate.evidence || []).slice(0, 8).map((evidence) => `<p class="item-meta">${escapeDisplay(displaySafeAiText(evidence.excerpt || evidence.discoveryChunkId, 500), 500)}<br>Chunk: ${escapeDisplay(evidence.discoveryChunkId, DISPLAY_META_LIMIT)} · ${escapeDisplay(evidence.relationship || "supports", DISPLAY_META_LIMIT)}</p>`).join("")}<p class="item-meta">Provider: ${escapeDisplay(candidate.provenance?.providerId || "local", DISPLAY_META_LIMIT)} · Model: ${escapeDisplay(candidate.provenance?.modelId || "unknown", DISPLAY_META_LIMIT)}</p></details>
         </article>
       `).join("")}</div>` : emptyText("No Idea Candidates have been produced for this Work Order yet.")}
     `,

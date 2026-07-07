@@ -4,6 +4,7 @@ const path = require("node:path");
 const os = require("node:os");
 const crypto = require("node:crypto");
 const zlib = require("node:zlib");
+const { Readable } = require("node:stream");
 const { DatabaseSync } = require("node:sqlite");
 const {
   QWEN3_8B_PROVIDER_ID,
@@ -1674,6 +1675,24 @@ function sampleableCorpusExtension(extension) {
   return classifyDiscoveryFile(`file${extension}`).readMode === "text";
 }
 
+function textLooksBinaryOrGibberish(text = "") {
+  const sample = String(text || "").slice(0, 6000);
+  if (!sample.trim()) return true;
+  const replacementCount = (sample.match(/\uFFFD/g) || []).length;
+  const controlCount = (sample.match(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g) || []).length;
+  const printableCount = (sample.match(/[A-Za-z0-9\s.,;:'"!?()[\]{}#/_-]/g) || []).length;
+  const printableRatio = printableCount / Math.max(1, sample.length);
+  const wordCount = (sample.match(/[A-Za-z][A-Za-z0-9_'-]{2,}/g) || []).length;
+  const zipContainerNoise = /^\s*PK[\x00-\x08\x0B\x0C\x0E-\x1F\uFFFD]/.test(sample) || /\[Content_Types\]\.xml|_rels\/\.rels/.test(sample);
+  return zipContainerNoise || replacementCount > 12 || controlCount > 20 || printableRatio < 0.58 || (sample.length > 500 && wordCount < 8);
+}
+
+async function extractReadableDiscoveryText(filePath) {
+  const text = cleanExtractedText(await extractText(filePath) || "");
+  if (!text || textLooksBinaryOrGibberish(text)) return "";
+  return text;
+}
+
 async function readDiscoveryFileSample(filePath, byteSize, sampleBytes = CORPUS_PREFLIGHT_SAMPLE_BYTES) {
   const bytesToRead = Math.min(Math.max(4096, sampleBytes), Math.max(0, Number(byteSize) || 0));
   if (!bytesToRead) return { text: "", sampledBytes: 0, headBytes: 0, tailBytes: 0 };
@@ -1783,7 +1802,7 @@ async function extractDiscoveryFileVersion({ storageRoot, dbPath, payload = {} }
         status = "large_file_pending";
         error = { name: "LargeFileDeferred", message: `File was staged safely, but immediate text extraction is deferred above ${formatBytesForLog(MAX_TEXT_EXTRACTION_BYTES)}.` };
       } else {
-        text = cleanExtractedText(await extractText(physicalPath) || "");
+        text = await extractReadableDiscoveryText(physicalPath);
         status = text ? "complete" : "partial";
       }
     } else if (classification.readMode === "metadata_only") status = "metadata_only";
@@ -1873,11 +1892,14 @@ async function indexDiscoveryCorpus({ storageRoot, dbPath, payload = {} }) {
   const extension = path.extname(version.originalName || "").toLowerCase();
   if (!sampleableCorpusExtension(extension)) throw new Error("Corpus indexing currently supports text, markdown, CSV, JSON, notebooks, and source-code archives.");
   const physicalPath = resolveManagedPath(storageRoot, version.managedPath);
-  const rawText = cleanExtractedText(await readAsText(physicalPath));
-  if (!rawText) throw new Error("Corpus indexing found no readable text.");
-  const allPieces = chunkDeterministicText(rawText, chunkCharacters);
   const startChunkIndex = continueIndex ? existingChunkCount : 0;
-  const pieces = allPieces.slice(startChunkIndex, startChunkIndex + maxChunks);
+  const windowed = extension === ".docx"
+    ? await extractDocxTextWindow(await fsp.readFile(physicalPath), { chunkCharacters, startChunkIndex, maxChunks })
+    : null;
+  const rawText = windowed ? "" : await extractReadableDiscoveryText(physicalPath);
+  if (!windowed && !rawText) throw new Error("Corpus indexing found no readable text.");
+  const allPieces = windowed ? [] : chunkDeterministicText(rawText, chunkCharacters);
+  const pieces = windowed ? windowed.pieces : allPieces.slice(startChunkIndex, startChunkIndex + maxChunks);
   const extractionRoot = path.join(storageRoot, "discovery", discoveryCaseId, extraction.fileVersionId, extractionId, "corpus-index");
   const chunks = [];
   await fsp.mkdir(path.join(extractionRoot, "chunks"), { recursive: true });
@@ -1912,9 +1934,11 @@ async function indexDiscoveryCorpus({ storageRoot, dbPath, payload = {} }) {
     allChunks = readDb.prepare("SELECT record_json FROM discovery_chunks WHERE discovery_extraction_id = ? ORDER BY chunk_index").all(extractionId).map(parseRecordRow);
   } finally { readDb.close(); }
   const totalIndexedChunks = allChunks.length;
-  const truncated = totalIndexedChunks < allPieces.length;
-  await appendDiscoveryEvent({ storageRoot, dbPath, payload: { id: makeId("discovery_event"), discoveryCaseId, eventType: "large_corpus_indexed", actorId, actorType: "tool", occurredAt: createdAt, fileVersionId: extraction.fileVersionId, extractionId, chunkCount: chunks.length, totalIndexedChunks, totalDetectedChunks: allPieces.length, nextChunkIndex: totalIndexedChunks, chunkCharacters, maxChunks, startChunkIndex, truncated, complete: !truncated } });
-  return { ok: true, discoveryCaseId, extraction, chunks: allChunks, indexed: { chunkCount: chunks.length, totalIndexedChunks, startChunkIndex, nextChunkIndex: totalIndexedChunks, chunkCharacters, maxChunks, truncated, complete: !truncated, totalDetectedChunks: allPieces.length } };
+  const truncated = windowed ? windowed.truncated : totalIndexedChunks < allPieces.length;
+  const complete = windowed ? windowed.complete : !truncated;
+  const totalDetectedChunks = windowed ? windowed.totalDetectedChunks : allPieces.length;
+  await appendDiscoveryEvent({ storageRoot, dbPath, payload: { id: makeId("discovery_event"), discoveryCaseId, eventType: "large_corpus_indexed", actorId, actorType: "tool", occurredAt: createdAt, fileVersionId: extraction.fileVersionId, extractionId, chunkCount: chunks.length, totalIndexedChunks, totalDetectedChunks, nextChunkIndex: totalIndexedChunks, chunkCharacters, maxChunks, startChunkIndex, truncated, complete, streamingWindow: Boolean(windowed) } });
+  return { ok: true, discoveryCaseId, extraction, chunks: allChunks, indexed: { chunkCount: chunks.length, totalIndexedChunks, startChunkIndex, nextChunkIndex: totalIndexedChunks, chunkCharacters, maxChunks, truncated, complete, totalDetectedChunks, streamingWindow: Boolean(windowed) } };
 }
 
 async function readDiscoveryChunkText({ storageRoot, dbPath, payload = {} }) {
@@ -4156,6 +4180,104 @@ function extractDocxText(bytes) {
   return cleanExtractedText(xmlToText(xml));
 }
 
+async function extractDocxTextWindow(bytes, { chunkCharacters = 12000, startChunkIndex = 0, maxChunks = 120 } = {}) {
+  const entry = findZipEntry(bytes, "word/document.xml");
+  if (!entry) throw new Error("Could not find document text in this DOCX.");
+  const compressed = zipEntryCompressedData(bytes, entry);
+  const source = entry.method === 0 ? Readable.from([compressed]) : Readable.from([compressed]).pipe(zlib.createInflateRaw());
+  const limit = Math.max(500, Math.min(16000, Number(chunkCharacters) || 12000));
+  const start = Math.max(0, Number(startChunkIndex) || 0);
+  const target = Math.max(1, Math.min(500, Number(maxChunks) || 120));
+  const pieces = [];
+  let piece = "";
+  let pieceIndex = 0;
+  let inTag = false;
+  let tag = "";
+  let inEntity = false;
+  let entity = "";
+  let stopped = false;
+
+  const addText = (value = "") => {
+    if (!value || stopped) return;
+    piece += value;
+    while (piece.length >= limit && !stopped) {
+      let splitAt = piece.lastIndexOf("\n", limit);
+      if (splitAt < Math.floor(limit * 0.5)) splitAt = piece.lastIndexOf(" ", limit);
+      if (splitAt < Math.floor(limit * 0.5)) splitAt = limit;
+      const chunk = cleanExtractedText(piece.slice(0, splitAt));
+      if (chunk && !textLooksBinaryOrGibberish(chunk) && pieceIndex >= start) pieces.push(chunk);
+      pieceIndex += 1;
+      piece = piece.slice(splitAt).trimStart();
+      if (pieces.length >= target) stopped = true;
+    }
+  };
+
+  const finishTag = () => {
+    const normalized = tag.trim().toLowerCase();
+    if (normalized === "w:tab/" || normalized === "w:tab") addText("\t");
+    else if (normalized.startsWith("/w:p") || normalized.startsWith("w:br")) addText("\n");
+    tag = "";
+  };
+
+  const finishEntity = () => {
+    const value = `&${entity};`;
+    addText(decodeXmlEntities(value));
+    entity = "";
+    inEntity = false;
+  };
+
+  await new Promise((resolve, reject) => {
+    source.on("data", (buffer) => {
+      if (stopped) {
+        source.destroy();
+        return;
+      }
+      const text = Buffer.from(buffer).toString("utf8");
+      for (const ch of text) {
+        if (stopped) break;
+        if (inTag) {
+          if (ch === ">") {
+            inTag = false;
+            finishTag();
+          } else if (tag.length < 80) tag += ch;
+          continue;
+        }
+        if (inEntity) {
+          if (ch === ";") finishEntity();
+          else if (entity.length > 20) {
+            addText(`&${entity}${ch}`);
+            entity = "";
+            inEntity = false;
+          } else entity += ch;
+          continue;
+        }
+        if (ch === "<") {
+          inTag = true;
+          tag = "";
+        } else if (ch === "&") {
+          inEntity = true;
+          entity = "";
+        } else {
+          addText(ch);
+        }
+      }
+    });
+    source.on("end", resolve);
+    source.on("close", resolve);
+    source.on("error", reject);
+  });
+
+  const finalPiece = cleanExtractedText(piece);
+  if (finalPiece && !textLooksBinaryOrGibberish(finalPiece) && pieceIndex >= start && pieces.length < target) pieces.push(finalPiece);
+  const complete = !stopped;
+  return {
+    pieces,
+    complete,
+    truncated: !complete,
+    totalDetectedChunks: complete ? pieceIndex + (finalPiece ? 1 : 0) : start + pieces.length + 1
+  };
+}
+
 function findZipEntry(bytes, fileName) {
   for (let i = bytes.length - 22; i >= 0; i -= 1) {
     if (readUint32(bytes, i) !== 0x06054b50) continue;
@@ -4178,13 +4300,22 @@ function findZipEntry(bytes, fileName) {
   return null;
 }
 
+function zipEntryCompressedData(bytes, entry) {
+  const localOffset = entry.localHeaderOffset;
+  if (readUint32(bytes, localOffset) !== 0x04034b50) throw new Error("Invalid DOCX file.");
+  const nameLength = readUint16(bytes, localOffset + 26);
+  const extraLength = readUint16(bytes, localOffset + 28);
+  const dataStart = localOffset + 30 + nameLength + extraLength;
+  return Buffer.from(bytes.slice(dataStart, dataStart + entry.compressedSize));
+}
+
 function inflateZipEntry(bytes, entry) {
   const localOffset = entry.localHeaderOffset;
   if (readUint32(bytes, localOffset) !== 0x04034b50) throw new Error("Invalid DOCX file.");
   const nameLength = readUint16(bytes, localOffset + 26);
   const extraLength = readUint16(bytes, localOffset + 28);
   const dataStart = localOffset + 30 + nameLength + extraLength;
-  const compressed = bytes.slice(dataStart, dataStart + entry.compressedSize);
+  const compressed = zipEntryCompressedData(bytes, entry);
   if (entry.method === 0) return compressed;
   if (entry.method !== 8) throw new Error("This DOCX compression method is not supported.");
   return zlib.inflateRawSync(Buffer.from(compressed));
