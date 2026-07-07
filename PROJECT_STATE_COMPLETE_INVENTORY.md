@@ -997,13 +997,14 @@ Unknown folder handling now follows two lanes:
 - Large corpus routes are blocked from direct Intake promotion and must go through AI follow-up first.
 - The Discovery progress panel filters stale/routed/promoted cases, collapses duplicate active long-scan cases, and hides old `Project folder candidate: Folder root` entries.
 
-### Deep scan findings from 2026-07-05
+### Deep scan findings from 2026-07-05 / 2026-07-07
 
 - Active product code no longer exposes the old unknown-folder “treat entire folder as one case” UI option.
 - Browser/dev runtime language is still present by design as a locked migration/development gate; it is not an authoritative runtime path.
 - API folder submission tooling still supports `one-case` for connector/backward-compatibility use; this is separate from the end-user unknown-folder UI and should be reviewed before public connector packaging.
-- The AI follow-up cutover is not fully complete. `app.js` still contains the older inline/local Idea Analysis branch after large-file indexing (`runFakeIdeaAnalysis`, `data-run-idea-analysis`, and retry/analyzing labels). This conflicts with the newer intended flow where slow AI digestion should be parked in AI Work Orders.
-- `scripts/run-idea-review-live-ui-check.js` and `scripts/idea-review-ui-check.js` still validate parts of that older inline Idea Review/analysis path. They should be updated or retired when the AI Work Order flow becomes the sole supported path.
+- The AI follow-up cutover was completed on 2026-07-07 in the Discovery screen. The older inline/local Idea Analysis branch was removed from `app.js`; Discovery no longer exposes `runFakeIdeaAnalysis`, `data-run-idea-analysis`, inline candidate review, or direct `recordReviewDecision` UI behavior.
+- `scripts/run-idea-review-live-ui-check.js` and `scripts/idea-review-ui-check.js` were converted into guard checks that forbid the old inline AI path and require AI follow-up to route into AI Work Orders.
+- `scripts/large-corpus-intake-flow-check.js` was updated so large-corpus verification requires Work Order routing and forbids the removed inline indexing/analysis UI.
 - `DISCOVERY_FIRST_SYSTEM.md` and `FOLDER_DISCOVERY_FLOW.md` were updated to reflect the repaired subfolder/loose-file split.
 
 ### Verification after repair
@@ -1014,6 +1015,15 @@ Passed on 2026-07-05:
 - `node --check desktop/project-state-desktop-bridge.cjs`
 - `pnpm run check:folder-discovery`
 - `node scripts/discovery-supporting-files-check.js`
+- `pnpm run check:large-corpus`
+- `pnpm run check:flow-hardening`
+- `pnpm run check:api-arm`
+
+Additional pass after AI Work Order cutover on 2026-07-07:
+
+- `pnpm run check`
+- `pnpm run check:idea-review-ui`
+- `pnpm run check:folder-discovery`
 - `pnpm run check:large-corpus`
 - `pnpm run check:flow-hardening`
 - `pnpm run check:api-arm`

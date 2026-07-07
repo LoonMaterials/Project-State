@@ -8667,74 +8667,6 @@ function renderDiscoveryUnitEditor(unit, index, { included = false, defaultDesti
   `;
 }
 
-function renderIdeaCandidateReview(candidates = [], actor = currentActor()) {
-  return `
-    <p class="notice"><strong>Local test analysis complete.</strong> These are non-authoritative Idea Candidates. Review their evidence before creating Confirmed Idea Units.</p>
-    <div class="list idea-candidate-review-list">
-      ${candidates.map((candidate, index) => `
-        <article class="item" data-idea-candidate-index="${index}">
-          <label class="check-field"><input type="checkbox" data-idea-candidate-select checked><span><strong>Review this candidate</strong></span></label>
-          <div class="field"><label for="idea_candidate_title_${index}">Working idea label</label><input id="idea_candidate_title_${index}" data-idea-candidate-title value="${escapeHtml(candidate.workingLabel || "")}"></div>
-          <div class="field"><label for="idea_candidate_summary_${index}">Neutral summary</label><textarea id="idea_candidate_summary_${index}" data-idea-candidate-summary rows="3">${escapeHtml(candidate.neutralSummary || "")}</textarea></div>
-          <p class="item-meta">${escapeHtml(t("type"))}: ${escapeHtml(candidate.candidateType || "unknown")} · Confidence: ${Math.round(Number(candidate.confidence?.score || 0) * 100)}%</p>
-          ${candidate.confidence?.uncertaintyNotes ? `<p class="notice"><strong>Uncertainty:</strong> ${escapeDisplay(candidate.confidence.uncertaintyNotes, 1000)}</p>` : ""}
-          <details class="technical-details"><summary>Evidence and provenance</summary>${(candidate.evidence || []).map((evidence) => `<p class="item-meta">${escapeDisplay(evidence.excerpt || evidence.discoveryChunkId, 500)}<br>Chunk: ${escapeDisplay(evidence.discoveryChunkId, DISPLAY_META_LIMIT)} · ${escapeDisplay(evidence.relationship || "supports", DISPLAY_META_LIMIT)}</p>`).join("")}<p class="item-meta">Provider: ${escapeDisplay(candidate.provenance?.providerId || "unknown", DISPLAY_META_LIMIT)} · Model: ${escapeDisplay(candidate.provenance?.modelId || "unknown", DISPLAY_META_LIMIT)}</p></details>
-        </article>
-      `).join("")}
-    </div>
-    <div class="field"><label for="ideaReviewAction">What should happen to the selected candidates?</label><select id="ideaReviewAction"><option value="accept">Keep as separate confirmed ideas</option><option value="merge">Merge into one confirmed idea</option><option value="reject">Reject</option><option value="defer">Defer</option><option value="mark_uncertain">Keep unresolved</option></select></div>
-    <div data-idea-merge-fields hidden>
-      <div class="field"><label for="ideaMergeTitle">Merged idea title</label><input id="ideaMergeTitle" value="${escapeHtml(candidates[0]?.workingLabel || "")}"></div>
-      <div class="field"><label for="ideaMergeSummary">Merged idea summary</label><textarea id="ideaMergeSummary" rows="3">${escapeHtml(candidates.map((candidate) => candidate.neutralSummary || "").filter(Boolean).join(" ").slice(0, 2000))}</textarea></div>
-    </div>
-    <div class="field"><label for="ideaReviewActor">Reviewed by</label><select id="ideaReviewActor">${activeActorOptions(actor?.name || "")}</select></div>
-    <div class="field"><label for="ideaReviewReason">Why</label><textarea id="ideaReviewReason" rows="2" required placeholder="Explain the review decision"></textarea></div>
-    <button class="btn" type="button" data-confirm-idea-review>Confirm idea review</button>
-  `;
-}
-
-async function runFakeIdeaAnalysis(discoveryCaseId, actor, reason = "") {
-  const caseView = await platformAdapter.discovery.getCase({ discoveryCaseId });
-  const capabilities = await platformAdapter.analysis.describeCapabilities();
-  if (capabilities.arm?.executionLocation !== "local") throw new Error("Only local AI analysis arms are allowed in this flow.");
-  const chunks = caseView.chunks || [];
-  const hasPendingCorpus = (caseView.extractions || []).some((extraction) => extraction.status === "large_corpus_pending");
-  if (!chunks.length && hasPendingCorpus) throw new Error("Large file has been staged but not indexed yet. Build a large-file index before running local AI idea analysis.");
-  if (!chunks.length) throw new Error("No extracted text chunks are available for idea analysis.");
-  const maximumChunks = Number(capabilities.limits?.maximumChunks || 100);
-  const analysisChunks = chunks.slice(0, Math.max(1, maximumChunks));
-  const extractionById = new Map((caseView.extractions || []).map((extraction) => [extraction.id, extraction]));
-  const versionById = new Map((caseView.fileVersions || []).map((version) => [version.id, version]));
-  const assetById = new Map((caseView.fileAssets || []).map((asset) => [asset.id, asset]));
-  const privacyClasses = new Set((caseView.fileVersions || []).map((version) => assetById.get(version.fileAssetId)?.privacyClass || "local_only"));
-  if (privacyClasses.size !== 1) throw new Error("Mixed privacy classes must be reviewed in separate Discovery Cases before analysis.");
-  const privacyClass = [...privacyClasses][0];
-  const sourceScopeMap = new Map();
-  for (const chunk of analysisChunks) {
-    const extraction = extractionById.get(chunk.discoveryExtractionId);
-    if (!extraction) continue;
-    if (!sourceScopeMap.has(extraction.fileVersionId)) sourceScopeMap.set(extraction.fileVersionId, { fileVersionId: extraction.fileVersionId, sourceSha256: extraction.sourceSha256, expectedChunkIds: [] });
-    sourceScopeMap.get(extraction.fileVersionId).expectedChunkIds.push(chunk.id);
-  }
-  const analysisRunId = uid("idea_run");
-  const modelId = capabilities.realProviderInstalled ? "qwen3:8b" : "deterministic_fake_v0.1";
-  const analysisStrategy = capabilities.realProviderInstalled ? "local_ai_qwen3_8b" : "fake_local_contract_test";
-  await platformAdapter.analysis.createRun({ id: analysisRunId, discoveryCaseId, actorId: capabilities.arm.armId, actorType: "tool", method: "ai", status: "running", sourceScope: [...sourceScopeMap.values()], provenance: { providerId: capabilities.arm.providerId, modelId } });
-  const chunkScopes = analysisChunks.map((chunk) => ({ discoveryChunkId: chunk.id, chunkTextSha256: chunk.textSha256 }));
-  const authorizationRecordId = uid("idea_privacy");
-  const authorization = await platformAdapter.analysis.authorizeTransmission({ id: authorizationRecordId, discoveryCaseId, actorId: actor.id, actorType: "human", providerId: capabilities.arm.providerId, purpose: "idea_candidate_discovery", privacyClass, chunkScopes, redactionMode: "none", reason: reason || "Authorized exact chunks for local AI idea analysis." });
-  const inputChunks = [];
-  for (const chunk of analysisChunks) {
-    const read = await platformAdapter.discovery.readChunkText({ discoveryChunkId: chunk.id });
-    const extraction = extractionById.get(chunk.discoveryExtractionId);
-    const version = versionById.get(extraction.fileVersionId);
-    inputChunks.push({ discoveryChunkId: chunk.id, discoveryExtractionId: extraction.id, fileVersionId: version.id, sourceSha256: extraction.sourceSha256, chunkTextSha256: chunk.textSha256, content: { type: "text", text: read.text }, redactionState: "original" });
-  }
-  const requestId = uid("analysis_request");
-  const result = await platformAdapter.analysis.submitAnalysisBatch({ contractVersion: "0.1", requestId, idempotencyKey: uid("analysis_idempotency"), submittedAt: nowIso(), arm: capabilities.arm, analysisRunId, discoveryCaseId, purpose: "idea_candidate_discovery", privacyAuthorization: { authorizationRecordId: authorization.authorization.id, authorizedBy: actor.id, authorizedAt: authorization.authorization.authorizedAt, providerId: capabilities.arm.providerId, purpose: "idea_candidate_discovery", privacyClass, chunkScopes, redactionMode: "none" }, batch: { batchId: uid("analysis_batch"), batchIndex: 0, isFinalBatch: analysisChunks.length >= chunks.length }, input: { chunks: inputChunks }, analysisOptions: { language: currentLanguage(), candidateTypes: capabilities.supportedCandidateTypes, maxCandidates: capabilities.limits.candidatesPerResultPage, includeRelationships: Boolean(capabilities.realProviderInstalled), includeClarificationQuestions: true }, provenance: { projectStateContract: "ai-analysis-arm-v0.1", ideaCandidateSchema: "0.1", analysisStrategy, analyzedChunkWindow: { analyzedChunks: analysisChunks.length, totalIndexedChunks: chunks.length } } });
-  return { ...result, analysisChunkWindow: { analyzedChunks: analysisChunks.length, totalIndexedChunks: chunks.length } };
-}
-
 async function createDiscoveryAiWorkOrders({ discoveryCaseId, routes = [], extractions = [], analysis = {}, actor = currentActor(), groupLabel = "", folderIntent = "", privacyClass = "local_only", reason = "" } = {}) {
   const aiRoutes = routes.filter(discoveryRouteCreatesAiWorkOrder);
   if (!aiRoutes.length) return [];
@@ -8839,7 +8771,6 @@ function openDiscoveryReviewModal({ discoveryCaseId, analysis, extractions = [],
   const defaultSingleDestination = folderDiscoveryIntent ? "unassigned" : "proposed_new_project";
   const defaultUnitDestination = folderDiscoveryIntent ? "unassigned" : "proposed_new_project";
   const corpusIntake = analysis.corpusIntake?.recommended ? analysis.corpusIntake : null;
-  let corpusReadyForAi = false;
   const ideaAnalysisPanel = platformAdapter.analysis?.available
     ? corpusIntake
       ? `<section class="panel" data-idea-analysis-panel data-corpus-index-required><p class="meta-label">AI follow-up</p><p class="notice">Large-file digestion now belongs in AI Work Orders. Choose <strong>Create Large-file/folder AI Work Order</strong> above to park this safely for later indexing and review.</p><div data-idea-analysis-output><p class="item-meta">Discovery stays fast; AI Work Orders handle the slow bench.</p></div></section>`
@@ -8993,108 +8924,6 @@ function openDiscoveryReviewModal({ discoveryCaseId, analysis, extractions = [],
     if (suggestedProjectNameChoice.value) proposedProjectNameField.value = suggestedProjectNameChoice.value;
   });
   syncDiscoveryUnitMode();
-  const ideaPanel = reviewModal?.querySelector("[data-idea-analysis-panel]");
-  const ideaOutput = ideaPanel?.querySelector("[data-idea-analysis-output]");
-  let currentIdeaCandidates = [];
-  ideaPanel?.addEventListener("click", async (event) => {
-    const indexButton = event.target.closest("[data-index-corpus]");
-    if (indexButton) {
-      indexButton.disabled = true;
-      indexButton.textContent = indexButton.dataset.continueIndex === "true" ? "Indexing next local batch…" : "Indexing large file locally…";
-      try {
-        const caseView = await platformAdapter.discovery.getCase({ discoveryCaseId });
-        const extraction = (caseView.extractions || []).find((item) => item.status === "large_corpus_pending");
-        if (!extraction) throw new Error("No pending large-file extraction was found for this Discovery case.");
-        const result = await platformAdapter.discovery.indexCorpus({ discoveryCaseId, extractionId: extraction.id, actorId: "project_state_deterministic", maxChunks: 120, chunkCharacters: 12000, continueIndex: indexButton.dataset.continueIndex === "true" });
-        corpusReadyForAi = Boolean(result.chunks?.length);
-        if (result.indexed?.truncated) {
-          ideaOutput.innerHTML = `<p class="notice"><strong>Large file indexing continued.</strong> Indexed ${Number(result.indexed.totalIndexedChunks || result.chunks?.length || 0).toLocaleString()} of ${Number(result.indexed.totalDetectedChunks || 0).toLocaleString()} detected chunks. Continue indexing before running full idea analysis.</p>`;
-          indexButton.textContent = "Index next large-file batch";
-          indexButton.dataset.continueIndex = "true";
-        } else {
-          ideaOutput.innerHTML = `<p class="notice"><strong>Large file index ready.</strong> Indexed ${Number(result.indexed?.totalIndexedChunks || result.chunks?.length || 0).toLocaleString()} local evidence chunks. Local AI can now analyze the indexed evidence.</p>`;
-          indexButton.textContent = "Queue indexed evidence in AI Work Orders";
-          indexButton.removeAttribute("data-index-corpus");
-          indexButton.removeAttribute("data-continue-index");
-          indexButton.setAttribute("data-run-idea-analysis", "true");
-        }
-        indexButton.disabled = false;
-      } catch (error) {
-        console.error("Corpus indexing failed.", error);
-        ideaOutput.innerHTML = `<p class="notice danger">Large-file indexing could not continue: ${escapeDisplay(error.message || "Unknown error", DISPLAY_META_LIMIT)}</p>`;
-        indexButton.disabled = false;
-        indexButton.textContent = "Retry large-file indexing";
-      }
-      return;
-    }
-    const runButton = event.target.closest("[data-run-idea-analysis]");
-    if (runButton) {
-      if (corpusIntake && !corpusReadyForAi) {
-        ideaOutput.innerHTML = `<p class="notice danger">Large file has been staged but not indexed yet. Build a large-file index before running local AI idea analysis.</p>`;
-        return;
-      }
-      runButton.disabled = true;
-      runButton.textContent = "Analyzing exact chunks locally…";
-      try {
-        const result = await runFakeIdeaAnalysis(discoveryCaseId, actor, reason);
-        currentIdeaCandidates = result.candidates || [];
-        if (!currentIdeaCandidates.length) {
-          ideaOutput.innerHTML = `<p class="notice">The local test arm found no Idea Candidates. No project or route was created.</p>`;
-          return;
-        }
-        const partialWindow = result.analysisChunkWindow && result.analysisChunkWindow.analyzedChunks < result.analysisChunkWindow.totalIndexedChunks
-          ? `<p class="notice"><strong>Partial analysis window:</strong> Local AI reviewed ${Number(result.analysisChunkWindow.analyzedChunks).toLocaleString()} of ${Number(result.analysisChunkWindow.totalIndexedChunks).toLocaleString()} indexed chunks. More analysis windows will be needed for full-corpus coverage.</p>`
-          : "";
-        ideaOutput.innerHTML = `${partialWindow}${renderIdeaCandidateReview(currentIdeaCandidates, actor)}`;
-      } catch (error) {
-        console.error("Local idea analysis failed.", error);
-        ideaOutput.innerHTML = `<p class="notice danger">Idea analysis could not continue: ${escapeDisplay(error.message || "Unknown error", DISPLAY_META_LIMIT)}</p>`;
-        runButton.disabled = false;
-        runButton.textContent = "Retry local AI idea analysis";
-      }
-      return;
-    }
-    const confirmButton = event.target.closest("[data-confirm-idea-review]");
-    if (!confirmButton) return;
-    const selected = [...ideaPanel.querySelectorAll("[data-idea-candidate-index]")].filter((row) => row.querySelector("[data-idea-candidate-select]")?.checked).map((row) => {
-      const index = Number(row.dataset.ideaCandidateIndex);
-      return { candidate: currentIdeaCandidates[index], title: row.querySelector("[data-idea-candidate-title]")?.value.trim() || currentIdeaCandidates[index]?.workingLabel || "Untitled idea", summary: row.querySelector("[data-idea-candidate-summary]")?.value.trim() || currentIdeaCandidates[index]?.neutralSummary || "" };
-    });
-    if (!selected.length) { window.alert("Select at least one Idea Candidate to review."); return; }
-    const reviewReason = ideaPanel.querySelector("#ideaReviewReason")?.value.trim() || "";
-    if (!reviewReason) { window.alert("Record why you made this Idea Review decision."); return; }
-    const reviewActorName = ideaPanel.querySelector("#ideaReviewActor")?.value || "";
-    const reviewActor = getOrCreateActor(reviewActorName, "Human");
-    const selectedAction = ideaPanel.querySelector("#ideaReviewAction")?.value || "accept";
-    const reviewAction = selectedAction;
-    let resultingUnits = [];
-    if (reviewAction === "accept") resultingUnits = selected.map((item) => ({ id: uid("idea_unit"), title: item.title, summary: item.summary, sourceCandidateIds: [item.candidate.id], unresolvedUncertainty: item.candidate.confidence?.uncertaintyNotes ? [item.candidate.confidence.uncertaintyNotes] : [] }));
-    if (reviewAction === "merge") resultingUnits = [{ id: uid("idea_unit"), title: ideaPanel.querySelector("#ideaMergeTitle")?.value.trim() || selected[0].title, summary: ideaPanel.querySelector("#ideaMergeSummary")?.value.trim() || selected.map((item) => item.summary).join(" ").slice(0, 2000), sourceCandidateIds: selected.map((item) => item.candidate.id), unresolvedUncertainty: selected.map((item) => item.candidate.confidence?.uncertaintyNotes).filter(Boolean) }];
-    confirmButton.disabled = true;
-    try {
-      const review = await platformAdapter.analysis.recordReviewDecision({ id: uid("idea_review"), discoveryCaseId, actorId: reviewActor.id, actorType: "human", action: reviewAction, candidateIds: selected.map((item) => item.candidate.id), reason: reviewReason, resultingUnits });
-      const confirmedUnits = review.confirmedIdeaUnits || [];
-      if (confirmedUnits.length) {
-        unitSlots = confirmedUnits.map((unit) => ({ id: unit.id, title: unit.title, summary: unit.summary, fileVersionIds: [...new Set((unit.evidence || []).map((evidence) => evidence.fileVersionId).filter(Boolean))], evidence: unit.evidence || [], suggested: false }));
-        const multipleList = reviewModal.querySelector("[data-multiple-discovery-routes] .list");
-        if (multipleList) multipleList.innerHTML = unitSlots.map((unit, index) => renderDiscoveryUnitEditor(unit, index, { included: true, defaultDestination: defaultUnitDestination })).join("");
-        if (modeField) modeField.value = "multiple_units";
-        syncDiscoveryUnitMode();
-        ideaOutput.innerHTML = `<p class="notice"><strong>Idea review confirmed.</strong> ${confirmedUnits.length} Confirmed Idea ${confirmedUnits.length === 1 ? "Unit is" : "Units are"} now ready for project naming and routing below. These units are still not Core.</p>`;
-      } else {
-        ideaOutput.innerHTML = `<p class="notice"><strong>Idea review recorded.</strong> No Confirmed Idea Unit was created, so project naming and routing were not changed.</p>`;
-      }
-    } catch (error) {
-      console.error("Idea review failed.", error);
-      window.alert(error.message || "Idea review could not be recorded.");
-      confirmButton.disabled = false;
-    }
-  });
-  ideaPanel?.addEventListener("change", (event) => {
-    if (event.target.id !== "ideaReviewAction") return;
-    const mergeFields = ideaPanel.querySelector("[data-idea-merge-fields]");
-    if (mergeFields) mergeFields.hidden = event.target.value !== "merge";
-  });
 }
 
 function renderIntakeQueue() {
