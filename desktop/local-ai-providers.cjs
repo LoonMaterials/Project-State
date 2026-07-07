@@ -4,6 +4,20 @@ const QWEN3_8B_MODEL_ID = "qwen3:8b";
 const OLLAMA_BASE_URL = process.env.PROJECT_STATE_OLLAMA_BASE_URL || "http://127.0.0.1:11434";
 const OLLAMA_GENERATE_TIMEOUT_MS = positiveInteger(process.env.PROJECT_STATE_LOCAL_AI_TIMEOUT_MS, 300000);
 const OLLAMA_NUM_PREDICT = positiveInteger(process.env.PROJECT_STATE_LOCAL_AI_NUM_PREDICT, 2400);
+const PROJECT_STATE_CLASSIFICATIONS = ["project_candidate", "existing_project_support", "reference_note", "personal_context_note", "assistant_scaffolding_noise", "rejected_noise"];
+const ASSISTANT_SCAFFOLDING_HEADING_PATTERN = /^(?:#{1,6}\s*)?(?:\d+[.)]\s*)?(?:short answer|important|bottom line|where this (?:all )?leaves us|the right mental model|ground rule for next steps|what i(?:'|’)d recommend|simple intuition|why your instinct was correct|one last grounding point|what happened|why it matters|the big caution|simple timeline|next steps|here(?:'|’)s the point|the key point|in plain english|quick answer|quick note|my honest recommendation)\s*[:.!-]*$/i;
+const GENERIC_ASSISTANT_HEADING_PATTERN = /^(?:#{1,6}\s*)?(?:\d+[.)]\s*)?(?:short answer|important|bottom line|where this|the right|ground rule|what i|simple|why your|one last|what happened|why it matters|big caution|timeline|next steps|recommendation|intuition|mental model)\b/i;
+const KNOWN_PROJECT_ANCHORS = [
+  { id: "gibm", label: "GIBM", patterns: [/\bgibm\b/i] },
+  { id: "eq_wheel", label: "EQ Wheel / earthquake analog detector", patterns: [/\beq\s*wheel\b/i, /\bearthquake\s+detector\b/i, /\banalog\s+detector\b/i] },
+  { id: "drl_ltc", label: "Lattice insulation / DRL / LTC", patterns: [/\blattice\s+insulation\b/i, /\bdrl\b/i, /\bltc\b/i, /\bresilience\s+lattice\b/i] },
+  { id: "gpc1_cancer_tube", label: "Cancer tube / exosome diagnostic / GPC1", patterns: [/\bcancer\s+tube\b/i, /\bexosome\s+diagnostic\b/i, /\bgpc1\b/i] },
+  { id: "aether", label: "Aether / agency / identity / continuity", patterns: [/\baether\b/i, /\bidentity\s+continuity\b/i, /\bagency\s+continuity\b/i] },
+  { id: "fusion_desal_thermal", label: "Fusion / desal / thermal battery", patterns: [/\bfusion\b/i, /\bdesal(?:ination)?\b/i, /\bthermal\s+battery\b/i] },
+  { id: "mirror_earth_games", label: "Mirror Earth / games / software", patterns: [/\bmirror\s+earth\b/i, /\bleave\s+me\s+alone\s+games?\b/i, /\bgame\s+suite\b/i] },
+  { id: "shaw_governance", label: "SHAW / human-first / governance", patterns: [/\bshaw\b/i, /\bhuman[-\s]?first\b/i, /\bgovernance\b/i] },
+  { id: "patents_lmc", label: "Patents / licensing / outreach / LMC", patterns: [/\bpatents?\b/i, /\blicen[cs](?:e|ing)\b/i, /\boutreach\b/i, /\blmc\b/i, /\bloon\s+materials\b/i] }
+];
 
 function localAiError(code, message, fieldPath = "") {
   const error = new Error(message);
@@ -98,6 +112,13 @@ function normalizeText(value = "", limit = 2000) {
   return String(value || "").replace(/\s+/g, " ").trim().slice(0, limit);
 }
 
+function cleanArchiveMarkupArtifacts(value = "", limit = 2000) {
+  return normalizeText(String(value || "")
+    .replace(/[\uFFFD\u25A1]*cite[\uFFFD\u25A1]*(?:turn|ref|news|search)[A-Za-z0-9_\-:\[\]]*/gi, " ")
+    .replace(/[\uFFFD\u25A1]*entity[\uFFFD\u25A1]*\[[^\]]{0,240}\][\uFFFD\u25A1]*/gi, " ")
+    .replace(/\s{2,}/g, " "), limit);
+}
+
 function textLooksBinaryOrGibberish(text = "") {
   const sample = String(text || "").slice(0, 6000);
   if (!sample.trim()) return true;
@@ -112,7 +133,88 @@ function textLooksBinaryOrGibberish(text = "") {
 
 function normalizeTerms(value = []) {
   const input = Array.isArray(value) ? value : String(value || "").split(/[,;\n]/);
-  return [...new Set(input.map((term) => normalizeText(term, 80).toLowerCase()).filter((term) => term.length > 2))].slice(0, 32);
+  return [...new Set(input
+    .map((term) => cleanArchiveMarkupArtifacts(term, 80).toLowerCase())
+    .filter((term) => term.length > 2 && !textLooksBinaryOrGibberish(term)))].slice(0, 32);
+}
+
+function firstMeaningfulHeading(text = "") {
+  return String(text || "").split(/\r?\n/)
+    .map((line) => line.trim())
+    .find((line) => /^#{1,6}\s+\S+/.test(line) || ASSISTANT_SCAFFOLDING_HEADING_PATTERN.test(line))
+    || "";
+}
+
+function titleLooksAssistantScaffolding(value = "") {
+  const cleaned = cleanArchiveMarkupArtifacts(value, 220).replace(/^needs review:\s*/i, "").replace(/^#{1,6}\s+/, "").trim();
+  return ASSISTANT_SCAFFOLDING_HEADING_PATTERN.test(cleaned) || GENERIC_ASSISTANT_HEADING_PATTERN.test(cleaned);
+}
+
+function knownProjectAnchorMatches(text = "") {
+  const haystack = String(text || "").slice(0, 60000);
+  return KNOWN_PROJECT_ANCHORS
+    .filter((anchor) => anchor.patterns.some((pattern) => pattern.test(haystack)))
+    .map((anchor) => ({ id: anchor.id, label: anchor.label }))
+    .slice(0, 8);
+}
+
+function strongNamedProjectSignal(text = "", title = "") {
+  const haystack = `${title}\n${text}`.slice(0, 50000);
+  if (knownProjectAnchorMatches(haystack).length) return true;
+  if (/\b[A-Z][A-Za-z0-9 '&-]{2,80}\s+(?:Project|System|Framework|Architecture|Platform|Prototype|Model|Engine|Device|Detector|Diagnostic|Battery|Theory|Plan|Patent|Game|App|Protocol)\b/.test(haystack)) return true;
+  if (/\b(?:business\s+plan|prototype|patent|invention|white\s+paper|simulation|device|detector|diagnostic|architecture|platform|software|game|publishable|buildable)\b/i.test(haystack)) return true;
+  return false;
+}
+
+function classifyProjectStateCandidate({ text = "", title = "", sourceName = "", legal = null } = {}) {
+  const combined = `${sourceName}\n${title}\n${text}`;
+  const anchors = knownProjectAnchorMatches(combined);
+  const assistantHeading = titleLooksAssistantScaffolding(title) || titleLooksAssistantScaffolding(firstMeaningfulHeading(text));
+  const strongSignal = strongNamedProjectSignal(text, title);
+  const legalSignals = legal || legalReferenceSignals(text);
+  if (textLooksBinaryOrGibberish(text)) return { classification: "rejected_noise", knownProjectAnchors: anchors, reason: "Unreadable binary/container text." };
+  if (anchors.length) return { classification: "existing_project_support", knownProjectAnchors: anchors, reason: "Matched a known Project State project anchor before new-project creation." };
+  if (assistantHeading && !strongSignal) return { classification: "assistant_scaffolding_noise", knownProjectAnchors: anchors, reason: "Generic ChatGPT response heading without a strong named project signal." };
+  if (legalSignals.isLegalReference) return { classification: "reference_note", knownProjectAnchors: anchors, reason: "Legal/licensing/reference material." };
+  if (/\b(?:i feel|my life|personal|emotionally|mental|family|home|health|stress|fear|hope|identity|therapy)\b/i.test(combined) && !strongSignal) return { classification: "personal_context_note", knownProjectAnchors: anchors, reason: "Personal context without a concrete buildable/publishable project signal." };
+  if (strongSignal) return { classification: "project_candidate", knownProjectAnchors: anchors, reason: "Concrete named/buildable or publishable idea signal not matched to known projects." };
+  return { classification: "reference_note", knownProjectAnchors: anchors, reason: "Weak material preserved as reference, not a project candidate." };
+}
+
+function extractChatThreadMetadata(text = "", sourceName = "") {
+  const sample = String(text || "").slice(0, 12000);
+  const title =
+    (sample.match(/(?:^|\n)\s*(?:title|conversation title|thread title|chat title)\s*[:=-]\s*(.{3,180})/i) || [])[1]
+    || (sample.match(/(?:^|\n)\s*#{1,3}\s*(?:chat|thread|conversation)\s*[:=-]?\s*(.{3,180})/i) || [])[1]
+    || "";
+  const date =
+    (sample.match(/\b(20\d{2}[-/]\d{1,2}[-/]\d{1,2}(?:[ T]\d{1,2}:\d{2}(?::\d{2})?)?)\b/) || [])[1]
+    || (sample.match(/\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s+\d{1,2},\s+20\d{2}\b/i) || [])[0]
+    || "";
+  const sourceTitle = title || String(sourceName || "").replace(/\.[a-z0-9]+$/i, "").replace(/[_-]+/g, " ").trim();
+  const threadMarker = /\b(?:new chat|chat started|conversation started|thread started|chatgpt conversation|conversation id|mapping|create_time|update_time)\b/i.test(sample)
+    || Boolean(title && /\b(?:chat|thread|conversation)\b/i.test(sample.slice(0, 1000)));
+  return {
+    hasThreadMarker: threadMarker,
+    source_thread: sourceTitle ? cleanArchiveMarkupArtifacts(sourceTitle, 180) : "",
+    source_date: cleanArchiveMarkupArtifacts(date, 80),
+    source_title: sourceTitle ? cleanArchiveMarkupArtifacts(sourceTitle, 180) : ""
+  };
+}
+
+function looksLikeChatBoundaryOnly(text = "") {
+  const sample = String(text || "").trim().slice(0, 5000);
+  if (!sample) return false;
+  const lines = sample.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  const boundaryLineCount = lines.filter((line) => /\b(?:new chat|chat started|conversation started|thread started|conversation title|chat title|create_time|update_time|conversation id|mapping|moderation_results)\b/i.test(line)).length;
+  const substantiveSignals = [
+    /^#{1,6}\s+(?!.*\b(?:new chat|chat started|conversation started|thread started|chat title|conversation title)\b).{3,}/im,
+    /\b(?:business\s+plan|framework|prototype|architecture|platform|system|model|workflow|design|concept|invention|patent|simulation|test|evidence)\b/i,
+    /\b(?:def|class|import|function|const|let|var|plt\.|np\.|matplotlib|jupyter|unreal|python|json file)\b/i,
+    /\b(?:act\s+i|chapter|scene|story|character|novel|screenplay|draft)\b/i,
+    /\b(?:should|must|need(?:s)?|todo|risk|question|decision|requirement)\b/i
+  ].filter((pattern) => pattern.test(sample)).length;
+  return boundaryLineCount > 0 && substantiveSignals === 0 && sample.length < 1400;
 }
 
 const LEGAL_REFERENCE_PATTERNS = [
@@ -141,6 +243,7 @@ function candidateSignalScore(text = "", sourceName = "") {
   if (textLooksBinaryOrGibberish(text)) return 0;
   const haystack = `${sourceName}\n${text}`.slice(0, 24000);
   let score = 0;
+  if (looksLikeChatBoundaryOnly(haystack)) return 0;
   if (/^#{1,6}\s+\S+/m.test(haystack)) score += 5;
   if (/\b(?:business\s+plan|framework|project|prototype|architecture|platform|system|model|workflow|design|concept|invention|patent|simulation|test|evidence)\b/i.test(haystack)) score += 4;
   if (/\b(?:def|class|import|function|const|let|var|plt\.|np\.|matplotlib|jupyter|unreal|python|json file)\b/i.test(haystack)) score += 3;
@@ -152,14 +255,14 @@ function candidateSignalScore(text = "", sourceName = "") {
 
 function titleFromText(text = "", sourceName = "", index = 0) {
   const lines = String(text || "").split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
-  const heading = lines.find((line) => /^#{1,6}\s+\S+/.test(line));
-  if (heading) return normalizeText(heading.replace(/^#{1,6}\s+/, ""), 160);
+  const heading = lines.find((line) => /^#{1,6}\s+\S+/.test(line) && !/\b(?:new chat|chat started|conversation started|thread started|chat title|conversation title)\b/i.test(line) && !titleLooksAssistantScaffolding(line));
+  if (heading) return cleanArchiveMarkupArtifacts(heading.replace(/^#{1,6}\s+/, ""), 160);
   const namedPlan = String(text || "").match(/\b([A-Z][A-Za-z0-9 '&-]{2,80}\s+(?:Business Plan|Framework|System|Architecture|Platform|Simulation|Model|Prototype|Project|Concept))\b/);
-  if (namedPlan) return normalizeText(namedPlan[1], 160);
+  if (namedPlan) return cleanArchiveMarkupArtifacts(namedPlan[1], 160);
   const sourceBase = String(sourceName || "").replace(/\.[a-z0-9]+$/i, "").replace(/[_-]+/g, " ").trim();
-  if (sourceBase) return normalizeText(sourceBase, 160);
+  if (sourceBase) return cleanArchiveMarkupArtifacts(sourceBase, 160);
   const firstSentence = String(text || "").replace(/\s+/g, " ").split(/[.!?]/)[0];
-  return normalizeText(firstSentence || `Substantive source window ${index + 1}`, 160);
+  return cleanArchiveMarkupArtifacts(firstSentence || `Substantive source window ${index + 1}`, 160);
 }
 
 function fallbackCandidateType(text = "", allowedTypes = new Set()) {
@@ -175,7 +278,7 @@ function fallbackCandidateType(text = "", allowedTypes = new Set()) {
 function deterministicRescueCandidates({ validated, allowedTypes, maxCandidates, attempts }) {
   const scored = validated.map((item, index) => {
     const sourceName = item.extraction?.fileName || item.extraction?.originalName || "";
-    if (textLooksBinaryOrGibberish(item.text)) return { item, index, sourceName, legal: { isLegalReference: false, terms: [] }, score: 0 };
+    if (textLooksBinaryOrGibberish(item.text) || looksLikeChatBoundaryOnly(item.text)) return { item, index, sourceName, legal: { isLegalReference: false, terms: [] }, score: 0 };
     const legal = legalReferenceSignals(item.text);
     const signalScore = legal.isLegalReference ? 2 : candidateSignalScore(item.text, sourceName);
     const fallbackScore = String(item.text || "").trim().length > 80 ? Math.max(1, signalScore) : signalScore;
@@ -183,14 +286,21 @@ function deterministicRescueCandidates({ validated, allowedTypes, maxCandidates,
   }).filter((entry) => entry.score > 0).sort((a, b) => b.score - a.score || a.index - b.index);
   const selected = scored.slice(0, Math.max(1, Math.min(3, Number(maxCandidates) || 3)));
   return selected.map(({ item, index, sourceName, score }) => {
-    const compact = normalizeText(item.text, 1200);
+    const compact = cleanArchiveMarkupArtifacts(item.text, 1200);
     const title = titleFromText(item.text, sourceName, index);
+    const chatMetadata = extractChatThreadMetadata(item.text, sourceName);
+    const classification = classifyProjectStateCandidate({ text: item.text, title, sourceName });
+    const candidateType = classification.classification === "project_candidate"
+      ? fallbackCandidateType(item.text, allowedTypes)
+      : classification.classification === "existing_project_support" || classification.classification === "reference_note"
+        ? "reference"
+        : "observation";
     return {
       clientCandidateId: `qwen3_rescue_${String(index + 1).padStart(4, "0")}`,
       workingLabel: `Needs review: ${title}`,
       neutralSummary: normalizeText(`Qwen returned no candidates for this substantive window, so Project State preserved this low-confidence review candidate instead of silently dropping the signal. Source excerpt: ${compact}`, 2000),
-      candidateType: fallbackCandidateType(item.text, allowedTypes),
-      scope: "unknown",
+      candidateType: allowedTypes.has(candidateType) ? candidateType : "other",
+      scope: classification.classification === "project_candidate" ? "unknown" : "supporting",
       keyTerms: normalizeTerms([title, sourceName, ...compact.split(/\s+/).slice(0, 30)]),
       evidence: [{
         discoveryChunkId: item.chunk.id,
@@ -199,11 +309,11 @@ function deterministicRescueCandidates({ validated, allowedTypes, maxCandidates,
         sourceSha256: item.extraction.sourceSha256,
         chunkTextSha256: item.chunk.textSha256,
         relationship: "mentions",
-        excerpt: normalizeText(item.text, 500)
+        excerpt: cleanArchiveMarkupArtifacts(item.text, 500)
       }],
       confidence: {
         score: Math.min(0.42, Math.max(0.22, score / 20)),
-        basis: "Deterministic local rescue candidate created because Qwen returned an empty candidate list for a substantive chunk window.",
+        basis: `Deterministic local rescue candidate created because Qwen returned an empty candidate list for a substantive chunk window. Project State classification: ${classification.classification}.`,
         uncertaintyNotes: "Human review should decide whether this is a real idea, supporting evidence, duplicate context, or noise."
       },
       relationships: [],
@@ -213,7 +323,10 @@ function deterministicRescueCandidates({ validated, allowedTypes, maxCandidates,
         affects: "routing",
         allowNotSure: true
       }],
-      provenance: { providerId: QWEN3_8B_PROVIDER_ID, modelId: QWEN3_8B_MODEL_ID, externalJobId: "local_rescue_candidate", responseAttempts: attempts, deterministicRescue: true }
+      projectStateClassification: classification.classification,
+      knownProjectAnchors: classification.knownProjectAnchors,
+      classificationReason: classification.reason,
+      provenance: { providerId: QWEN3_8B_PROVIDER_ID, modelId: QWEN3_8B_MODEL_ID, externalJobId: "local_rescue_candidate", responseAttempts: attempts, deterministicRescue: true, projectStateClassification: classification.classification, knownProjectAnchors: classification.knownProjectAnchors, ...chatMetadata }
     };
   });
 }
@@ -240,13 +353,23 @@ function buildAnalysisPrompt({ chunks, candidateTypes, maxCandidates, priorDiges
     "Use the Candidate Map context to avoid duplicate ideas and to recognize when current evidence updates, supports, conflicts with, or extends an existing mapped idea.",
     "Prior digest context is context only. Every new candidate must still cite at least one supplied current discoveryChunkId.",
     "Do not create project names, project IDs, routes, approvals, facts, or history.",
+    "For raw chat archives, a new chat/thread/conversation start is source metadata only. Do not create a candidate merely because a chat or thread begins.",
+    "Use chat/thread title, date, or start marker only as provenance: source_thread, source_date, source_title if available.",
+    "Before suggesting a distinct new idea, first check whether the current evidence supports, continues, updates, or duplicates an existing Candidate Map entry.",
+    "Weak single-window signals should usually update an existing cluster or remain a review-only note; do not inflate them into separate project proposals.",
+    "Base candidate generation on substantive repeated topic signals, named entities, project names, filenames, user-confirmed labels, and semantic clustering across chunks.",
+    "Classify each candidate using projectStateClassification with one of: project_candidate, existing_project_support, reference_note, personal_context_note, assistant_scaffolding_noise, rejected_noise.",
+    "Generic ChatGPT assistant-answer headings are assistant_scaffolding_noise unless surrounding text has a strong named project signal. Examples: Short answer, IMPORTANT, Bottom line, Where this leaves us, The right mental model, Ground rule for next steps, What I'd recommend, Simple intuition, Why your instinct was correct, One last grounding point.",
+    "Run known-project matching before new-project creation. Known anchors include GIBM; EQ Wheel/earthquake detector/analog detector; lattice insulation/DRL/LTC; cancer tube/exosome diagnostic/GPC1; Aether/agency/identity/continuity; fusion/desal/thermal battery; Mirror Earth/games/software; SHAW/human-first/governance; patents/licensing/outreach/LMC.",
+    "If a chunk matches a known project anchor, classify it as existing_project_support, not project_candidate.",
+    "Only classify project_candidate when the chunk has a concrete buildable or publishable idea, a meaningful named concept/title, is not merely a ChatGPT heading, is repeated or strongly described, and does not match an existing known project.",
     "Licensing agreements, EULAs, terms, privacy policies, developer/app-store agreements, SDK/API terms, and third-party notices are reference/supporting material. Do not split them into project ideas unless the text clearly describes a buildable project.",
     "When a chunk is mostly legal/app agreement material, return at most one reference candidate with scope supporting.",
     "Return an empty candidates array only when the supplied chunks are pure boilerplate, duplicate legal text, or unreadable metadata. If there are named projects, headings, business plans, code/test evidence, story drafts, simulations, requirements, risks, tasks, or questions, return at least one candidate.",
     "If a current chunk supports or continues an existing Candidate Map entry, still return a candidate with that current chunk evidence so Project State can update the map.",
     "Every candidate must cite at least one supplied discoveryChunkId.",
     "Return strict JSON only with this shape:",
-    '{"candidates":[{"workingLabel":"short label","neutralSummary":"plain evidence-based summary","candidateType":"other","scope":"standalone|supporting|cross_cutting|unknown","keyTerms":["term"],"evidence":[{"discoveryChunkId":"chunk id","relationship":"supports|mentions|contrasts|limits|depends_on|context_only","excerpt":"short quote or paraphrase from the chunk"}],"confidence":{"score":0.0,"basis":"why","uncertaintyNotes":"what is unclear"},"clarificationQuestions":[{"text":"question","affects":"meaning|scope|routing|priority|grouping","allowNotSure":true}]}]}',
+    '{"candidates":[{"workingLabel":"short label","neutralSummary":"plain evidence-based summary","candidateType":"other","projectStateClassification":"reference_note","scope":"standalone|supporting|cross_cutting|unknown","keyTerms":["term"],"evidence":[{"discoveryChunkId":"chunk id","relationship":"supports|mentions|contrasts|limits|depends_on|context_only","excerpt":"short quote or paraphrase from the chunk"}],"confidence":{"score":0.0,"basis":"why","uncertaintyNotes":"what is unclear"},"clarificationQuestions":[{"text":"question","affects":"meaning|scope|routing|priority|grouping","allowNotSure":true}]}]}',
     `Allowed candidateType values: ${candidateTypes.join(", ")}`,
     `Maximum candidates: ${maxCandidates}`,
     "Keep the response extremely compact. Prefer one strong candidate over several weak candidates.",
@@ -316,8 +439,8 @@ async function generateQwenIdeaCandidates({ validated, envelope, ideaContract, m
   const chunkById = new Map(validated.map((item) => [item.chunk.id, item]));
   const legalByChunkId = new Map(validated.map((item) => [item.chunk.id, legalReferenceSignals(item.text)]));
   const allowedTypes = new Set(ideaContract.objects.IdeaCandidate.candidateTypes);
-  const allowedScopes = new Set(ideaContract.objects.IdeaCandidate.candidateScopes);
-  const allowedRelationships = new Set(ideaContract.objects.IdeaCandidate.evidenceRelationships);
+  const allowedScopes = new Set(ideaContract.objects.IdeaCandidate.scopes || ideaContract.objects.IdeaCandidate.candidateScopes || []);
+  const allowedRelationships = new Set(ideaContract.objects.EvidenceReference?.relationships || ideaContract.objects.IdeaCandidate.evidenceRelationships || []);
   let parsed;
   let attempts = 0;
   let responseInvalid = false;
@@ -348,7 +471,7 @@ async function generateQwenIdeaCandidates({ validated, envelope, ideaContract, m
         sourceSha256: source.extraction.sourceSha256,
         chunkTextSha256: source.chunk.textSha256,
         relationship,
-        excerpt: normalizeText(evidence.excerpt || source.text, 500)
+        excerpt: cleanArchiveMarkupArtifacts(evidence.excerpt || source.text, 500)
       };
     }).filter(Boolean);
     if (!normalizedEvidence.length && validated[index]) {
@@ -360,18 +483,36 @@ async function generateQwenIdeaCandidates({ validated, envelope, ideaContract, m
         sourceSha256: source.extraction.sourceSha256,
         chunkTextSha256: source.chunk.textSha256,
         relationship: "supports",
-        excerpt: normalizeText(source.text, 500)
+        excerpt: cleanArchiveMarkupArtifacts(source.text, 500)
       });
     }
     const legalEvidenceSignals = normalizedEvidence.map((evidence) => legalByChunkId.get(evidence.discoveryChunkId)).filter(Boolean);
     const isLegalReference = legalEvidenceSignals.some((signals) => signals.isLegalReference);
     const legalTerms = [...new Set(legalEvidenceSignals.flatMap((signals) => signals.terms || []))].slice(0, 8);
-    const candidateType = isLegalReference ? "reference" : allowedTypes.has(candidate.candidateType) ? candidate.candidateType : "other";
-    const scope = isLegalReference ? "supporting" : allowedScopes.has(candidate.scope) ? candidate.scope : "unknown";
-    const neutralSummary = normalizeText(candidate.neutralSummary || candidate.summary || "", 2000);
+    const firstEvidenceSource = normalizedEvidence[0] ? chunkById.get(normalizedEvidence[0].discoveryChunkId) : null;
+    const chatMetadata = extractChatThreadMetadata(firstEvidenceSource?.text || "", firstEvidenceSource?.extraction?.fileName || firstEvidenceSource?.extraction?.originalName || "");
+    const classification = classifyProjectStateCandidate({
+      text: [firstEvidenceSource?.text || "", candidate.neutralSummary || candidate.summary || "", (candidate.keyTerms || []).join(" ")].join("\n"),
+      title: candidate.workingLabel || candidate.title || "",
+      sourceName: firstEvidenceSource?.extraction?.fileName || firstEvidenceSource?.extraction?.originalName || "",
+      legal: isLegalReference ? { isLegalReference: true, terms: legalTerms } : null
+    });
+    const modelClassification = PROJECT_STATE_CLASSIFICATIONS.includes(candidate.projectStateClassification) ? candidate.projectStateClassification : "";
+    const projectStateClassification = classification.classification === "existing_project_support" || classification.classification === "assistant_scaffolding_noise" || classification.classification === "rejected_noise"
+      ? classification.classification
+      : modelClassification || classification.classification;
+    const candidateType = isLegalReference || ["existing_project_support", "reference_note"].includes(projectStateClassification)
+      ? "reference"
+      : ["assistant_scaffolding_noise", "personal_context_note", "rejected_noise"].includes(projectStateClassification)
+        ? "observation"
+        : allowedTypes.has(candidate.candidateType) ? candidate.candidateType : "other";
+    const scope = projectStateClassification === "project_candidate"
+      ? (allowedScopes.has(candidate.scope) ? candidate.scope : "unknown")
+      : "supporting";
+    const neutralSummary = cleanArchiveMarkupArtifacts(candidate.neutralSummary || candidate.summary || "", 2000);
     return {
       clientCandidateId: normalizeText(candidate.clientCandidateId || `qwen3_candidate_${String(index + 1).padStart(4, "0")}`, 120).replace(/[^a-zA-Z0-9_-]/g, "_") || `qwen3_candidate_${index + 1}`,
-      workingLabel: normalizeText(candidate.workingLabel || candidate.title || `Idea candidate ${index + 1}`, 200),
+      workingLabel: cleanArchiveMarkupArtifacts(candidate.workingLabel || candidate.title || `Idea candidate ${index + 1}`, 200),
       neutralSummary: isLegalReference
         ? normalizeText(`Licensing/app agreement/reference material. Keep as supporting context unless a human confirms it is the project. Signals: ${legalTerms.join(", ") || "legal reference"}. ${neutralSummary}`, 2000)
         : neutralSummary,
@@ -381,17 +522,20 @@ async function generateQwenIdeaCandidates({ validated, envelope, ideaContract, m
       evidence: normalizedEvidence,
       confidence: {
         score: clampNumber(candidate.confidence?.score, 0, 1, 0.5),
-        basis: normalizeText(candidate.confidence?.basis || "Qwen3 8B local model analysis of authorized chunks.", 1000),
-        uncertaintyNotes: normalizeText(candidate.confidence?.uncertaintyNotes || "", 2000)
+        basis: cleanArchiveMarkupArtifacts(candidate.confidence?.basis || "Qwen3 8B local model analysis of authorized chunks.", 1000),
+        uncertaintyNotes: cleanArchiveMarkupArtifacts(candidate.confidence?.uncertaintyNotes || "", 2000)
       },
       relationships: Array.isArray(candidate.relationships) ? candidate.relationships.slice(0, 50) : [],
       clarificationQuestions: (Array.isArray(candidate.clarificationQuestions) ? candidate.clarificationQuestions : []).slice(0, 20).map((question, questionIndex) => ({
         clientQuestionId: normalizeText(question.clientQuestionId || `qwen3_question_${index + 1}_${questionIndex + 1}`, 120).replace(/[^a-zA-Z0-9_-]/g, "_"),
-        text: normalizeText(question.text || "", 500),
+        text: cleanArchiveMarkupArtifacts(question.text || "", 500),
         affects: normalizeText(question.affects || "meaning", 80),
         allowNotSure: question.allowNotSure !== false
       })).filter((question) => question.text),
-      provenance: { ...(candidate.provenance || {}), providerId: QWEN3_8B_PROVIDER_ID, modelId: QWEN3_8B_MODEL_ID, externalJobId: candidate.provenance?.externalJobId || `local_ollama_${envelope.requestId}`, responseAttempts: candidate.provenance?.responseAttempts || attempts, responseInvalidRescue: candidate.provenance?.responseInvalidRescue || responseInvalid }
+      projectStateClassification,
+      knownProjectAnchors: classification.knownProjectAnchors,
+      classificationReason: classification.reason,
+      provenance: { ...(candidate.provenance || {}), ...chatMetadata, providerId: QWEN3_8B_PROVIDER_ID, modelId: QWEN3_8B_MODEL_ID, externalJobId: candidate.provenance?.externalJobId || `local_ollama_${envelope.requestId}`, responseAttempts: candidate.provenance?.responseAttempts || attempts, responseInvalidRescue: candidate.provenance?.responseInvalidRescue || responseInvalid, projectStateClassification, knownProjectAnchors: classification.knownProjectAnchors }
     };
   });
 }

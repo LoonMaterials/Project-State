@@ -5717,7 +5717,7 @@ function actionPermission(action = "") {
   if (["create-project", "add-decision", "add-fact", "add-conflict", "add-source", "add-relationship", "add-question", "add-action", "add-extract", "read-file-extract", "suggest-extract", "create-draft-project", "import-files", "import-folder", "import-project-files", "import-project-folder"].includes(action)) return "create";
   if (["edit-status", "edit-object", "assign-object", "mark-complete", "attach-source", "attach-image", "archive-object", "unarchive-project", "manage-project-roles", "review-source-freshness", "verify-source-file", "verify-all-source-files", "archive-ai-work-order", "start-local-ai-work-order", "edit-file-source", "archive-file-source"].includes(action)) return "edit";
   if (["approve-intake", "approve-extract", "approve-draft-project"].includes(action)) return "approve";
-  if (["export-project", "export-handoff", "context-pack", "view-object-history", "show-history", "view-history", "show-changes-since", "history-file-source", "view-ai-work-order-results", "refresh-storage"].includes(action)) return "audit";
+  if (["export-project", "export-handoff", "context-pack", "view-object-history", "show-history", "view-history", "show-changes-since", "history-file-source", "view-ai-work-order-results", "export-chatgpt-review-pack", "refresh-storage"].includes(action)) return "audit";
   if (["show-settings", "backup-storage", "restore-storage", "reset-local-data", "export-current-raw-data", "enable-arm-transport", "disable-arm-transport", "rotate-arm-transport-token", "revoke-arm-transport"].includes(action)) return "admin";
   return "";
 }
@@ -6197,7 +6197,30 @@ function renderCandidateMapStats(candidateMap = null) {
 function displaySafeAiText(value = "", limit = DISPLAY_TEXT_LIMIT) {
   const text = String(value || "");
   if (textLooksBinaryOrGibberish(text)) return "[Unreadable binary/container text hidden from display]";
-  return text.slice(0, limit);
+  return cleanAiDisplayText(text, limit);
+}
+
+function cleanAiDisplayText(value = "", limit = DISPLAY_TEXT_LIMIT) {
+  return String(value || "")
+    .replace(/[\uFFFD\u25A1]*cite[\uFFFD\u25A1]*(?:turn|ref|news|search)[A-Za-z0-9_\-:\[\]]*/gi, " ")
+    .replace(/[\uFFFD\u25A1]*entity[\uFFFD\u25A1]*\[[^\]]{0,240}\][\uFFFD\u25A1]*/gi, " ")
+    .replace(/\s{2,}/g, " ")
+    .trim()
+    .slice(0, limit);
+}
+
+function displaySafeAiTitle(value = "", fallback = "Needs review") {
+  const cleaned = cleanAiDisplayText(value, DISPLAY_META_LIMIT);
+  if (!cleaned || textLooksBinaryOrGibberish(cleaned)) return fallback;
+  return cleaned;
+}
+
+function displaySafeAiTerms(terms = [], limit = DISPLAY_META_LIMIT) {
+  const safeTerms = (Array.isArray(terms) ? terms : [])
+    .map((term) => cleanAiDisplayText(term, 80))
+    .filter((term) => term && !textLooksBinaryOrGibberish(term))
+    .slice(0, 10);
+  return safeTerms.length ? escapeDisplay(safeTerms.join(", "), limit) : "";
 }
 
 function renderCandidateMapEntries(candidateMap = null) {
@@ -6205,10 +6228,10 @@ function renderCandidateMapEntries(candidateMap = null) {
   if (!entries.length) return emptyText("Candidate Map is empty. Run local AI digestion to begin building the pre-Airlock idea ledger.");
   return `<section class="list">${entries.map((entry) => `
     <article class="item">
-      <p class="item-title">${escapeDisplay(entry.title, DISPLAY_META_LIMIT)}</p>
-      <p class="item-meta">${escapeHtml(entry.candidateType || "unknown")} · ${escapeHtml(entry.scope || "unknown")} · ${escapeHtml(String(entry.status || "active").replaceAll("_", " "))} · confidence ${Math.round(Number(entry.confidenceScore || 0) * 100)}%</p>
+      <p class="item-title">${escapeDisplay(displaySafeAiTitle(entry.title), DISPLAY_META_LIMIT)}</p>
+      <p class="item-meta">${escapeHtml(entry.candidateType || "unknown")} · ${escapeHtml(String(entry.projectStateClassification || classifyProjectStateCandidate(entry)).replaceAll("_", " "))} · ${escapeHtml(entry.scope || "unknown")} · ${escapeHtml(String(entry.status || "active").replaceAll("_", " "))} · confidence ${Math.round(Number(entry.confidenceScore || 0) * 100)}%</p>
       <p class="item-body">${escapeDisplay(displaySafeAiText(entry.summary || "", DISPLAY_TEXT_LIMIT), DISPLAY_TEXT_LIMIT)}</p>
-      <p class="item-meta">${Number(entry.evidence?.length || 0).toLocaleString()} evidence link${Number(entry.evidence?.length || 0) === 1 ? "" : "s"} · ${Number(entry.sourceCandidateIds?.length || 0).toLocaleString()} source candidate${Number(entry.sourceCandidateIds?.length || 0) === 1 ? "" : "s"}${entry.keyTerms?.length ? ` · ${escapeDisplay(entry.keyTerms.slice(0, 10).join(", "), DISPLAY_META_LIMIT)}` : ""}</p>
+      <p class="item-meta">${Number(entry.evidence?.length || 0).toLocaleString()} evidence link${Number(entry.evidence?.length || 0) === 1 ? "" : "s"} · ${Number(entry.sourceCandidateIds?.length || 0).toLocaleString()} source candidate${Number(entry.sourceCandidateIds?.length || 0) === 1 ? "" : "s"}${displaySafeAiTerms(entry.keyTerms) ? ` · ${displaySafeAiTerms(entry.keyTerms)}` : ""}${entry.knownProjectMatches?.length ? ` · possible existing project: ${escapeDisplay(entry.knownProjectMatches[0].name, DISPLAY_META_LIMIT)}` : ""}</p>
       <details class="technical-details">
         <summary>Map evidence and history</summary>
         ${(entry.evidence || []).slice(0, 12).map((evidence) => `<p class="item-meta">${escapeDisplay(displaySafeAiText(evidence.excerpt || evidence.discoveryChunkId, 500), 500)}<br>Chunk: ${escapeDisplay(evidence.discoveryChunkId, DISPLAY_META_LIMIT)} · ${escapeDisplay(evidence.relationship || "supports", DISPLAY_META_LIMIT)}</p>`).join("") || `<p class="item-meta">No evidence links recorded.</p>`}
@@ -6256,6 +6279,9 @@ function renderAiWorkOrderItem(order) {
       <div class="item-actions">
         ${canRunLocalAi ? `<button class="btn compact" data-action="start-local-ai-work-order" data-work-order-id="${escapeHtml(order.id)}">Start local AI digestion</button>` : ""}
         ${source.discoveryCaseId ? `<button class="btn secondary compact" data-action="view-ai-work-order-results" data-work-order-id="${escapeHtml(order.id)}">View AI results</button>` : ""}
+        ${source.discoveryCaseId ? `<button class="btn secondary compact" data-action="export-chatgpt-review-pack" data-review-pack-mode="summary" data-work-order-id="${escapeHtml(order.id)}">Export Summary Pack</button>` : ""}
+        ${source.discoveryCaseId ? `<button class="btn secondary compact" data-action="export-chatgpt-review-pack" data-review-pack-mode="evidence_heavy" data-work-order-id="${escapeHtml(order.id)}">Export Evidence-Heavy Pack</button>` : ""}
+        ${source.discoveryCaseId ? `<button class="btn secondary compact" data-action="export-chatgpt-review-pack" data-review-pack-mode="split_cluster" data-work-order-id="${escapeHtml(order.id)}">Export Split Packs</button>` : ""}
         ${order.projectId ? `<button class="btn secondary compact" data-action="open-project" data-project-id="${escapeHtml(order.projectId)}">${escapeHtml(t("goToProject"))}</button>` : ""}
         <button class="btn secondary compact" data-action="comment-ai-work-order" data-work-order-id="${escapeHtml(order.id)}">${escapeHtml(t("reviewThread"))}</button>
         <button class="btn secondary compact" data-action="archive-ai-work-order" data-work-order-id="${escapeHtml(order.id)}" ${order.status === "archived" ? "disabled" : ""}>${escapeHtml(t("archive"))}</button>
@@ -11155,7 +11181,7 @@ async function resetLocalDataFromSettings() {
 }
 
 function downloadTextFile(fileName, text, type = "text/plain") {
-  platformAdapter.downloads.saveTextFile(fileName, text, type);
+  return platformAdapter.downloads.saveTextFile(fileName, text, type);
 }
 
 function openProjectOverviewModal() {
@@ -12148,9 +12174,57 @@ function textLooksBinaryOrGibberish(text = "") {
   return zipContainerNoise || replacementCount > 12 || controlCount > 20 || printableRatio < 0.58 || (sample.length > 500 && wordCount < 8);
 }
 
+const PROJECT_STATE_CLASSIFICATIONS = ["project_candidate", "existing_project_support", "reference_note", "personal_context_note", "assistant_scaffolding_noise", "rejected_noise"];
+const ASSISTANT_SCAFFOLDING_HEADING_PATTERN = /^(?:#{1,6}\s*)?(?:\d+[.)]\s*)?(?:short answer|important|bottom line|where this (?:all )?leaves us|the right mental model|ground rule for next steps|what i(?:'|’)d recommend|simple intuition|why your instinct was correct|one last grounding point|what happened|why it matters|the big caution|simple timeline|next steps|here(?:'|’)s the point|the key point|in plain english|quick answer|quick note|my honest recommendation)\s*[:.!-]*$/i;
+const GENERIC_ASSISTANT_HEADING_PATTERN = /^(?:#{1,6}\s*)?(?:\d+[.)]\s*)?(?:short answer|important|bottom line|where this|the right|ground rule|what i|simple|why your|one last|what happened|why it matters|big caution|timeline|next steps|recommendation|intuition|mental model)\b/i;
+const KNOWN_PROJECT_ANCHORS = [
+  { id: "gibm", label: "GIBM", patterns: [/\bgibm\b/i] },
+  { id: "eq_wheel", label: "EQ Wheel / earthquake analog detector", patterns: [/\beq\s*wheel\b/i, /\bearthquake\s+detector\b/i, /\banalog\s+detector\b/i] },
+  { id: "drl_ltc", label: "Lattice insulation / DRL / LTC", patterns: [/\blattice\s+insulation\b/i, /\bdrl\b/i, /\bltc\b/i, /\bresilience\s+lattice\b/i] },
+  { id: "gpc1_cancer_tube", label: "Cancer tube / exosome diagnostic / GPC1", patterns: [/\bcancer\s+tube\b/i, /\bexosome\s+diagnostic\b/i, /\bgpc1\b/i] },
+  { id: "aether", label: "Aether / agency / identity / continuity", patterns: [/\baether\b/i, /\bidentity\s+continuity\b/i, /\bagency\s+continuity\b/i] },
+  { id: "fusion_desal_thermal", label: "Fusion / desal / thermal battery", patterns: [/\bfusion\b/i, /\bdesal(?:ination)?\b/i, /\bthermal\s+battery\b/i] },
+  { id: "mirror_earth_games", label: "Mirror Earth / games / software", patterns: [/\bmirror\s+earth\b/i, /\bleave\s+me\s+alone\s+games?\b/i, /\bgame\s+suite\b/i] },
+  { id: "shaw_governance", label: "SHAW / human-first / governance", patterns: [/\bshaw\b/i, /\bhuman[-\s]?first\b/i, /\bgovernance\b/i] },
+  { id: "patents_lmc", label: "Patents / licensing / outreach / LMC", patterns: [/\bpatents?\b/i, /\blicen[cs](?:e|ing)\b/i, /\boutreach\b/i, /\blmc\b/i, /\bloon\s+materials\b/i] }
+];
+
 function candidateMapTokenSet(value = "") {
   const stop = new Set(["the", "and", "for", "with", "from", "this", "that", "into", "onto", "your", "about", "should", "would", "could", "project", "candidate", "idea"]);
-  return new Set(String(value || "").toLowerCase().replace(/[^a-z0-9\s]/g, " ").split(/\s+/).filter((token) => token.length > 2 && !stop.has(token)).slice(0, 80));
+  return new Set(cleanAiDisplayText(value, 8000).toLowerCase().replace(/[^a-z0-9\s]/g, " ").split(/\s+/).filter((token) => token.length > 2 && !stop.has(token)).slice(0, 80));
+}
+
+function titleLooksAssistantScaffolding(value = "") {
+  const cleaned = cleanAiDisplayText(value, 220).replace(/^needs review:\s*/i, "").replace(/^#{1,6}\s+/, "").trim();
+  return ASSISTANT_SCAFFOLDING_HEADING_PATTERN.test(cleaned) || GENERIC_ASSISTANT_HEADING_PATTERN.test(cleaned);
+}
+
+function knownProjectAnchorMatches(value = "") {
+  const haystack = String(value || "").slice(0, 60000);
+  return KNOWN_PROJECT_ANCHORS
+    .filter((anchor) => anchor.patterns.some((pattern) => pattern.test(haystack)))
+    .map((anchor) => ({ projectId: `known_anchor_${anchor.id}`, name: anchor.label, confidence: 0.9, evidence: [anchor.id], anchor: true }))
+    .slice(0, 8);
+}
+
+function strongNamedProjectSignal(value = "") {
+  const haystack = String(value || "").slice(0, 50000);
+  if (knownProjectAnchorMatches(haystack).length) return true;
+  if (/\b[A-Z][A-Za-z0-9 '&-]{2,80}\s+(?:Project|System|Framework|Architecture|Platform|Prototype|Model|Engine|Device|Detector|Diagnostic|Battery|Theory|Plan|Patent|Game|App|Protocol)\b/.test(haystack)) return true;
+  if (/\b(?:business\s+plan|prototype|patent|invention|white\s+paper|simulation|device|detector|diagnostic|architecture|platform|publishable|buildable)\b/i.test(haystack)) return true;
+  return false;
+}
+
+function classifyProjectStateCandidate(candidate = {}) {
+  if (PROJECT_STATE_CLASSIFICATIONS.includes(candidate.projectStateClassification)) return candidate.projectStateClassification;
+  const combined = [candidate.workingLabel, candidate.title, candidate.neutralSummary, candidate.summary, ...(candidate.keyTerms || []), ...(candidate.evidence || []).map((evidence) => evidence.excerpt || "")].join("\n");
+  if (textLooksBinaryOrGibberish(combined)) return "rejected_noise";
+  if (knownProjectAnchorMatches(combined).length || (candidate.knownProjectAnchors || []).length) return "existing_project_support";
+  if (titleLooksAssistantScaffolding(candidate.workingLabel || candidate.title || "") && !strongNamedProjectSignal(combined)) return "assistant_scaffolding_noise";
+  if (candidate.candidateType === "reference") return "reference_note";
+  if (/\b(?:i feel|my life|personal|emotionally|mental|family|home|health|stress|fear|hope|therapy)\b/i.test(combined) && !strongNamedProjectSignal(combined)) return "personal_context_note";
+  if (strongNamedProjectSignal(combined) && !knownProjectAnchorMatches(combined).length) return "project_candidate";
+  return "reference_note";
 }
 
 function candidateMapSimilarity(a = {}, b = {}) {
@@ -12163,6 +12237,40 @@ function candidateMapSimilarity(a = {}, b = {}) {
 
 function candidateMapEvidenceKey(evidence = {}) {
   return `${evidence.discoveryChunkId || ""}:${evidence.chunkTextSha256 || ""}:${evidence.relationship || ""}`;
+}
+
+function candidateDistinctivenessScore(candidate = {}) {
+  const terms = candidateMapTokenSet([candidate.workingLabel, candidate.neutralSummary, ...(candidate.keyTerms || [])].join(" "));
+  const evidenceCount = Array.isArray(candidate.evidence) ? candidate.evidence.length : 0;
+  const confidence = Number(candidate.confidence?.score || candidate.confidenceScore || 0);
+  const type = String(candidate.candidateType || "unknown");
+  const strongType = ["project_concept", "design_concept", "requirement", "decision_candidate", "claim_candidate", "relationship_candidate"].includes(type);
+  return (terms.size / 18) + (evidenceCount > 1 ? 0.25 : 0) + (strongType ? 0.2 : 0) + Math.min(0.35, confidence / 2);
+}
+
+function isWeakSingleWindowCandidate(candidate = {}) {
+  const evidenceCount = Array.isArray(candidate.evidence) ? candidate.evidence.length : 0;
+  const confidence = Number(candidate.confidence?.score || candidate.confidenceScore || 0);
+  const type = String(candidate.candidateType || "unknown");
+  const title = String(candidate.workingLabel || candidate.title || "");
+  return evidenceCount <= 1
+    && confidence <= 0.46
+    && !["project_concept", "design_concept"].includes(type)
+    && candidateDistinctivenessScore(candidate) < 0.75
+    && !/\b(?:business\s+plan|framework|architecture|platform|prototype|invention|patent|simulation|model)\b/i.test(title);
+}
+
+function knownProjectMatchesForCandidate(candidate = {}) {
+  const candidateTokens = candidateMapTokenSet([candidate.workingLabel, candidate.neutralSummary, ...(candidate.keyTerms || [])].join(" "));
+  const anchorMatches = knownProjectAnchorMatches([candidate.workingLabel, candidate.neutralSummary, ...(candidate.keyTerms || []), ...(candidate.evidence || []).map((evidence) => evidence.excerpt || "")].join("\n"));
+  if (!candidateTokens.size) return anchorMatches;
+  const storeMatches = (store.projects || []).filter((project) => project && !project.archived).map((project) => {
+    const projectTokens = candidateMapTokenSet(project.name || "");
+    const overlap = [...candidateTokens].filter((token) => projectTokens.has(token));
+    const confidence = projectTokens.size ? overlap.length / Math.max(projectTokens.size, 1) : 0;
+    return { projectId: project.id, name: project.name || "", confidence: Number(confidence.toFixed(2)), evidence: overlap.slice(0, 12) };
+  }).filter((match) => match.confidence >= 0.5 && match.evidence.length >= Math.min(2, candidateTokens.size)).sort((a, b) => b.confidence - a.confidence || a.name.localeCompare(b.name)).slice(0, 5);
+  return [...new Map([...anchorMatches, ...storeMatches].map((match) => [match.projectId, match])).values()].slice(0, 8);
 }
 
 function normalizeCandidateMap(workOrder = {}) {
@@ -12183,6 +12291,7 @@ function normalizeCandidateMap(workOrder = {}) {
       title: String(entry.title || entry.workingLabel || "Candidate Map Entry").slice(0, 220),
       summary: limitText(entry.summary || entry.neutralSummary || "", 3000),
       candidateType: entry.candidateType || "unknown",
+      projectStateClassification: PROJECT_STATE_CLASSIFICATIONS.includes(entry.projectStateClassification) ? entry.projectStateClassification : classifyProjectStateCandidate(entry),
       scope: entry.scope || "unknown",
       status: entry.status || "active",
       confidenceScore: Number.isFinite(Number(entry.confidenceScore)) ? Number(entry.confidenceScore) : 0.5,
@@ -12192,6 +12301,7 @@ function normalizeCandidateMap(workOrder = {}) {
       relatedEntryIds: Array.isArray(entry.relatedEntryIds) ? [...new Set(entry.relatedEntryIds.map(String).filter(Boolean))] : [],
       conflicts: Array.isArray(entry.conflicts) ? entry.conflicts.slice(0, 40) : [],
       questions: Array.isArray(entry.questions) ? entry.questions.slice(0, 40) : [],
+      knownProjectMatches: Array.isArray(entry.knownProjectMatches) ? entry.knownProjectMatches.slice(0, 10) : [],
       history: Array.isArray(entry.history) ? entry.history.slice(-80) : [],
       firstSeenAt: entry.firstSeenAt || nowIso(),
       lastSeenAt: entry.lastSeenAt || entry.firstSeenAt || nowIso(),
@@ -12208,7 +12318,7 @@ function buildCandidateMapContext(workOrder = {}) {
   if (!map.entries.length) return "Candidate Map: empty. Create entries for genuinely distinct ideas; otherwise update the map later with supporting evidence.";
   const lines = map.entries.slice(-50).map((entry, index) => [
     `${index + 1}. [${entry.id}] ${entry.title}`,
-    `type=${entry.candidateType}; scope=${entry.scope}; status=${entry.status}; confidence=${Math.round(Number(entry.confidenceScore || 0) * 100)}%`,
+    `type=${entry.candidateType}; classification=${entry.projectStateClassification || "reference_note"}; scope=${entry.scope}; status=${entry.status}; confidence=${Math.round(Number(entry.confidenceScore || 0) * 100)}%`,
     `summary=${limitText(entry.summary || "", 450)}`,
     entry.keyTerms?.length ? `terms=${entry.keyTerms.slice(0, 10).join(", ")}` : "",
     entry.evidence?.length ? `evidenceLinks=${entry.evidence.length}` : ""
@@ -12226,6 +12336,8 @@ function mergeCandidateIntoMapEntry(entry, candidate, candidateRecordId, passNum
   for (const evidence of candidate.evidence || []) if (!evidenceByKey.has(candidateMapEvidenceKey(evidence))) evidenceByKey.set(candidateMapEvidenceKey(evidence), cloneRecord(evidence));
   const sourceCandidateIds = new Set([...(entry.sourceCandidateIds || []), candidateRecordId || candidate.id || candidate.clientCandidateId].filter(Boolean));
   const keyTerms = new Set([...(entry.keyTerms || []), ...(candidate.keyTerms || [])].map(String).filter(Boolean));
+  const projectMatches = knownProjectMatchesForCandidate(candidate);
+  const classification = classifyProjectStateCandidate(candidate);
   const oldSummary = entry.summary || "";
   const newSummary = candidate.neutralSummary || "";
   const mergedSummary = newSummary && newSummary.length > oldSummary.length * 0.8
@@ -12233,13 +12345,18 @@ function mergeCandidateIntoMapEntry(entry, candidate, candidateRecordId, passNum
     : oldSummary || newSummary;
   entry.summary = mergedSummary;
   entry.candidateType = entry.candidateType === "unknown" || entry.candidateType === "other" ? candidate.candidateType || entry.candidateType : entry.candidateType;
+  entry.projectStateClassification = projectMatches.length ? "existing_project_support" : classification;
   entry.scope = entry.scope === "unknown" ? candidate.scope || entry.scope : entry.scope;
   entry.confidenceScore = Math.max(Number(entry.confidenceScore || 0), Number(candidate.confidence?.score || 0));
   entry.keyTerms = [...keyTerms].slice(0, 40);
   entry.sourceCandidateIds = [...sourceCandidateIds];
   entry.evidence = [...evidenceByKey.values()].slice(0, 120);
+  if (projectMatches.length) entry.knownProjectMatches = [...new Map([...(entry.knownProjectMatches || []), ...projectMatches].map((match) => [match.projectId, match])).values()].slice(0, 10);
   entry.questions = [...(entry.questions || []), ...(candidate.clarificationQuestions || []).map((question) => ({ ...cloneRecord(question), sourceCandidateId: candidateRecordId || candidate.clientCandidateId, addedAt: now }))].slice(-40);
-  entry.status = entry.status === "new" ? "updated" : entry.status === "supporting_reference" ? "supporting_reference" : "updated";
+  entry.status = entry.knownProjectMatches?.length
+    ? "possible_existing_project_match"
+    : ["assistant_scaffolding_noise", "rejected_noise"].includes(entry.projectStateClassification) ? entry.projectStateClassification
+      : entry.status === "new" ? "updated" : entry.status === "supporting_reference" ? "supporting_reference" : entry.status === "review_only_note" ? "review_only_note" : "updated";
   entry.lastSeenAt = now;
   entry.lastUpdatedAt = now;
   entry.history = [...(entry.history || []), { at: now, action: "updated_from_candidate", passNumber, sourceCandidateId: candidateRecordId || candidate.clientCandidateId, evidenceLinks: (candidate.evidence || []).length }].slice(-80);
@@ -12261,13 +12378,19 @@ function updateWorkOrderCandidateMap(workOrder, execution, analysisStateBefore =
   let duplicateHints = 0;
   for (const candidate of durableCandidates) {
     const candidateId = candidate.id || candidate.clientCandidateId;
+    const weakSingleWindow = isWeakSingleWindowCandidate(candidate);
+    const projectMatches = knownProjectMatchesForCandidate(candidate);
+    const classification = projectMatches.length ? "existing_project_support" : classifyProjectStateCandidate(candidate);
     const best = map.entries.map((entry) => ({ entry, score: candidateMapSimilarity(candidate, entry) })).sort((a, b) => b.score - a.score)[0];
-    if (best && best.score >= 0.42) {
+    const mergeThreshold = weakSingleWindow ? 0.28 : 0.42;
+    if (best && best.score >= mergeThreshold) {
       mergeCandidateIntoMapEntry(best.entry, candidate, candidateId, passNumber, now);
       updatedEntries += 1;
       if (best.score >= 0.72) {
         duplicateHints += 1;
-        best.entry.status = best.entry.status === "supporting_reference" ? "supporting_reference" : "possible_duplicate_or_continuation";
+        best.entry.status = ["supporting_reference", "possible_existing_project_match", "review_only_note"].includes(best.entry.status)
+          ? best.entry.status
+          : "possible_duplicate_or_continuation";
       }
       map.events.push({ id: uid("candidate_map_event"), at: now, type: "candidate_updated_entry", passNumber, entryId: best.entry.id, candidateId, similarity: Number(best.score.toFixed(3)) });
     } else {
@@ -12277,11 +12400,13 @@ function updateWorkOrderCandidateMap(workOrder, execution, analysisStateBefore =
         summary: limitText(candidate.neutralSummary || "", 3000),
         candidateType: candidate.candidateType || "unknown",
         scope: candidate.scope || "unknown",
-        status: candidate.candidateType === "reference" ? "supporting_reference" : "new",
+        projectStateClassification: classification,
+        status: projectMatches.length ? "possible_existing_project_match" : classification === "assistant_scaffolding_noise" ? "assistant_scaffolding_noise" : classification === "rejected_noise" ? "rejected_noise" : candidate.candidateType === "reference" || classification === "reference_note" ? "supporting_reference" : weakSingleWindow ? "review_only_note" : "new",
         confidenceScore: Number(candidate.confidence?.score || 0.5),
         keyTerms: Array.isArray(candidate.keyTerms) ? [...new Set(candidate.keyTerms.map(String).filter(Boolean))].slice(0, 40) : [],
         sourceCandidateIds: [candidateId].filter(Boolean),
         evidence: Array.isArray(candidate.evidence) ? candidate.evidence.slice(0, 120) : [],
+        knownProjectMatches: projectMatches,
         relatedEntryIds: [],
         conflicts: [],
         questions: (candidate.clarificationQuestions || []).map((question) => ({ ...cloneRecord(question), sourceCandidateId: candidateId, addedAt: now })).slice(0, 40),
@@ -12340,6 +12465,372 @@ function updateWorkOrderDigestContext(workOrder, execution, candidateCount) {
     totalDetectedChunks: execution.totalDetectedChunks,
     updatedAt: nowIso()
   };
+}
+
+function markdownSafeLine(value = "", fallback = "Not recorded") {
+  const cleaned = cleanAiDisplayText(value, 4000).replace(/\r?\n+/g, " ").replace(/\s+/g, " ").trim();
+  return cleaned || fallback;
+}
+
+function markdownSafeBlock(value = "", fallback = "Not recorded") {
+  const cleaned = cleanAiDisplayText(value, 12000).trim();
+  return cleaned || fallback;
+}
+
+function reviewPackModeConfig(mode = "summary") {
+  if (mode === "evidence_heavy") return {
+    mode,
+    label: "Evidence-Heavy",
+    fileSuffix: "chatgpt-evidence-heavy-review-pack",
+    mapEntryLimit: 500,
+    rawCandidateLimit: 300,
+    evidenceLimit: 18,
+    rawEvidenceLimit: 10,
+    chunkTextLimit: 5000,
+    chunkTextReadLimit: 120,
+    includeChunkText: true
+  };
+  if (mode === "split_cluster") return {
+    mode,
+    label: "Split Cluster",
+    fileSuffix: "chatgpt-cluster-review-pack",
+    mapEntryLimit: 1,
+    rawCandidateLimit: 80,
+    evidenceLimit: 30,
+    rawEvidenceLimit: 12,
+    chunkTextLimit: 7000,
+    chunkTextReadLimit: 80,
+    includeChunkText: true
+  };
+  return {
+    mode: "summary",
+    label: "Summary",
+    fileSuffix: "chatgpt-review-pack",
+    mapEntryLimit: 160,
+    rawCandidateLimit: 120,
+    evidenceLimit: 8,
+    rawEvidenceLimit: 4,
+    chunkTextLimit: 0,
+    chunkTextReadLimit: 0,
+    includeChunkText: false
+  };
+}
+
+function markdownCandidateEvidence(evidence = [], limit = 6, options = {}) {
+  const list = (Array.isArray(evidence) ? evidence : []).slice(0, limit);
+  if (!list.length) return "- No evidence links recorded.";
+  return list.map((item) => [
+    `- Chunk: \`${markdownSafeLine(item.discoveryChunkId, "missing_chunk")}\``,
+    `  - Relationship: ${markdownSafeLine(item.relationship || "supports")}`,
+    `  - Excerpt: ${markdownSafeLine(displaySafeAiText(item.excerpt || "", 1200), "No readable excerpt")}`,
+    options.chunkTextById?.get(item.discoveryChunkId)
+      ? `  - Stored chunk text preview: ${markdownSafeLine(displaySafeAiText(options.chunkTextById.get(item.discoveryChunkId), options.chunkTextLimit || 4000), "No readable stored chunk text")}`
+      : ""
+  ].filter(Boolean).join("\n")).join("\n");
+}
+
+function evidenceChunkIdsFromEntries(entries = [], candidates = []) {
+  const ids = new Set();
+  for (const entry of entries || []) for (const evidence of entry.evidence || []) if (evidence.discoveryChunkId) ids.add(evidence.discoveryChunkId);
+  for (const candidate of candidates || []) for (const evidence of candidate.evidence || []) if (evidence.discoveryChunkId) ids.add(evidence.discoveryChunkId);
+  return [...ids];
+}
+
+async function collectReviewPackChunkTexts({ entries = [], candidates = [], mode = "summary" } = {}) {
+  const config = reviewPackModeConfig(mode);
+  const chunkTextById = new Map();
+  if (!config.includeChunkText || !platformAdapter.discovery?.readChunkText) return chunkTextById;
+  const ids = evidenceChunkIdsFromEntries(entries, candidates).slice(0, config.chunkTextReadLimit);
+  for (const chunkId of ids) {
+    try {
+      const result = await platformAdapter.discovery.readChunkText({ discoveryChunkId: chunkId });
+      if (result?.text && !textLooksBinaryOrGibberish(result.text)) chunkTextById.set(chunkId, result.text);
+    } catch {
+      // Review Pack export should still work if one old chunk cannot be read.
+    }
+  }
+  return chunkTextById;
+}
+
+function candidateMatchesMapEntry(candidate = {}, entry = {}) {
+  const candidateIds = new Set([candidate.id, candidate.clientCandidateId].filter(Boolean));
+  if ((entry.sourceCandidateIds || []).some((id) => candidateIds.has(id))) return true;
+  const entryChunks = new Set((entry.evidence || []).map((evidence) => evidence.discoveryChunkId).filter(Boolean));
+  return (candidate.evidence || []).some((evidence) => entryChunks.has(evidence.discoveryChunkId));
+}
+
+function reviewPackFocusFileName(value = "cluster") {
+  return safeFileName(cleanAiDisplayText(value, 80) || "cluster");
+}
+
+function normalizedReviewPackTitle(value = "") {
+  return cleanAiDisplayText(value, 260)
+    .toLowerCase()
+    .replace(/^needs review:\s*/i, "")
+    .replace(/[^\p{L}\p{N}\s]+/gu, " ")
+    .replace(/\b(?:needs|review|candidate|idea|project|the|and|for|with|from)\b/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function buildReviewPackTitleClusters(workOrder = {}, candidates = []) {
+  const mapEntries = workOrder.candidateMap?.entries || [];
+  const items = [
+    ...mapEntries.map((entry) => ({ kind: "Candidate Map", title: entry.title, summary: entry.summary, id: entry.id, status: entry.status, evidenceCount: entry.evidence?.length || 0 })),
+    ...candidates.map((candidate) => ({ kind: "Raw Candidate", title: candidate.workingLabel, summary: candidate.neutralSummary, id: candidate.id || candidate.clientCandidateId, status: candidate.candidateType || "unknown", evidenceCount: candidate.evidence?.length || 0 }))
+  ];
+  const groups = new Map();
+  for (const item of items) {
+    const key = normalizedReviewPackTitle(item.title);
+    if (!key || key.length < 4) continue;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(item);
+  }
+  return [...groups.entries()]
+    .filter(([, group]) => group.length > 1)
+    .sort((a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0]))
+    .slice(0, 40);
+}
+
+function buildReviewPackIndexMarkdown(workOrder = {}, state = {}, entries = [], stamp = "") {
+  const candidateMap = normalizeCandidateMap(workOrder);
+  return [
+    "# ChatGPT Split Review Pack Index",
+    "",
+    "This index was exported by Project State. Upload the cluster files to ChatGPT in batches when a single source is too large for one review.",
+    "",
+    `- Work Order ID: \`${markdownSafeLine(workOrder.id)}\``,
+    `- Title: ${markdownSafeLine(workOrder.title)}`,
+    `- Exported: ${markdownSafeLine(formatDate(stamp || nowIso()))}`,
+    `- Candidate Map entries in full map: ${Number(candidateMap.entries.length || 0).toLocaleString()}`,
+    `- Cluster files exported: ${Number(entries.length || 0).toLocaleString()}`,
+    `- Raw candidates in Discovery state: ${Number((state.candidates || []).length || 0).toLocaleString()}`,
+    "",
+    "## How to use",
+    "",
+    "- Upload this index plus one or more cluster files to ChatGPT.",
+    "- Ask ChatGPT to merge repeated clusters, identify true projects, and return Codex update instructions.",
+    "- Do not treat ChatGPT output as Core truth. Import it back into Project State as an external review source.",
+    "",
+    "## Cluster file list",
+    "",
+    entries.length
+      ? entries.map((entry, index) => `- ${String(index + 1).padStart(3, "0")} · ${markdownSafeLine(displaySafeAiTitle(entry.title))} · ${Number(entry.evidence?.length || 0).toLocaleString()} evidence links · status ${markdownSafeLine(entry.status || "active")}`).join("\n")
+      : "- No Candidate Map entries were available to split."
+  ].join("\n");
+}
+
+function buildChatGptReviewPackMarkdown(workOrder = {}, state = {}, options = {}) {
+  const config = reviewPackModeConfig(options.mode);
+  const generatedAt = nowIso();
+  const source = workOrder.source || {};
+  const candidateMap = normalizeCandidateMap(workOrder);
+  const selectedMapEntries = Array.isArray(options.focusEntries) && options.focusEntries.length
+    ? options.focusEntries
+    : candidateMap.entries.slice(0, config.mapEntryLimit);
+  const allCandidates = Array.isArray(state.candidates) ? state.candidates : [];
+  const candidates = Array.isArray(options.focusEntries) && options.focusEntries.length
+    ? allCandidates.filter((candidate) => selectedMapEntries.some((entry) => candidateMatchesMapEntry(candidate, entry))).slice(-config.rawCandidateLimit)
+    : allCandidates.slice(-config.rawCandidateLimit);
+  const packWorkOrder = { ...workOrder, candidateMap: { ...candidateMap, entries: selectedMapEntries } };
+  const titleClusters = buildReviewPackTitleClusters(packWorkOrder, candidates);
+  const chunkTextById = options.chunkTextById || new Map();
+  const sourceFiles = Array.isArray(source.sourceFiles) ? source.sourceFiles : [];
+  const projectName = workOrder.projectId ? projectNameById(workOrder.projectId) || "Missing project" : "No target project";
+  const last = workOrder.lastAnalysis || {};
+  const sections = [
+    `# ChatGPT Review Pack v0.1 — ${config.label}`,
+    "",
+    "This file was exported by Project State for manual ChatGPT review. It is pre-Airlock material. Treat it as evidence and analysis assistance, not truth, not approval, and not Core history.",
+    options.focusTitle ? `\nFocused cluster: ${markdownSafeLine(options.focusTitle)}\n` : "",
+    "",
+    "## Review goal",
+    "",
+    "Help Project State combine chunk-window findings into coherent idea/project clusters and produce practical update instructions for Codex.",
+    "",
+    "Do this:",
+    "",
+    "- Merge repeated/same-title candidates into singular ideas when the evidence supports one shared project.",
+    "- Keep different branches separate only when the evidence clearly proves they are different projects or subprojects.",
+    "- Treat chat/thread/conversation starts as source metadata only, not project boundaries.",
+    "- Use source titles, filenames, repeated named entities, user-confirmed labels, and semantic continuity across chunks as the main grouping signals.",
+    "- Mark licensing, app agreements, boilerplate, casual chat, and one-off weak signals as reference/noise/support unless they clearly describe buildable work.",
+    "- Do not invent missing facts. Use TBD where the source is unclear.",
+    "- Preserve chunk IDs when citing evidence.",
+    "",
+    "## Return format requested from ChatGPT",
+    "",
+    "Please return a document with these sections:",
+    "",
+    "1. Merged Project / Idea Candidates",
+    "   - Title",
+    "   - Short summary",
+    "   - Supporting chunk IDs",
+    "   - Why these chunks belong together",
+    "   - Whether this should be a new project, existing project match, reference/supporting material, or rejected/noise",
+    "2. Same-Title / Duplicate Merge Decisions",
+    "3. Supporting References and Non-Project Material",
+    "4. Unclear / Needs Human Question",
+    "5. Recommended Project State Rule Updates for Codex",
+    "6. Recommended Local AI Prompt Updates",
+    "",
+    "Use these Project State classifications when reviewing: project_candidate, existing_project_support, reference_note, personal_context_note, assistant_scaffolding_noise, rejected_noise.",
+    "",
+    "## Work Order",
+    "",
+    `- Work Order ID: \`${markdownSafeLine(workOrder.id)}\``,
+    `- Title: ${markdownSafeLine(workOrder.title)}`,
+    `- Target project: ${markdownSafeLine(projectName)}`,
+    `- Status: ${markdownSafeLine(workOrder.status || "submitted")}`,
+    `- Created: ${markdownSafeLine(formatDate(workOrder.createdAt || generatedAt))}`,
+    `- Source Discovery Case: \`${markdownSafeLine(source.discoveryCaseId || "none")}\``,
+    `- Last local AI run: ${markdownSafeLine(last.providerLabel || last.providerId || "Not recorded")}`,
+    `- Chunks analyzed total: ${Number(last.analyzedUniqueChunks || last.analyzedChunks || 0).toLocaleString()}${last.totalDetectedChunks ? ` of ${Number(last.totalDetectedChunks).toLocaleString()} detected` : ""}`,
+    `- Source fully analyzed: ${last.sourceFullyAnalyzed === true ? "Yes" : "No / not yet"}`,
+    `- External transmission recorded by PS: ${last.externalTransmission === true ? "Yes" : "No"}`,
+    "",
+    "## Source manifest",
+    "",
+    sourceFiles.length
+      ? sourceFiles.map((file, index) => [
+        `### Source ${index + 1}: ${markdownSafeLine(file.originalName || "Discovery source")}`,
+        "",
+        `- Status: ${markdownSafeLine(file.status || "stored")}`,
+        `- Chunk count: ${Number(file.chunkCount || 0).toLocaleString()}`,
+        `- Text bytes: ${Number(file.textBytes || 0).toLocaleString()}`,
+        `- File version ID: \`${markdownSafeLine(file.fileVersionId || "not recorded")}\``
+      ].join("\n")).join("\n\n")
+      : "- No source file manifest was stored on this Work Order.",
+    "",
+    "## Candidate Map summary",
+    "",
+    `- Mapped entries included in this pack: ${Number(selectedMapEntries.length || 0).toLocaleString()} of ${Number(candidateMap.entries.length || 0).toLocaleString()}`,
+    `- Evidence links in full map: ${Number(candidateMap.totalEvidenceLinks || 0).toLocaleString()}`,
+    `- Passes: ${Number(candidateMap.totalPasses || 0).toLocaleString()}`,
+    `- Map status: ${markdownSafeLine(candidateMap.status || "building")}`,
+    `- Export mode: ${config.label}`,
+    config.includeChunkText ? `- Stored chunk text previews: included for up to ${Number(config.chunkTextReadLimit).toLocaleString()} chunks, capped at ${Number(config.chunkTextLimit).toLocaleString()} characters each` : "- Stored chunk text previews: not included in Summary mode",
+    "",
+    "## Same-title / possible duplicate clusters",
+    "",
+    titleClusters.length
+      ? titleClusters.map(([key, group], index) => [
+        `### Cluster ${index + 1}: ${markdownSafeLine(key)}`,
+        "",
+        ...group.map((item) => `- ${item.kind}: \`${markdownSafeLine(item.id)}\` · ${markdownSafeLine(item.status)} · ${Number(item.evidenceCount || 0).toLocaleString()} evidence links · ${markdownSafeLine(item.title)}`)
+      ].join("\n")).join("\n\n")
+      : "- No same-title clusters were detected by the exporter. Still check semantic duplicates manually.",
+    "",
+    "## Candidate Map entries",
+    "",
+    selectedMapEntries.length
+      ? selectedMapEntries.map((entry, index) => [
+        `### ${index + 1}. ${markdownSafeLine(displaySafeAiTitle(entry.title))}`,
+        "",
+        `- Entry ID: \`${markdownSafeLine(entry.id)}\``,
+        `- Status: ${markdownSafeLine(entry.status || "active")}`,
+        `- Project State classification: ${markdownSafeLine(entry.projectStateClassification || classifyProjectStateCandidate(entry))}`,
+        `- Type/scope: ${markdownSafeLine(entry.candidateType || "unknown")} / ${markdownSafeLine(entry.scope || "unknown")}`,
+        `- Confidence: ${Math.round(Number(entry.confidenceScore || 0) * 100)}%`,
+        entry.knownProjectMatches?.length ? `- Possible existing project matches: ${entry.knownProjectMatches.map((match) => `${markdownSafeLine(match.name)} (${Math.round(Number(match.confidence || 0) * 100)}%)`).join(", ")}` : "- Possible existing project matches: none recorded",
+        `- Key terms: ${Array.isArray(entry.keyTerms) && entry.keyTerms.length ? entry.keyTerms.map((term) => markdownSafeLine(term)).join(", ") : "Not recorded"}`,
+        "",
+        "Summary:",
+        "",
+        markdownSafeBlock(displaySafeAiText(entry.summary || "", 1800)),
+        "",
+        "Evidence:",
+        "",
+        markdownCandidateEvidence(entry.evidence, config.evidenceLimit, { chunkTextById, chunkTextLimit: config.chunkTextLimit }),
+        "",
+        entry.questions?.length ? ["Questions:", "", ...entry.questions.slice(0, 6).map((question) => `- ${markdownSafeLine(question.text || question.id)}`)].join("\n") : "Questions: Not recorded"
+      ].join("\n")).join("\n\n")
+      : "- Candidate Map is empty.",
+    "",
+    "## Raw AI candidates",
+    "",
+    candidates.length
+      ? candidates.map((candidate, index) => [
+        `### Raw Candidate ${index + 1}: ${markdownSafeLine(displaySafeAiTitle(candidate.workingLabel || "Idea Candidate", "Idea Candidate"))}`,
+        "",
+        `- Candidate ID: \`${markdownSafeLine(candidate.id || candidate.clientCandidateId)}\``,
+        `- Type: ${markdownSafeLine(candidate.candidateType || "unknown")}`,
+        `- Project State classification: ${markdownSafeLine(candidate.projectStateClassification || classifyProjectStateCandidate(candidate))}`,
+        `- Confidence: ${Math.round(Number(candidate.confidence?.score || 0) * 100)}%`,
+        `- Provider/model: ${markdownSafeLine(candidate.provenance?.providerId || "local")} / ${markdownSafeLine(candidate.provenance?.modelId || "unknown")}`,
+        candidate.provenance?.source_thread || candidate.provenance?.source_title || candidate.provenance?.source_date
+          ? `- Source provenance: ${markdownSafeLine([candidate.provenance?.source_thread, candidate.provenance?.source_title, candidate.provenance?.source_date].filter(Boolean).join(" · "))}`
+          : "- Source provenance: not recorded",
+        "",
+        "Summary:",
+        "",
+        markdownSafeBlock(displaySafeAiText(candidate.neutralSummary || "", 1200)),
+        "",
+        "Evidence:",
+        "",
+        markdownCandidateEvidence(candidate.evidence, config.rawEvidenceLimit, { chunkTextById, chunkTextLimit: config.chunkTextLimit })
+      ].join("\n")).join("\n\n")
+      : "- No raw AI candidates are stored yet.",
+    "",
+    "## Codex update request",
+    "",
+    "After reviewing the material, please give Codex concrete implementation guidance:",
+    "",
+    "- Merge rules that Project State should add or tune.",
+    "- Local Qwen prompt changes that would have avoided bad splits.",
+    "- Signals that should mark material as reference/noise/supporting instead of project candidates.",
+    "- Any title/filename/project-label matching rules that should be stronger.",
+    "- Any Aether-specific rules that should stay personal and not enter the commercial Project State default.",
+    "",
+    "## Boundary reminder",
+    "",
+    "ChatGPT's output should return to Project State as an external review source. It should not be treated as Core truth until a human routes it through Intake/Airlock and approves individual changes."
+  ];
+  return sections.join("\n");
+}
+
+async function exportChatGptReviewPack(workOrderId, mode = "summary") {
+  const workOrder = (store.aiWorkOrders || []).find((order) => order.id === workOrderId);
+  if (!workOrder?.source?.discoveryCaseId) {
+    window.alert("This AI Work Order has no Discovery source to export.");
+    return;
+  }
+  const state = await platformAdapter.analysis.readState({ discoveryCaseId: workOrder.source.discoveryCaseId });
+  const stamp = nowIso().replace(/[:.]/g, "-");
+  const config = reviewPackModeConfig(mode);
+  if (config.mode === "split_cluster") {
+    const candidateMap = normalizeCandidateMap(workOrder);
+    const entries = candidateMap.entries.slice(0, 80);
+    const saved = [];
+    const indexText = buildReviewPackIndexMarkdown(workOrder, state, entries, stamp);
+    saved.push(await downloadTextFile(`${safeFileName(workOrder.title || "ai-work-order")}.chatgpt-split-review-index-${stamp}.md`, indexText, "text/markdown"));
+    for (const [index, entry] of entries.entries()) {
+      const relatedCandidates = (state.candidates || []).filter((candidate) => candidateMatchesMapEntry(candidate, entry));
+      const chunkTextById = await collectReviewPackChunkTexts({ entries: [entry], candidates: relatedCandidates, mode: "split_cluster" });
+      const text = buildChatGptReviewPackMarkdown(workOrder, state, {
+        mode: "split_cluster",
+        focusEntries: [entry],
+        focusTitle: entry.title,
+        chunkTextById
+      });
+      const part = String(index + 1).padStart(3, "0");
+      saved.push(await downloadTextFile(`${safeFileName(workOrder.title || "ai-work-order")}.${part}-${reviewPackFocusFileName(entry.title)}.${config.fileSuffix}-${stamp}.md`, text, "text/markdown"));
+    }
+    const folder = saved[0]?.path ? saved[0].path.replace(/\\[^\\]+$/, "") : "Project State backups folder";
+    setSaveStatus("saved", `Split ChatGPT Review Packs exported: ${saved.length.toLocaleString()} files in ${folder}`);
+    window.alert(`Split ChatGPT Review Packs exported.\n\n${saved.length.toLocaleString()} files saved in:\n${folder}`);
+    return { ok: true, files: saved };
+  }
+  const candidateMap = normalizeCandidateMap(workOrder);
+  const selectedEntries = candidateMap.entries.slice(0, config.mapEntryLimit);
+  const selectedCandidates = (state.candidates || []).slice(-config.rawCandidateLimit);
+  const chunkTextById = await collectReviewPackChunkTexts({ entries: selectedEntries, candidates: selectedCandidates, mode: config.mode });
+  const text = buildChatGptReviewPackMarkdown(workOrder, state, { mode: config.mode, chunkTextById });
+  const result = await downloadTextFile(`${safeFileName(workOrder.title || "ai-work-order")}.${config.fileSuffix}-${stamp}.md`, text, "text/markdown");
+  const savedPath = result?.path || "Project State backups folder";
+  setSaveStatus("saved", `${config.label} ChatGPT Review Pack exported: ${savedPath}`);
+  window.alert(`${config.label} ChatGPT Review Pack exported.\n\n${savedPath}`);
+  return result;
 }
 
 function latestCorpusIndexState(caseView = {}, extractionId = "") {
@@ -12807,13 +13298,18 @@ async function openAiWorkOrderResultsModal(workOrderId) {
       ${workOrder.digestContext?.passCount ? `<p class="item-meta">Rolling digest context saved across ${Number(workOrder.digestContext.passCount).toLocaleString()} pass${Number(workOrder.digestContext.passCount) === 1 ? "" : "es"}.</p>` : ""}
       ${moreSourceRemaining ? `<p class="notice"><strong>More source remains.</strong> These results are partial. Run local AI digestion again to continue through the next chunk window.</p>` : ""}
       ${noCandidatesFound ? `<p class="notice"><strong>No candidates found in the last pass.</strong> This is a completed AI attempt, not a completed source digestion.</p>` : ""}
+      <div class="item-actions">
+        <button class="btn secondary compact" type="button" data-action="export-chatgpt-review-pack" data-review-pack-mode="summary" data-work-order-id="${escapeHtml(workOrder.id)}">Export Summary Pack</button>
+        <button class="btn secondary compact" type="button" data-action="export-chatgpt-review-pack" data-review-pack-mode="evidence_heavy" data-work-order-id="${escapeHtml(workOrder.id)}">Export Evidence-Heavy Pack</button>
+        <button class="btn secondary compact" type="button" data-action="export-chatgpt-review-pack" data-review-pack-mode="split_cluster" data-work-order-id="${escapeHtml(workOrder.id)}">Export Split Packs</button>
+      </div>
       <h3 class="section-title">Candidate Map</h3>
       ${renderCandidateMapEntries(workOrder.candidateMap)}
       <h3 class="section-title">Raw AI Candidates</h3>
       ${candidates.length ? `<div class="list">${candidates.map((candidate) => `
         <article class="item">
-          <p class="item-title">${escapeDisplay(candidate.workingLabel || "Idea Candidate", DISPLAY_META_LIMIT)}</p>
-          <p class="item-meta">${escapeHtml(candidate.candidateType || "unknown")} · confidence ${Math.round(Number(candidate.confidence?.score || 0) * 100)}%</p>
+          <p class="item-title">${escapeDisplay(displaySafeAiTitle(candidate.workingLabel || "Idea Candidate", "Idea Candidate"), DISPLAY_META_LIMIT)}</p>
+          <p class="item-meta">${escapeHtml(candidate.candidateType || "unknown")} · ${escapeHtml(String(candidate.projectStateClassification || classifyProjectStateCandidate(candidate)).replaceAll("_", " "))} · confidence ${Math.round(Number(candidate.confidence?.score || 0) * 100)}%</p>
           <p class="item-body">${escapeDisplay(displaySafeAiText(candidate.neutralSummary || "", DISPLAY_TEXT_LIMIT), DISPLAY_TEXT_LIMIT)}</p>
           <details class="technical-details"><summary>Evidence and provenance</summary>${(candidate.evidence || []).slice(0, 8).map((evidence) => `<p class="item-meta">${escapeDisplay(displaySafeAiText(evidence.excerpt || evidence.discoveryChunkId, 500), 500)}<br>Chunk: ${escapeDisplay(evidence.discoveryChunkId, DISPLAY_META_LIMIT)} · ${escapeDisplay(evidence.relationship || "supports", DISPLAY_META_LIMIT)}</p>`).join("")}<p class="item-meta">Provider: ${escapeDisplay(candidate.provenance?.providerId || "local", DISPLAY_META_LIMIT)} · Model: ${escapeDisplay(candidate.provenance?.modelId || "unknown", DISPLAY_META_LIMIT)}</p></details>
         </article>
@@ -16447,6 +16943,7 @@ app.addEventListener("click", (event) => {
   if (action === "create-ai-work-order") openCreateAiWorkOrderModal();
   if (action === "start-local-ai-work-order") openStartLocalAiWorkOrderModal(button.dataset.workOrderId);
   if (action === "view-ai-work-order-results") openAiWorkOrderResultsModal(button.dataset.workOrderId);
+  if (action === "export-chatgpt-review-pack") exportChatGptReviewPack(button.dataset.workOrderId, button.dataset.reviewPackMode || "summary");
   if (action === "comment-ai-work-order") openAiWorkOrderCommentsModal(button.dataset.workOrderId);
   if (action === "archive-ai-work-order") archiveAiWorkOrder(button.dataset.workOrderId);
   if (action === "delete-archived-ai-work-order") openDeleteArchivedAiWorkOrderModal(button.dataset.workOrderId);

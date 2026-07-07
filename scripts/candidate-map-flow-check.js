@@ -34,6 +34,16 @@ function main() {
     "duplicateHints",
     "sourceCandidateIds",
     "evidence",
+    "isWeakSingleWindowCandidate",
+    "knownProjectMatchesForCandidate",
+    "review_only_note",
+    "possible_existing_project_match",
+    "projectStateClassification",
+    "assistant_scaffolding_noise",
+    "existing_project_support",
+    "classifyProjectStateCandidate",
+    "displaySafeAiText",
+    "displaySafeAiTitle",
     "Candidate Map:",
     "Candidate Map",
     "Raw AI Candidates"
@@ -43,7 +53,13 @@ function main() {
     "candidateMapContext = \"\"",
     "Candidate Map context:",
     "avoid duplicate ideas",
-    "updates, supports, conflicts with, or extends an existing mapped idea"
+    "updates, supports, conflicts with, or extends an existing mapped idea",
+    "new chat/thread/conversation start is source metadata only",
+    "source_thread",
+    "source_date",
+    "source_title",
+    "assistant_scaffolding_noise",
+    "existing_project_support"
   ], "desktop/local-ai-providers.cjs");
 
   requireSourceMarkers(inventory, [

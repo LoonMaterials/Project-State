@@ -35,6 +35,24 @@ async function main() {
     assert(providerSource.includes("deterministicRescueCandidates") && providerSource.includes("Qwen returned no candidates"), "Local AI must preserve substantive chunk-window signals when Qwen returns an empty candidate list.");
     assert(providerSource.includes("responseInvalidRescue") && providerSource.includes('error.code !== "PROVIDER_RESPONSE_INVALID"'), "Local AI must rescue malformed Qwen JSON instead of failing the entire Work Order pass.");
     assert(providerSource.includes("textLooksBinaryOrGibberish") && providerSource.includes("Content_Types"), "Local AI rescue must not preserve binary/container garbage as candidates.");
+    assert(providerSource.includes("looksLikeChatBoundaryOnly") && providerSource.includes("chat/thread/conversation start is source metadata only"), "Local AI must treat chat/thread starts as provenance metadata, not project candidates.");
+    assert(providerSource.includes("source_thread") && providerSource.includes("source_date") && providerSource.includes("source_title"), "Local AI candidate provenance must retain chat/thread source metadata when available.");
+    assert(providerSource.includes("cleanArchiveMarkupArtifacts") && providerSource.includes("entity") && providerSource.includes("cite"), "Local AI output should clean archive entity/citation artifacts before display/storage.");
+    assert(providerSource.includes("PROJECT_STATE_CLASSIFICATIONS") && providerSource.includes("assistant_scaffolding_noise") && providerSource.includes("existing_project_support"), "Local AI must distinguish project candidates from support/reference/scaffolding/noise.");
+    for (const noisyHeading of [
+      "Short answer",
+      "IMPORTANT",
+      "Bottom line",
+      "Where this leaves us",
+      "The right mental model",
+      "Ground rule for next steps",
+      "What I'd recommend",
+      "Simple intuition",
+      "Why your instinct was correct",
+      "One last grounding point"
+    ]) assert(providerSource.includes(noisyHeading), `Local AI assistant-heading filter missing: ${noisyHeading}`);
+    assert(providerSource.includes("ASSISTANT_SCAFFOLDING_HEADING_PATTERN") && providerSource.includes("GENERIC_ASSISTANT_HEADING_PATTERN"), "Local AI must filter generic assistant-answer headings.");
+    assert(providerSource.includes("KNOWN_PROJECT_ANCHORS") && providerSource.includes("GIBM") && providerSource.includes("EQ Wheel") && providerSource.includes("Aether"), "Local AI must run known-project anchor matching before new-project classification.");
     assert(bridgeSource.includes("extractReadableDiscoveryText") && bridgeSource.includes("windowed ? \"\" : await extractReadableDiscoveryText(physicalPath)"), "Large-corpus indexing must use format-aware text extraction instead of raw UTF-8 reads.");
     assert(bridgeSource.includes("extractDocxTextWindow") && bridgeSource.includes("streamingWindow") && bridgeSource.includes("createInflateRaw"), "Large DOCX corpus indexing must stream windowed text instead of creating one giant string.");
     assert(providerSource.includes("callQwenForJson"), "Local AI provider must retry malformed JSON locally before failing.");
@@ -62,6 +80,16 @@ async function main() {
       "buildCandidateMapContext",
       "updateWorkOrderCandidateMap",
       "renderCandidateMapEntries",
+      "isWeakSingleWindowCandidate",
+      "knownProjectMatchesForCandidate",
+      "review_only_note",
+      "possible_existing_project_match",
+      "assistant_scaffolding_noise",
+      "existing_project_support",
+      "PROJECT_STATE_CLASSIFICATIONS",
+      "KNOWN_PROJECT_ANCHORS",
+      "classifyProjectStateCandidate",
+      "displaySafeAiTitle",
       "Candidate Map:",
       "until_paused",
       "Stop after this pass",
