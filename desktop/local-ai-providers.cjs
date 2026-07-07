@@ -124,7 +124,7 @@ function legalReferenceSignals(text = "") {
   };
 }
 
-function buildAnalysisPrompt({ chunks, candidateTypes, maxCandidates }) {
+function buildAnalysisPrompt({ chunks, candidateTypes, maxCandidates, priorDigestContext = "" }) {
   const safeChunks = chunks.map(({ chunk, text }, index) => ({
     index,
     discoveryChunkId: chunk.id,
@@ -134,6 +134,8 @@ function buildAnalysisPrompt({ chunks, candidateTypes, maxCandidates }) {
   return [
     "You are a local Project State analysis arm. You are not the source of truth.",
     "Analyze only the supplied chunks. Create non-authoritative Idea Candidates only.",
+    "These chunks may be one window from a much larger file. Use the prior digest context to understand continuity and avoid treating each chunk as a separate file.",
+    "Prior digest context is context only. Every new candidate must still cite at least one supplied current discoveryChunkId.",
     "Do not create project names, project IDs, routes, approvals, facts, or history.",
     "Licensing agreements, EULAs, terms, privacy policies, developer/app-store agreements, SDK/API terms, and third-party notices are reference/supporting material. Do not split them into project ideas unless the text clearly describes a buildable project.",
     "When a chunk is mostly legal/app agreement material, return at most one reference candidate with scope supporting.",
@@ -142,6 +144,7 @@ function buildAnalysisPrompt({ chunks, candidateTypes, maxCandidates }) {
     '{"candidates":[{"workingLabel":"short label","neutralSummary":"plain evidence-based summary","candidateType":"other","scope":"standalone|supporting|cross_cutting|unknown","keyTerms":["term"],"evidence":[{"discoveryChunkId":"chunk id","relationship":"supports|mentions|contrasts|limits|depends_on|context_only","excerpt":"short quote or paraphrase from the chunk"}],"confidence":{"score":0.0,"basis":"why","uncertaintyNotes":"what is unclear"},"clarificationQuestions":[{"text":"question","affects":"meaning|scope|routing|priority|grouping","allowNotSure":true}]}]}',
     `Allowed candidateType values: ${candidateTypes.join(", ")}`,
     `Maximum candidates: ${maxCandidates}`,
+    priorDigestContext ? `Prior digest context from earlier windows: ${priorDigestContext}` : "Prior digest context from earlier windows: none yet.",
     `Chunks: ${JSON.stringify(safeChunks)}`
   ].join("\n\n");
 }
@@ -198,7 +201,7 @@ async function generateQwenIdeaCandidates({ validated, envelope, ideaContract, m
   const providers = await describeLocalAiProviders();
   const provider = providers.find((item) => item.providerId === QWEN3_8B_PROVIDER_ID);
   if (!provider?.available) throw localAiError("PROVIDER_UNAVAILABLE", provider?.lastError || "Qwen3 8B is not installed in Ollama.");
-  const prompt = buildAnalysisPrompt({ chunks: validated, candidateTypes: ideaContract.objects.IdeaCandidate.candidateTypes, maxCandidates });
+  const prompt = buildAnalysisPrompt({ chunks: validated, candidateTypes: ideaContract.objects.IdeaCandidate.candidateTypes, maxCandidates, priorDigestContext: envelope.analysisOptions?.priorDigestContext || "" });
   const { parsed, attempts } = await callQwenForJson(prompt, { candidateTypes: ideaContract.objects.IdeaCandidate.candidateTypes, maxCandidates });
   const suppliedCandidates = Array.isArray(parsed.candidates) ? parsed.candidates : [];
   const chunkById = new Map(validated.map((item) => [item.chunk.id, item]));

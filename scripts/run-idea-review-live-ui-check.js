@@ -37,7 +37,7 @@ async function main() {
     assert(boundary.panelText.includes("AI Work Orders") && boundary.panelText.includes("No AI is called from this Discovery screen."), "Discovery does not show the AI Work Order boundary.", boundary);
     assert(boundary.workingLabel.includes("Working file-based name"), "File-derived name was not demoted from project authority.", boundary);
 
-    await client.evaluate(`(() => { const destination=document.querySelector('[name="destination"]'); destination.value='ai_work_order'; destination.dispatchEvent(new Event('change',{bubbles:true})); document.querySelector('.modal form').requestSubmit(); return true; })()`);
+    await client.evaluate(`(() => { const mode=document.querySelector('[name="unitReviewMode"]'); if(mode){ mode.value='one_item'; mode.dispatchEvent(new Event('change',{bubbles:true})); } const destination=document.querySelector('[name="destination"]'); destination.value='ai_work_order'; destination.dispatchEvent(new Event('change',{bubbles:true})); document.querySelector('.modal form').requestSubmit(); return true; })()`);
     await waitFor(client.evaluate, `!document.querySelector('.modal')`, 30000);
     const result = await client.evaluate(`(() => ({ workOrders:(store.aiWorkOrders||[]).length, intake:(store.intakeItems||[]).filter(x=>Boolean(x.discoveryCaseId)).length, inlineRunControls:Boolean(document.querySelector('[data-run-idea-analysis]')) }))()`);
     assert(result.workOrders > 0 && result.intake === 0 && result.inlineRunControls === false, "AI follow-up did not route cleanly to Work Orders.", result);

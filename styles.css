@@ -1091,6 +1091,127 @@ select:focus {
   margin: 0 0 8px;
 }
 
+.ai-progress-panel {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid #9ab6a1;
+  border-radius: 8px;
+  background: #f2f8f3;
+}
+
+.ai-progress-panel[hidden] {
+  display: none;
+}
+
+.ai-progress-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.ai-progress-head .item-title,
+.ai-progress-head .item-meta {
+  margin: 0;
+}
+
+.ai-progress-bar {
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #dce7de;
+}
+
+.ai-progress-bar span {
+  display: block;
+  width: 8%;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+  transition: width 180ms ease;
+}
+
+.ai-progress-bar.indeterminate span {
+  width: 42%;
+  animation: ai-progress-slide 1.25s ease-in-out infinite;
+}
+
+.ai-progress-bar.failed span {
+  background: #b34848;
+}
+
+@keyframes ai-progress-slide {
+  0% { transform: translateX(-110%); }
+  50% { transform: translateX(90%); }
+  100% { transform: translateX(240%); }
+}
+
+.ai-progress-steps {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ai-progress-steps li {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.ai-progress-steps li span {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  flex: 0 0 auto;
+  border: 1px solid #9ab6a1;
+  border-radius: 50%;
+  background: #fff;
+}
+
+.ai-progress-steps li.active {
+  color: var(--ink);
+  font-weight: 760;
+}
+
+.ai-progress-steps li.active span,
+.ai-progress-steps li.complete span {
+  border-color: var(--accent);
+  background: var(--accent);
+}
+
+.ai-progress-counters {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.ai-progress-counters div {
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #fff;
+}
+
+.ai-progress-counters strong,
+.ai-progress-counters span {
+  display: block;
+}
+
+.ai-progress-counters strong {
+  font-size: 18px;
+}
+
+.ai-progress-counters span {
+  color: var(--muted);
+  font-size: 11px;
+}
+
 .field-help {
   margin: 5px 0 0;
   color: var(--muted);

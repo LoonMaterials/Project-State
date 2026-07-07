@@ -60,6 +60,21 @@ async function main() {
   const storageRoot = await fsp.mkdtemp(path.join(os.tmpdir(), "project-state-desktop-spine-"));
   const bridge = createProjectStateDesktopBridge({ storageRoot, label: "Project State Desktop Test Bridge" });
   const store = readFixtureStore();
+  store.aiWorkOrders = [{
+    id: "ai_work_order_desktop_bridge_fixture",
+    projectId: "",
+    title: "Large AI follow-up: Desktop bridge fixture",
+    task: "Verify AI Work Orders survive desktop spine save/load rebuild.",
+    contextPreset: "source_research",
+    outputType: "Large-file/folder digestion and project-candidate suggestions",
+    canCreateIntake: true,
+    status: "submitted",
+    createdAt: "2026-07-07T12:00:00.000Z",
+    createdBy: store.actors?.[0]?.id || "",
+    reason: "Desktop bridge persistence regression fixture.",
+    source: { origin: "discovery", discoveryCaseId: "discovery_case_fixture", sourceFiles: [{ originalName: "huge-file.txt", status: "large_corpus_pending" }] },
+    comments: []
+  }];
   const manifest = buildManifest(store);
   const split = splitStoreRecords(store);
   const snapshot = JSON.stringify(store);
@@ -101,6 +116,7 @@ async function main() {
   const loadedCounts = countStoreParts(loaded.store);
   assert(!verifyStoreIntegrity(loaded.store).length, "Loaded desktop store failed integrity.", { errors: verifyStoreIntegrity(loaded.store) });
   assert(JSON.stringify(loadedCounts) === JSON.stringify(expectedCounts), "Loaded desktop store counts changed.", { loadedCounts, expectedCounts });
+  assert(loaded.store.aiWorkOrders?.length === 1 && loaded.store.aiWorkOrders[0].id === "ai_work_order_desktop_bridge_fixture", "AI Work Orders did not survive desktop spine rebuild.", loaded.store.aiWorkOrders || []);
 
   const textFile = path.join(storageRoot, "temp", "sample.txt");
   await fsp.writeFile(textFile, "Desktop bridge text extraction sample.", "utf8");
@@ -155,6 +171,7 @@ async function main() {
     storageRoot,
     tableCounts,
     loadedCounts,
+    aiWorkOrders: loaded.store.aiWorkOrders.length,
     folders: FOLDERS.length
   }, null, 2));
   console.log("Desktop bridge implementation: ok");

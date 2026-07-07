@@ -23,15 +23,43 @@ async function main() {
     const bridgeSource = fs.readFileSync(path.join(__dirname, "..", "desktop", "project-state-desktop-bridge.cjs"), "utf8");
     const providerSource = fs.readFileSync(path.join(__dirname, "..", "desktop", "local-ai-providers.cjs"), "utf8");
     const appSource = fs.readFileSync(path.join(__dirname, "..", "app.js"), "utf8");
+    const indexSource = fs.readFileSync(path.join(__dirname, "..", "index.html"), "utf8");
     assert(bridgeSource.includes("LOCAL_ANALYSIS_PROVIDER_IDS"), "Local provider privacy boundary is missing.");
     assert(bridgeSource.includes("externalTransmission: false"), "Local AI receipts must remain non-external.");
     assert(providerSource.includes("127.0.0.1:11434"), "Qwen/Ollama provider must target loopback only.");
+    assert(indexSource.includes("connect-src http://127.0.0.1:11434 http://localhost:11434"), "CSP must permit local-only Ollama loopback checks.");
+    assert(!/connect-src[^"]*(https?:\/\/(?!127\.0\.0\.1:11434|localhost:11434)[^"'\s;]+)/.test(indexSource), "CSP must not permit non-loopback provider connections.");
     assert(providerSource.includes("PROJECT_STATE_LOCAL_AI_TIMEOUT_MS"), "Local AI generation timeout must be configurable for offline models.");
     assert(providerSource.includes("num_predict: 1200"), "Local AI generation should keep responses bounded for smoke/offline use.");
     assert(providerSource.includes("callQwenForJson"), "Local AI provider must retry malformed JSON locally before failing.");
     assert(providerSource.includes("responseAttempts"), "Local AI candidate provenance should record JSON retry attempts.");
     assert(providerSource.includes("Do not create project names"), "Local AI prompt must keep project naming out of the provider.");
+    assert(providerSource.includes("priorDigestContext") && providerSource.includes("much larger file"), "Local AI prompt must carry rolling digest context across chunk windows.");
     assert(appSource.includes("creates no Core authority"), "UI does not explain local AI authority boundary.");
+    for (const required of [
+      "Start local AI digestion",
+      "function executeAiWorkOrderLocalAnalysis",
+      "function openStartLocalAiWorkOrderModal",
+      "function openAiWorkOrderResultsModal",
+      "No real local AI provider is available",
+      "Idea Candidates only",
+      "no_candidates_found",
+      "candidates_found_more_source_remaining",
+      "sourceFullyAnalyzed",
+      "Pass complete — more remains",
+      "Work Order stays active",
+      "buildWorkOrderDigestContext",
+      "updateWorkOrderDigestContext",
+      "until_paused",
+      "Stop after this pass",
+      "Rolling digest context",
+      "view-ai-work-order-results",
+      "start-local-ai-work-order"
+    ]) assert(appSource.includes(required), `AI Work Order local execution UI missing: ${required}`);
+    assert(appSource.includes('workOrder.status = sourceFullyAnalyzed ? "completed" : "submitted";'), "AI Work Orders must complete only when source coverage is fully analyzed.");
+    assert(appSource.includes("unanalyzedChunks") && appSource.includes("alreadyAnalyzedChunkIds"), "AI Work Order execution must continue through new chunk windows instead of repeating the first pass.");
+    assert(appSource.includes("!capabilities.realProviderInstalled"), "AI Work Order execution should require a real local provider instead of the fake fixture arm.");
+    assert(appSource.includes("externalTransmission: execution.result.transmissionReceipt?.externalTransmission === true"), "AI Work Order execution should retain local/external transmission evidence.");
 
     console.log("Local AI Provider Plumbing Check");
     console.log(JSON.stringify({

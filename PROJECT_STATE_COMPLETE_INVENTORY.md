@@ -1005,6 +1005,10 @@ Unknown folder handling now follows two lanes:
 - The AI follow-up cutover was completed on 2026-07-07 in the Discovery screen. The older inline/local Idea Analysis branch was removed from `app.js`; Discovery no longer exposes `runFakeIdeaAnalysis`, `data-run-idea-analysis`, inline candidate review, or direct `recordReviewDecision` UI behavior.
 - `scripts/run-idea-review-live-ui-check.js` and `scripts/idea-review-ui-check.js` were converted into guard checks that forbid the old inline AI path and require AI follow-up to route into AI Work Orders.
 - `scripts/large-corpus-intake-flow-check.js` was updated so large-corpus verification requires Work Order routing and forbids the removed inline indexing/analysis UI.
+- Pre-huge-file cleanup hardening was added on 2026-07-07: the AI Work Orders screen now shows Active / Completed / Archived / Total counts, displays queued source-file and large-corpus details, and includes owner-only deletion for archived AI Work Orders. Delete warnings explicitly state that managed source files, Discovery cases, Intake items, and Core project history are not deleted.
+- `scripts/flow-hardening-check.js` now guards the AI Work Order readiness/cleanup affordances so huge-file testing can be reset safely after archived test Work Orders.
+- Live preflight testing on 2026-07-07 found and fixed an AI Work Order persistence bug: Discovery could record an `ai_work_order` route but the desktop split-store rebuild omitted `aiWorkOrders`, causing the Work Order to disappear after save/load. `desktop/project-state-desktop-bridge.cjs` now rebuilds `aiWorkOrders` from store metadata, and `scripts/desktop-bridge-implementation-check.js` includes a regression fixture.
+- `scripts/run-idea-review-live-ui-check.js` now explicitly verifies the pre-API boundary in a live Electron window: no inline AI controls, AI follow-up routes to AI Work Orders, zero Discovery-created Intake items, and zero renderer exceptions.
 - `DISCOVERY_FIRST_SYSTEM.md` and `FOLDER_DISCOVERY_FLOW.md` were updated to reflect the repaired subfolder/loose-file split.
 
 ### Verification after repair
@@ -1028,4 +1032,68 @@ Additional pass after AI Work Order cutover on 2026-07-07:
 - `pnpm run check:flow-hardening`
 - `pnpm run check:api-arm`
 
-No installer was rebuilt during this checkpoint. The next live test should start from a cleaned test dataset and verify: AI Work Order count after subfolder/AI routing, no image/plot-only ready approvals, and no stale Folder Root entries in active Discovery progress.
+Additional pass after pre-huge-file AI Work Order cleanup hardening on 2026-07-07:
+
+- `pnpm run check`
+- `pnpm run check:desktop`
+- `pnpm run check:idea-review-ui`
+- `pnpm run check:large-corpus`
+- `pnpm run check:flow-hardening`
+- `node scripts/run-idea-review-live-ui-check.js 9228` against a temporary live Electron test store
+
+No installer was rebuilt during this checkpoint. The next live test should start from a cleaned test dataset and verify: AI Work Order count after subfolder/AI routing, no image/plot-only ready approvals, no stale Folder Root entries in active Discovery progress, and archived AI Work Order cleanup after a test run.
+
+## 28. AI Work Order Local Digestion Checkpoint
+
+Status: first local-AI digestion path implemented and verified 2026-07-07 after large-file / large-folder tests confirmed that oversized or exploratory material parks correctly in AI Work Orders.
+
+### Current behavior
+
+- AI Work Orders now have a **Start local AI digestion** action when they are linked to a Discovery Case and a real local provider is available.
+- The first supported real provider is **Qwen3 8B via Ollama** (`qwen3:8b`) on the local machine.
+- The Work Order execution path requires a real provider; it does not silently use the fake fixture analysis arm.
+- Before analysis, Project State builds an exact source/chunk scope from Discovery evidence and records human authorization for those chunks.
+- Large-corpus Work Orders can request the first bounded chunk batch before local analysis, keeping huge-file digestion incremental instead of trying to load the whole source at once.
+- Local AI results create **Idea Candidates only**. They do not create Core records, approve Intake, assign project authority, or write final history.
+- Work Orders now record `analysisRunIds` and `lastAnalysis` summary metadata so the UI can show provider, candidate count, chunk count, completion time, and whether any external transmission occurred.
+- A **View AI results** action shows pre-Airlock candidate results with evidence/provenance so a human can decide what to do next.
+- Local Qwen receipts remain `externalTransmission: false`.
+- The **Start local AI digestion** modal now includes a truthful progress/counter panel: stage, elapsed time, selected chunks, sent chunks, returned candidate count, and external-transmission status. The progress bar is stage-based and becomes indeterminate only while the local model is thinking, so it does not invent a fake percentage for Qwen generation time.
+
+### API/cloud boundary
+
+- The existing generic API Arm remains intact and verified.
+- No provider-specific cloud AI integration is installed yet.
+- Cloud/deep-thinking API use should remain optional and must enter through a provider-specific arm later, with explicit `provider_allowed` privacy authorization and the same pre-Airlock Idea Candidate boundary.
+- For this checkpoint, the safest working path is local-first digestion, then human review, then later optional cloud escalation only for material the user deliberately sends out.
+
+### Verification results on 2026-07-07
+
+Passed:
+
+- `pnpm run check`
+- `pnpm run check:ai-analysis-foundation`
+- `pnpm run check:idea-review-ui`
+- `pnpm run check:flow-hardening`
+- `pnpm run check:local-ai-qwen`
+- `pnpm run check:api-arm`
+
+Additional pass after progress/counter UI was added:
+
+- `pnpm run check`
+- `pnpm run check:ai-analysis-foundation`
+- `pnpm run check:idea-review-ui`
+- `pnpm run check:local-ai-qwen`
+- `pnpm run check:flow-hardening`
+
+Notable verification points:
+
+- Local Qwen smoke returned one candidate from one authorized chunk.
+- Local Qwen smoke confirmed `externalTransmission: false`.
+- Local Qwen smoke confirmed Core remained unchanged.
+- API-arm checks confirmed API proposals still remain Intake/Airlock-only and do not mutate Core.
+- Flow checks confirmed the old inline Discovery AI path remains removed and AI follow-up routes through AI Work Orders.
+- Live testing found a workflow mismatch: a local AI pass could finish successfully with zero Idea Candidates and still mark the AI Work Order complete. The UI now treats that as a completed AI attempt but an active Work Order: it records `outcome: no_candidates_found`, keeps the Work Order submitted/active, shows a no-candidates notice, and allows another chunk pass, archive/no-find, or later deep-provider follow-up.
+- Follow-up live testing clarified the stronger rule: for massive files, candidate count must never decide Work Order completion. A Work Order now stays active until Project State reaches the end of the source coverage. Each run selects the next unanalyzed chunk window, continues large-corpus indexing when all indexed chunks have already been analyzed, records cumulative analyzed/detected chunk counts, and marks complete only when the source is fully digested.
+- Further live testing showed the first continuation model still treated each chunk window too independently. Local Qwen prompts now receive a bounded rolling digest context from prior passes, while still requiring every new candidate to cite current authorized chunks. AI Work Orders now preserve `digestContext` across saves/reloads and display the number of saved rolling-context passes.
+- The **Start local AI digestion** modal now has a run mode selector: **One pass only** or **Run until paused or source complete**. Continuous mode saves after every pass, carries rolling context forward, and exposes **Stop after this pass** so a user can pause safely without corrupting evidence or losing progress.

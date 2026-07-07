@@ -11,6 +11,8 @@ const inventory = fs.readFileSync(path.join(root, "PROJECT_STATE_COMPLETE_INVENT
 for (const required of [
   "function projectNextStep(project)",
   "function intakeNextStep(item",
+  "function openDeleteArchivedAiWorkOrderModal",
+  "function openDeleteAllArchivedAiWorkOrdersModal",
   "Next step:",
   "function projectCorrectionForFlag",
   'action === "correct-project-warning"',
@@ -22,6 +24,16 @@ for (const required of [
   "setFlowGuideStep(modal, 4)",
   'requiresFinalReview = resolvedFlowStep < 4'
 ]) assert(app.includes(required), `Flow hardening implementation missing: ${required}`);
+for (const required of [
+  'data-action="delete-all-archived-ai-work-orders"',
+  'data-action="delete-archived-ai-work-order"',
+  "DELETE ARCHIVED AI WORK ORDERS",
+  "DELETE AI WORK ORDER",
+  "Huge-file and unknown-folder AI follow-up should appear here first",
+  "Source files queued",
+  "does not delete managed source files, Discovery cases, Intake items, or Core project history"
+]) assert(app.includes(required), `AI Work Order cleanup/readiness missing: ${required}`);
+assert(app.includes('"delete-archived-ai-work-order", "delete-all-archived-ai-work-orders"'), "Archived AI Work Order deletion must remain owner-only.");
 
 for (const required of [".next-step-panel", ".next-step-inline", ".technical-details", ".modal-final-review", ".review-summary-list"]) assert(styles.includes(required), `Flow hardening style missing: ${required}`);
 for (const required of ["contextual primary **Next step** action", "actionable warning links directly", "Details and provenance", "plain-language final review"]) assert(contract.includes(required), `Flow hardening contract missing: ${required}`);

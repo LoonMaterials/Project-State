@@ -47,7 +47,8 @@ function main() {
   assert(!browserAdapterText.includes("localStorage.getItem") && !browserAdapterText.includes("indexedDB.open") && !browserAdapterText.includes("new FileReader"), "Browser adapter still exposes old web storage or file starts.");
   assert(appText.includes('return window.location?.protocol === "file:";'), "Web runtime could still accept an injected desktop bridge.");
   const indexText = fs.readFileSync(path.join(__dirname, "..", "index.html"), "utf8");
-  assert(indexText.includes("connect-src 'none'"), "Web runtime must block all outbound network connections.");
+  assert(indexText.includes("connect-src http://127.0.0.1:11434 http://localhost:11434"), "Runtime CSP must allow only the local Ollama loopback provider.");
+  assert(!/connect-src[^"]*(https?:\/\/(?!127\.0\.0\.1:11434|localhost:11434)[^"'\s;]+)/.test(indexText), "Runtime CSP must not allow non-loopback outbound network connections.");
   assert(indexText.includes("object-src 'none'") && indexText.includes("frame-src 'none'"), "Web runtime must block external objects and frames.");
   assert(/if \(browserDevRuntime\(\)\) \{\s+renderBrowserDevModeGate\(\);\s+return;\s+\}/.test(appText), "Startup render path does not gate browser/dev mode.");
   assert(appText.includes("if (!seriousStorageWorkAllowed() && !options.allowInBrowserDev)"), "saveStore does not block serious storage work without the desktop bridge.");

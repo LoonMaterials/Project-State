@@ -1913,7 +1913,7 @@ async function indexDiscoveryCorpus({ storageRoot, dbPath, payload = {} }) {
   } finally { readDb.close(); }
   const totalIndexedChunks = allChunks.length;
   const truncated = totalIndexedChunks < allPieces.length;
-  await appendDiscoveryEvent({ storageRoot, dbPath, payload: { id: makeId("discovery_event"), discoveryCaseId, eventType: "large_corpus_indexed", actorId, actorType: "tool", occurredAt: createdAt, fileVersionId: extraction.fileVersionId, extractionId, chunkCount: chunks.length, totalIndexedChunks, chunkCharacters, maxChunks, startChunkIndex, truncated } });
+  await appendDiscoveryEvent({ storageRoot, dbPath, payload: { id: makeId("discovery_event"), discoveryCaseId, eventType: "large_corpus_indexed", actorId, actorType: "tool", occurredAt: createdAt, fileVersionId: extraction.fileVersionId, extractionId, chunkCount: chunks.length, totalIndexedChunks, totalDetectedChunks: allPieces.length, nextChunkIndex: totalIndexedChunks, chunkCharacters, maxChunks, startChunkIndex, truncated, complete: !truncated } });
   return { ok: true, discoveryCaseId, extraction, chunks: allChunks, indexed: { chunkCount: chunks.length, totalIndexedChunks, startChunkIndex, nextChunkIndex: totalIndexedChunks, chunkCharacters, maxChunks, truncated, complete: !truncated, totalDetectedChunks: allPieces.length } };
 }
 
@@ -3748,6 +3748,7 @@ async function rebuildStoreFromSplitRecords(storageRoot, split = {}) {
     actors: Array.isArray(meta.actors) ? meta.actors : [],
     intakeBatches: Array.isArray(split.intakeBatches) ? split.intakeBatches : (Array.isArray(meta.intakeBatches) ? meta.intakeBatches : []),
     intakeItems: Array.isArray(split.intakeItems) ? split.intakeItems : (Array.isArray(meta.intakeItems) ? meta.intakeItems : []),
+    aiWorkOrders: Array.isArray(meta.aiWorkOrders) ? meta.aiWorkOrders : [],
     projects: split.projects || []
   };
 
