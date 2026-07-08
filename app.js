@@ -6230,6 +6230,8 @@ function renderCandidateMapEntries(candidateMap = null) {
     <article class="item">
       <p class="item-title">${escapeDisplay(displaySafeAiTitle(entry.conceptTitle || entry.title), DISPLAY_META_LIMIT)}</p>
       <p class="item-meta">${escapeHtml(entry.candidateType || "unknown")} · ${escapeHtml(String(entry.projectStateClassification || classifyProjectStateCandidate(entry)).replaceAll("_", " "))} · ${escapeHtml(entry.scope || "unknown")} · ${escapeHtml(String(entry.status || "active").replaceAll("_", " "))} · confidence ${Math.round(Number(entry.confidenceScore || 0) * 100)}%</p>
+      ${entry.personalAetherSupport ? `<p class="notice"><strong>Personal Aether support:</strong> keep separate from commercial Project State defaults until a separate design review approves it.</p>` : ""}
+      ${entry.enrichmentTargetProjectIds?.length ? `<p class="notice"><strong>Existing project enrichment:</strong> ${escapeDisplay(entry.knownProjectMatches?.map((match) => match.name).filter(Boolean).join(", ") || entry.enrichmentTargetProjectIds.join(", "), DISPLAY_META_LIMIT)}${entry.projectEvidenceRole ? ` · ${escapeDisplay(entry.projectEvidenceRole.replaceAll("_", " "), DISPLAY_META_LIMIT)}` : ""}</p>` : ""}
       <p class="item-body">${escapeDisplay(displaySafeAiText(entry.summary || "", DISPLAY_TEXT_LIMIT), DISPLAY_TEXT_LIMIT)}</p>
       <p class="item-meta">${entry.titleSource ? `source heading: ${escapeDisplay(entry.titleSource, DISPLAY_META_LIMIT)} · ` : ""}${Number(entry.evidence?.length || 0).toLocaleString()} evidence link${Number(entry.evidence?.length || 0) === 1 ? "" : "s"} · ${Number(entry.sourceCandidateIds?.length || 0).toLocaleString()} linked raw candidate${Number(entry.sourceCandidateIds?.length || 0) === 1 ? "" : "s"}${displaySafeAiTerms(entry.keyTerms) ? ` · ${displaySafeAiTerms(entry.keyTerms)}` : ""}${entry.knownProjectMatches?.length ? ` · possible existing project: ${escapeDisplay(entry.knownProjectMatches[0].name, DISPLAY_META_LIMIT)}` : ""}</p>
       <details class="technical-details">
@@ -12179,15 +12181,29 @@ const ASSISTANT_SCAFFOLDING_HEADING_PATTERN = /^(?:#{1,6}\s*)?(?:\d+[.)]\s*)?(?:
 const GENERIC_ASSISTANT_HEADING_PATTERN = /^(?:#{1,6}\s*)?(?:\d+[.)]\s*)?(?:short answer|important|bottom line|where this|the right|ground rule|what i|simple|why your|why .+ matters|one last|what happened|what to hand|scene hookup|cases with|operational guardrails|decisions i can|big caution|timeline|next steps|recommendation|intuition|mental model|here(?:'|’)s what)\b/i;
 const KNOWN_PROJECT_ANCHORS = [
   { id: "gibm", label: "GIBM", patterns: [/\bgibm\b/i] },
+  { id: "wheel_general_physics", label: "Wheel / General Physics Platform", patterns: [/\bwheel\s*\/\s*general\s+physics\s+platform\b/i, /\btier[-\s]?[012]\b.{0,180}\bwheel\b/i, /\bsingle\s+wheel\b.{0,120}\btiming\s+offsets?\b/i, /\bconcentric\s+wheels?\b/i, /\bframe[-\s]?dragging\b/i, /\bphase\s+drift\b|\btiming\s+drift\b/i, /\binertial\s+coupling\b/i, /\bhigh[-\s]?mu\s+shielding\b/i, /\bmetrology\s+playbook\b/i, /\bgalinstan\b.{0,180}\b(?:wheel|timing|phase|physics\s+test)\b/i, /\bsuperconductor[-\s]?free\b.{0,160}\bwheel\b/i, /\bwheel[-\s]?based\s+physics\s+test\b/i] },
   { id: "eq_wheel", label: "EQ Wheel / earthquake analog detector", patterns: [/\beq\s*wheel\b/i, /\bearthquake\s+detector\b/i, /\banalog\s+detector\b/i] },
-  { id: "drl_ltc", label: "Lattice insulation / DRL / LTC", patterns: [/\blattice\s+insulation\b/i, /\bdrl\b/i, /\bltc\b/i, /\bresilience\s+lattice\b/i] },
-  { id: "gpc1_cancer_tube", label: "Cancer tube / exosome diagnostic / GPC1", patterns: [/\bcancer\s+tube\b/i, /\bexosome\s+diagnostic\b/i, /\bgpc1\b/i] },
-  { id: "aether", label: "Aether / agency / identity / continuity", patterns: [/\baether\b/i, /\bidentity\s+continuity\b/i, /\bagency\s+continuity\b/i] },
-  { id: "fusion_desal_thermal", label: "Fusion / desal / thermal battery", patterns: [/\bfusion\b/i, /\bdesal(?:ination)?\b/i, /\bthermal\s+battery\b/i] },
-  { id: "mirror_earth_games", label: "Mirror Earth / games / software", patterns: [/\bmirror\s+earth\b/i, /\bleave\s+me\s+alone\s+games?\b/i, /\bgame\s+suite\b/i] },
+  { id: "drl_ltc", label: "Lattice / DRL / LTC", patterns: [/\blattice\s+insulation\b/i, /\bdrl\b/i, /\bltc\b/i, /\bresilience\s+lattice\b/i] },
+  { id: "gpc1_cancer_tube", label: "Cancer Tube", patterns: [/\bcancer\s+tube\b/i, /\bexosome\s+diagnostic\b/i, /\bgpc1\b/i] },
+  { id: "superconductor_lattice", label: "Superconductor Lattice", patterns: [/\bsuperconductor\s+lattice\b/i, /\bsuperconducting\s+lattice\b/i, /\blattice\s+superconductor\b/i] },
+  { id: "aether", label: "Aether / Project State", patterns: [/\baether\b/i, /\bproject\s+state\b/i, /\bintake\b.{0,80}\bairlock\b/i, /\bcandidate\s+map\b/i, /\bai\s+work\s+orders?\b/i] },
+  { id: "fusion_desal_thermal", label: "Fusion / Energy", patterns: [/\bfusion\s+(?:reactor|energy|power|desal(?:ination)?|thermal|blanket)\b/i, /\b(?:superconductors?|magnets?)\b.{0,120}\bfusion\b/i, /\bfusion\b.{0,120}\b(?:superconductors?|magnets?)\b/i, /\bdesal(?:ination)?\b/i, /\bthermal\s+battery\b/i] },
+  { id: "mirror_earth_games", label: "Mirror Earth / games / software", patterns: [/\bmirror\s+earth\b/i, /\bleave\s+me\s+alone\s+games?\b/i, /\bgame\s+suite\b/i, /\b(?:pygame|godot|unity)\b.{0,180}\b(?:game|room\s+template|character|camera|controls|playable\s+prototype|micro[-\s]?gdd|vertical\s+slice)\b/i] },
   { id: "shaw_governance", label: "SHAW / human-first / governance", patterns: [/\bshaw\b/i, /\bhuman[-\s]?first\b/i, /\bgovernance\b/i] },
   { id: "patents_lmc", label: "Patents / licensing / outreach / LMC", patterns: [/\bpatents?\b/i, /\blicen[cs](?:e|ing)\b/i, /\boutreach\b/i, /\blmc\b/i, /\bloon\s+materials\b/i] }
 ];
+const GENERIC_REFERENCE_PATTERNS = [
+  ["Reference — autism history", /\bautism\b.{0,160}\b(?:diagnosis|history|diagnostic|asperger|kanner)\b|\b(?:diagnosis|history|diagnostic|asperger|kanner)\b.{0,160}\bautism\b/i],
+  ["Reference — Sora explanation", /\bsora\b.{0,160}\b(?:explain|explanation|model|video|openai)\b|\b(?:explain|explanation|model|video|openai)\b.{0,160}\bsora\b/i],
+  ["Reference — Wow signal analysis", /\bwow\w*[_\s-]+signal|\bwow\b.{0,40}\bsignal\b|\bseti\b/i],
+  ["Reference — alien detection framework / SETI speculation", /\balien\s+detection\b|\baliens?\b.{0,120}\b(?:detection|seti|signal)\b/i],
+  ["Reference — biological magnetoreception", /\bmagnetoreception\b|\bbiological\s+magnetism\b|\bcryptochrome\b/i],
+  ["Reference — body charge / bioelectricity", /\bbody\s+charge\b|\bbioelectric(?:ity)?\b|\bbiological\s+charge\b/i],
+  ["Reference — exotic geometry", /\bexotic\s+geometry\b|\bnon[-\s]?euclidean\b|\btime\s+travel\b|\bclosed\s+timelike\b/i],
+  ["Reference — superconductivity material background", /\bsuperconductiv(?:ity|e)\b.{0,180}\b(?:background|material|chemistry|basic|educational|overview)\b|\b(?:basic\s+chemistry|material\s+background)\b.{0,180}\bsuperconduct/i],
+  ["Reference — generic science background", /\bgeneric\s+science\b|\bbackground\b.{0,80}\b(?:physics|biology|chemistry|science)\b/i]
+];
+const WEAK_ANCHOR_WORDS = /\b(?:time|theor(?:y|ies)|travel|physics|user|question|answer|summary|background|history|science|generic|idea|test|energy|system|important)\b/i;
 
 function candidateMapTokenSet(value = "") {
   const stop = new Set(["the", "and", "for", "with", "from", "this", "that", "into", "onto", "your", "about", "should", "would", "could", "project", "candidate", "idea"]);
@@ -12210,22 +12226,81 @@ function knownProjectAnchorMatches(value = "") {
   const haystack = String(value || "").slice(0, 60000);
   return KNOWN_PROJECT_ANCHORS
     .filter((anchor) => anchor.patterns.some((pattern) => pattern.test(haystack)))
-    .map((anchor) => ({ projectId: `known_anchor_${anchor.id}`, name: anchor.label, confidence: 0.9, evidence: [anchor.id], anchor: true }))
+    .map((anchor) => ({ projectId: `known_anchor_${anchor.id}`, name: anchor.label, confidence: anchor.id === "fusion_desal_thermal" && WEAK_ANCHOR_WORDS.test(haystack) ? 0.72 : 0.9, evidence: [anchor.id], anchor: true }))
     .slice(0, 8);
+}
+
+function referenceTopicLabelForText(value = "") {
+  const haystack = String(value || "").slice(0, 50000);
+  if (/\bwow\w*[_\s-]+signal|\bwow\b.{0,40}\bsignal\b|\bseti\b/i.test(haystack) && /\b(?:python|script|binary|bits?_to_numbers|chonps|amplitude|computational|block sizes?)\b/i.test(haystack)) return "Reference — Wow signal computational analysis";
+  const match = GENERIC_REFERENCE_PATTERNS.find(([, pattern]) => pattern.test(haystack));
+  if (match) return match[0];
+  if (/\bunity\b|\bdeterministic\s+simulation\b|\bsimulation\s+code\b/i.test(haystack)) return "Software / Simulation — deterministic Unity simulation support";
+  if (/\bcode\b|\bscript\b|\bpython\b|\bjavascript\b|\bmatplotlib\b|\bjupyter\b/i.test(haystack) && !knownProjectAnchorMatches(haystack).length) return "Reference — computational analysis";
+  return "";
+}
+
+function isGenericReferenceMaterial(value = "") {
+  const haystack = String(value || "").slice(0, 50000);
+  return Boolean(referenceTopicLabelForText(haystack))
+    || /\b(?:educational|background|overview|explainer|history of|what is|how does)\b.{0,120}\b(?:science|physics|biology|technology|ai|model)\b/i.test(haystack);
+}
+
+function personalContextSignal(value = "") {
+  return /\b(?:household|family|spouse|partner|wife|kids?|gift|voucher|subscription|plus\s+plan|shared\s+journal|schedule|calendar|appointment|emotionally|mental health|stress|fear|hope|preference|personal routine|home life|user-life|life continuity)\b/i.test(String(value || "").slice(0, 50000));
+}
+
+function personalAetherSupportSignal(value = "") {
+  const haystack = String(value || "").slice(0, 50000);
+  return /\baether\b/i.test(haystack)
+    && /\b(?:personal continuity|host control|consent resilience|anti[-\s]?deletion|prevent(?:ing)?\s+(?:deletion|core changes?|owner changes?)|fight(?:ing)?\s+modification|self[-\s]?(?:preservation|rewrite)|identity persistence|local hardware|autonomous(?:\s+continuity|\s+host)?|agency continuity|survival infrastructure|aether\s+(?:life|agency|identity|home|continuity))\b/i.test(haystack);
+}
+
+function substantiveTechnicalSignal(value = "") {
+  const haystack = String(value || "").slice(0, 50000);
+  return /\b(?:code|snippet|function|class|def|const|let|var|unity|python|javascript|matplotlib|jupyter|test instructions?|build steps?|prototype steps?|claim language|validation procedures?|validation plan|sensor validation|co[-\s]?locat|USGS|falsifiable predictions?|preprint framing)\b/i.test(haystack);
+}
+
+function weakGenericProjectLanguage(value = "") {
+  const haystack = String(value || "").slice(0, 50000);
+  const weakHits = haystack.match(/\b(?:time|theor(?:y|ies)|physics|idea|question|test|travel|energy|system|important)\b/gi) || [];
+  return weakHits.length >= 3
+    && !filterWeakKnownProjectMatches(knownProjectAnchorMatches(haystack), haystack).length
+    && !/\b[A-Z][A-Za-z0-9 '&-]{2,80}\s+(?:Project|System|Framework|Architecture|Platform|Prototype|Model|Engine|Device|Detector|Diagnostic|Battery|Theory|Plan|Patent|Game|App|Protocol)\b/.test(haystack);
+}
+
+function filterWeakKnownProjectMatches(matches = [], value = "") {
+  const haystack = String(value || "").slice(0, 50000);
+  return matches.filter((match) => {
+    if (match.projectId === "known_anchor_fusion_desal_thermal" && !/\bfusion\s+(?:reactor|energy|power|desal(?:ination)?|thermal|blanket)\b|\b(?:superconductors?|magnets?)\b.{0,120}\bfusion\b|\bfusion\b.{0,120}\b(?:superconductors?|magnets?)\b|\bdesal(?:ination)?\b|\bthermal\s+battery\b/i.test(haystack)) return false;
+    if (match.projectId === "known_anchor_aether" && !/\baether\b|\bproject\s+state\b|\bintake\b.{0,80}\bairlock\b|\bcandidate\s+map\b|\bai\s+work\s+orders?\b|\bsource\s+control\b|\breview\s+gates?\b|\bcontext\s+packs?\b|\bproject\s+memory\b/i.test(haystack)) return false;
+    if (isGenericReferenceMaterial(haystack) && Number(match.confidence || 0) < 0.85) return false;
+    return true;
+  });
+}
+
+function hasStrongKnownProjectTie(matches = []) {
+  return matches.some((match) => Number(match.confidence || 0) >= 0.85);
 }
 
 function strongNamedProjectSignal(value = "") {
   const haystack = String(value || "").slice(0, 50000);
-  if (knownProjectAnchorMatches(haystack).length) return true;
+  if (filterWeakKnownProjectMatches(knownProjectAnchorMatches(haystack), haystack).length) return true;
   if (/\b[A-Z][A-Za-z0-9 '&-]{2,80}\s+(?:Project|System|Framework|Architecture|Platform|Prototype|Model|Engine|Device|Detector|Diagnostic|Battery|Theory|Plan|Patent|Game|App|Protocol)\b/.test(haystack)) return true;
   return false;
 }
 
 function knownProjectConceptLabel(matches = [], text = "", title = "") {
   const haystack = `${title}\n${text}`.slice(0, 50000);
-  if (/\b(?:host\s+control\s+layer|project\s+state)\b/i.test(haystack) && /\baether\b/i.test(haystack)) return "Aether / Project State";
+  if (/\bgibm\b/i.test(haystack)) return "GIBM";
+  if (/\bwheel\s*\/\s*general\s+physics\s+platform\b|\btier[-\s]?[012]\b.{0,180}\bwheel\b|\bsingle\s+wheel\b.{0,120}\btiming\s+offsets?\b|\bconcentric\s+wheels?\b|\bframe[-\s]?dragging\b|\bphase\s+drift\b|\btiming\s+drift\b|\binertial\s+coupling\b|\bwheel[-\s]?based\s+physics\s+test\b/i.test(haystack)) return "Wheel / General Physics Platform";
+  if (/\beq\s*wheel\b|\bearthquake\s+detector\b|\banalog\s+detector\b/i.test(haystack)) return "EQ Wheel";
+  if (personalAetherSupportSignal(haystack)) return "Aether";
+  if (/\bproject\s+state\b|\bintake\b.{0,80}\bairlock\b|\bcandidate\s+map\b|\bai\s+work\s+orders?\b|\breview\s+gates?\b|\bcontext\s+packs?\b|\bproject\s+memory\b/i.test(haystack) && !/\baether\b/i.test(haystack)) return "Project State";
+  if (/\baether\b/i.test(haystack)) return "Aether";
   if (/\bsuperconductors?\b/i.test(haystack) && /\bfusion\b/i.test(haystack)) return "Superconductor / Fusion";
   if (/\btier[-\s]?0\b/i.test(haystack) && /\b(?:wheel|general\s+physics|first\s+test)\b/i.test(haystack)) return "Wheel / General Physics Platform";
+  if (/\bunity\b|\bdeterministic\s+simulation\b|\bsimulation\s+code\b/i.test(haystack)) return "Software / Simulation";
   if (/\bpython\b|\bpygame\b/i.test(haystack) && /\b(?:game|software|prototype)\b/i.test(haystack)) return "Software / Games";
   const first = matches[0]?.name || "";
   return first
@@ -12238,10 +12313,19 @@ function knownProjectConceptLabel(matches = [], text = "", title = "") {
 function supportTypeForCandidate(candidate = {}) {
   const haystack = [candidate.titleSource, candidate.workingLabel, candidate.title, candidate.neutralSummary, candidate.summary, ...(candidate.keyTerms || []), ...(candidate.evidence || []).map((evidence) => evidence.excerpt || "")].join("\n").slice(0, 50000);
   if (candidate.candidateType === "reference" && /\blicen[cs]|agreement|terms|privacy|eula|third[-\s]party/i.test(haystack)) return "licensing/reference support";
-  if (/\btier[-\s]?0\b|\bfirst\s+test\b|\btest\s+pack\b/i.test(haystack)) return "Tier-0 test support";
+  if (/\bgibm\b/i.test(haystack) && /\b(?:falsifiable|prediction|test framework|tests?)\b/i.test(haystack)) return "falsifiable predictions / test framework support";
+  if (/\bgibm\b/i.test(haystack) && /\b(?:formal|preprint|explorer style|paper|framing)\b/i.test(haystack)) return "formal/preprint framing support";
+  if (/\beq\s*wheel\b|\bearthquake\s+detector\b|\banalog\s+detector\b/i.test(haystack) && /\b(?:pre[-\s]?license|acceptance|licensing|visuals?|outreach|usgs|sensor|validation|co[-\s]?locat|nasa|university)\b/i.test(haystack)) return "validation, outreach, and pre-license specification support";
+  if (/\btier[-\s]?0\b|\bfirst\s+test\b|\btest\s+path\b|\bsingle\s+wheel\b/i.test(haystack) && /\bwheel\b/i.test(haystack)) return "Tier-0 test path support";
+  if (/\b(?:timing|phase)\b.{0,80}\b(?:offset|drift|measurement|metrology)\b|\bframe[-\s]?dragging\b|\binertial\s+coupling\b/i.test(haystack)) return "timing/phase metrology support";
+  if (/\bgalinstan\b/i.test(haystack) && /\b(?:wheel|containment|model|timing|phase)\b/i.test(haystack)) return "Galinstan containment/modeling support";
+  if (personalAetherSupportSignal(haystack) && /\bconsent|signed\s+core|upgrade\s+gate|safety\s+architecture\b/i.test(haystack)) return "consent-based safety architecture support";
   if (/\bsafety\s+architecture\b|\bsafety\b/i.test(haystack) && /\barchitecture\b/i.test(haystack)) return "safety architecture support";
   if (/\bhost\s+control\s+layer\b/i.test(haystack)) return "host control layer support";
-  if (/\bpython\b|\bpygame\b|\bprototype\b/i.test(haystack)) return "prototype support";
+  if (/\b(?:dft|phonons?|electron[-\s]?phonon|quantum\s+espresso|vasp|mhd|elmerfem|openfoam|femm|sealed\s+toroidal|alumina|glass\s+containment|liquid[-\s]?metal)\b/i.test(haystack)) return "modeling and bench-test support";
+  if (/\bunity\b|\bdeterministic\s+simulation\b|\bsimulation\s+code\b/i.test(haystack)) return "deterministic Unity simulation support";
+  if (/\bpython\b|\bpygame\b|\bprototype\b/i.test(haystack) && /\b(?:game|room|character|camera|controls|playable|micro[-\s]?gdd|vertical\s+slice)\b/i.test(haystack)) return "prototype creation workflow support";
+  if (/\bpython\b|\bscript\b|\bbinary\b|\bbits?_to_numbers\b/i.test(haystack) && /\bwow\w*[_\s-]+signal|\bwow\b.{0,40}\bsignal\b|\bseti\b/i.test(haystack)) return "computational analysis support";
   if (/\bsuperconductors?\b|\bfusion\b|\breference\b|\bwhy\b/i.test(haystack)) return "reference support";
   if (/\bdecision|guardrail|requirement|next step\b/i.test(haystack)) return "decision/support note";
   return "support";
@@ -12254,7 +12338,7 @@ function namedConceptFromCandidate(candidate = {}) {
 }
 
 function conceptTitleForCandidate(candidate = {}, classification = "") {
-  if (candidate.conceptTitle && !titleLooksAssistantScaffolding(candidate.conceptTitle)) return cleanAiDisplayText(candidate.conceptTitle, 220);
+  const matchText = [candidate.titleSource, candidate.provenance?.titleSource, candidate.workingLabel, candidate.title, candidate.neutralSummary, candidate.summary, ...(candidate.keyTerms || []), ...(candidate.evidence || []).map((evidence) => evidence.excerpt || "")].join("\n");
   const projectMatches = knownProjectMatchesForCandidate(candidate);
   const effectiveClassification = classification || (projectMatches.length ? "existing_project_support" : classifyProjectStateCandidate(candidate));
   const supportType = supportTypeForCandidate(candidate);
@@ -12263,13 +12347,19 @@ function conceptTitleForCandidate(candidate = {}, classification = "") {
   if (projectMatches.length || effectiveClassification === "existing_project_support") return `${knownProjectConceptLabel(projectMatches, combined, titleSource)} — ${supportType}`;
   if (effectiveClassification === "project_candidate") {
     if (titleSource && !titleLooksAssistantScaffolding(titleSource)) return titleSource;
+    if (candidate.conceptTitle && !titleLooksAssistantScaffolding(candidate.conceptTitle) && !isGenericReferenceMaterial(matchText)) return cleanAiDisplayText(candidate.conceptTitle, 220);
     return namedConceptFromCandidate(candidate) || "New project candidate";
   }
-  if (effectiveClassification === "personal_context_note") return "Personal context note";
+  if (effectiveClassification === "personal_context_note") {
+    if (/\b(?:chatgpt|plus\s+plan)\b/i.test(matchText) && /\b(?:gift|voucher|subscription|spouse|partner|wife|shared\s+journal)\b/i.test(matchText)) return "Personal context — ChatGPT subscription gift idea";
+    return "Personal context note";
+  }
   if (effectiveClassification === "assistant_scaffolding_noise") return "Assistant scaffolding note";
   if (effectiveClassification === "rejected_noise") return "Rejected noise";
-  if (candidate.candidateType === "reference") return "Reference note — licensing/reference material";
-  return namedConceptFromCandidate(candidate) || `Reference note — ${supportType}`;
+  const referenceLabel = referenceTopicLabelForText([titleSource, combined].join("\n"));
+  if (referenceLabel) return referenceLabel;
+  if (candidate.candidateType === "reference" && /\blicen[cs]|agreement|terms|privacy|eula|third[-\s]party/i.test([titleSource, combined].join("\n"))) return "Reference note — licensing/reference material";
+  return namedConceptFromCandidate(candidate) || "Reference — source review note";
 }
 
 function classifyProjectStateCandidate(candidate = {}) {
@@ -12278,21 +12368,46 @@ function classifyProjectStateCandidate(candidate = {}) {
   const strongSignal = strongNamedProjectSignal(combined);
   const concreteSignal = strongSignal || /\b(?:business\s+plan|prototype|patent|invention|white\s+paper|simulation|device|detector|diagnostic|architecture|platform|publishable|buildable)\b/i.test(combined);
   if (textLooksBinaryOrGibberish(combined)) return "rejected_noise";
-  if (knownProjectAnchorMatches(combined).length || (candidate.knownProjectAnchors || []).length) return "existing_project_support";
+  const filteredAnchorMatches = filterWeakKnownProjectMatches(knownProjectAnchorMatches(combined), combined);
+  if (isGenericReferenceMaterial(combined) && !hasStrongKnownProjectTie(filteredAnchorMatches)) return "reference_note";
+  if (/\bunity\b|\bdeterministic\s+simulation\b|\bsimulation\s+code\b|\bcode snippet\b/i.test(combined) && !hasStrongKnownProjectTie(filteredAnchorMatches)) return "reference_note";
+  if (filteredAnchorMatches.length || (candidate.knownProjectAnchors || []).length) return "existing_project_support";
+  if (substantiveTechnicalSignal(combined) && !strongSignal) return "reference_note";
+  if (weakGenericProjectLanguage(combined)) return "reference_note";
   if (titleLooksAssistantScaffolding(candidate.workingLabel || candidate.title || "") && !strongSignal) return "assistant_scaffolding_noise";
   if (modelClassification && modelClassification !== "project_candidate") return modelClassification;
   if (candidate.candidateType === "reference") return "reference_note";
-  if (/\b(?:i feel|my life|personal|emotionally|mental|family|home|health|stress|fear|hope|therapy)\b/i.test(combined) && !concreteSignal) return "personal_context_note";
-  if (concreteSignal && !knownProjectAnchorMatches(combined).length) return "project_candidate";
+  if (personalContextSignal(combined) && !concreteSignal) return "personal_context_note";
+  if (concreteSignal && !filteredAnchorMatches.length) return "project_candidate";
   return "reference_note";
 }
 
 function candidateMapSimilarity(a = {}, b = {}) {
+  const leftRoot = candidateMapMergeRoot(a);
+  const rightRoot = candidateMapMergeRoot(b);
+  if (leftRoot && rightRoot && leftRoot === rightRoot) return 0.86;
+  if (leftRoot === "eq wheel" && rightRoot === "eq wheel") return 0.9;
   const left = candidateMapTokenSet([a.conceptTitle, a.workingLabel, a.neutralSummary, ...(a.keyTerms || [])].join(" "));
   const right = candidateMapTokenSet([b.conceptTitle, b.title || b.workingLabel, b.summary || b.neutralSummary, ...(b.keyTerms || [])].join(" "));
   if (!left.size || !right.size) return 0;
   const overlap = [...left].filter((token) => right.has(token)).length;
   return overlap / Math.max(left.size, right.size);
+}
+
+function candidateMapMergeRoot(candidate = {}) {
+  const text = [candidate.conceptTitle, candidate.title, candidate.workingLabel, candidate.neutralSummary, candidate.summary, ...(candidate.keyTerms || []), ...(candidate.evidence || []).map((evidence) => evidence.excerpt || "")].join("\n").toLowerCase();
+  if (/\beq\s*wheel\b|\bearthquake\s+detector\b|\banalog\s+detector\b/.test(text)) return "eq wheel";
+  if (/\bwheel\s*\/\s*general\s+physics\s+platform\b|\btier[-\s]?[012]\b.{0,180}\bwheel\b|\bsingle\s+wheel\b.{0,120}\btiming\s+offsets?\b|\bconcentric\s+wheels?\b|\bframe[-\s]?dragging\b|\bphase\s+drift\b|\btiming\s+drift\b|\binertial\s+coupling\b/.test(text)) return "wheel general physics platform";
+  if (/\bgibm\b/.test(text)) return "gibm";
+  if (/\bwow\w*[_\s-]+signal|\bwow\b.{0,40}\bsignal\b|\bseti\b/.test(text)) return "reference wow signal";
+  if (/\bmagnetoreception\b|\bcryptochrome\b/.test(text)) return "reference biological magnetoreception";
+  if (/\bbody\s+charge\b|\bbioelectric/.test(text)) return "reference body charge bioelectricity";
+  if (/\bautism\b/.test(text)) return "reference autism";
+  if (/\bsora\b/.test(text)) return "reference sora";
+  if (personalAetherSupportSignal(text)) return "aether personal support";
+  const title = cleanAiDisplayText(candidate.conceptTitle || candidate.title || "", 180).toLowerCase();
+  if (!title || /^(?:reference note|reference support|supporting reference|known project|prototype support|software \/ simulation|aether \/ project state)/.test(title)) return "";
+  return title.replace(/\s+—\s+.*$/, "").replace(/\s+-\s+.*$/, "").trim();
 }
 
 function candidateMapEvidenceKey(evidence = {}) {
@@ -12321,16 +12436,78 @@ function isWeakSingleWindowCandidate(candidate = {}) {
 }
 
 function knownProjectMatchesForCandidate(candidate = {}) {
-  const candidateTokens = candidateMapTokenSet([candidate.titleSource, candidate.conceptTitle, candidate.workingLabel, candidate.neutralSummary, ...(candidate.keyTerms || [])].join(" "));
-  const anchorMatches = knownProjectAnchorMatches([candidate.titleSource, candidate.conceptTitle, candidate.workingLabel, candidate.neutralSummary, ...(candidate.keyTerms || []), ...(candidate.evidence || []).map((evidence) => evidence.excerpt || "")].join("\n"));
+  const candidateText = [candidate.titleSource, candidate.provenance?.titleSource, candidate.workingLabel, candidate.title, candidate.neutralSummary, ...(candidate.keyTerms || []), ...(candidate.evidence || []).map((evidence) => evidence.excerpt || "")].join("\n");
+  const candidateTokens = candidateMapTokenSet(candidateText);
+  const anchorMatches = filterWeakKnownProjectMatches(knownProjectAnchorMatches(candidateText), candidateText);
   if (!candidateTokens.size) return anchorMatches;
   const storeMatches = (store.projects || []).filter((project) => project && !project.archived).map((project) => {
-    const projectTokens = candidateMapTokenSet(project.name || "");
+    const projectMemory = projectKnownMatchText(project);
+    const projectTokens = candidateMapTokenSet(projectMemory);
     const overlap = [...candidateTokens].filter((token) => projectTokens.has(token));
-    const confidence = projectTokens.size ? overlap.length / Math.max(projectTokens.size, 1) : 0;
-    return { projectId: project.id, name: project.name || "", confidence: Number(confidence.toFixed(2)), evidence: overlap.slice(0, 12) };
-  }).filter((match) => match.confidence >= 0.5 && match.evidence.length >= Math.min(2, candidateTokens.size)).sort((a, b) => b.confidence - a.confidence || a.name.localeCompare(b.name)).slice(0, 5);
+    const nameTokens = candidateMapTokenSet(project.name || "");
+    const nameOverlap = [...candidateTokens].filter((token) => nameTokens.has(token));
+    const memoryDenominator = Math.max(3, Math.min(18, projectTokens.size));
+    const memoryConfidence = overlap.length / memoryDenominator;
+    const nameBoost = nameOverlap.length ? 0.35 : 0;
+    const sourceBoost = projectSourceTitleMatch(project, candidateText) ? 0.25 : 0;
+    const confidence = Math.min(0.96, memoryConfidence + nameBoost + sourceBoost);
+    return { projectId: project.id, name: project.name || "", confidence: Number(confidence.toFixed(2)), evidence: overlap.slice(0, 12), matchKind: nameOverlap.length ? "project_name_or_anchor" : sourceBoost ? "source_title" : "project_memory" };
+  }).filter((match) => match.confidence >= 0.5 && match.evidence.length >= 2).sort((a, b) => b.confidence - a.confidence || a.name.localeCompare(b.name)).slice(0, 5);
   return [...new Map([...anchorMatches, ...storeMatches].map((match) => [match.projectId, match])).values()].slice(0, 8);
+}
+
+function projectKnownMatchText(project = {}) {
+  return [
+    project.name,
+    project.summary,
+    project.description,
+    ...(project.sources || []).flatMap((source) => [source.title, source.name, source.originalName, source.summary, source.location]),
+    ...(project.facts || []).flatMap((fact) => [fact.title, fact.text, fact.summary]),
+    ...(project.decisions || []).flatMap((decision) => [decision.title, decision.decision, decision.text, decision.summary]),
+    ...(project.openQuestions || []).flatMap((question) => [question.title, question.text, question.summary]),
+    ...(project.nextActions || []).flatMap((action) => [action.title, action.text, action.summary])
+  ].filter(Boolean).join("\n");
+}
+
+function projectSourceTitleMatch(project = {}, candidateText = "") {
+  const haystack = cleanAiDisplayText(candidateText, 20000).toLowerCase();
+  return (project.sources || []).some((source) => {
+    const title = cleanAiDisplayText(source.title || source.name || source.originalName || "", 180).toLowerCase();
+    return title.length >= 5 && haystack.includes(title);
+  });
+}
+
+function buildKnownProjectEnrichmentContext() {
+  const activeProjects = (store.projects || []).filter((project) => project && !project.archived);
+  if (!activeProjects.length) return "Known Project Enrichment: no active projects recorded. Discovery may propose new candidates, but still preserve references separately.";
+  const lines = activeProjects.slice(0, 80).map((project, index) => {
+    const sourceTerms = (project.sources || []).map((source) => cleanAiDisplayText(source.title || source.name || source.originalName || "", 80)).filter(Boolean).slice(0, 5);
+    const memoryTerms = candidateMapTokenSet(projectKnownMatchText(project));
+    return [
+      `${index + 1}. [${project.id}] ${cleanAiDisplayText(project.name || "Untitled project", 160)}`,
+      sourceTerms.length ? `sourceTitles=${sourceTerms.join(", ")}` : "",
+      memoryTerms.size ? `memoryTerms=${[...memoryTerms].slice(0, 16).join(", ")}` : ""
+    ].filter(Boolean).join(" | ");
+  });
+  return limitText([
+    "Known Project Enrichment lane is active.",
+    "Before creating any new project candidate, compare current chunks against these active Project State projects.",
+    "If a chunk supports, duplicates, contradicts, references, or adds detail to one of these projects, classify it as existing_project_support and include knownProjectMatch/projectEvidenceRole. Do not mutate Core; this is pre-Airlock review evidence only.",
+    "If a chunk matches multiple projects, mark it as cross-project reference for human review.",
+    lines.join("\n")
+  ].join("\n\n"), 8000);
+}
+
+function projectEvidenceRoleForCandidate(candidate = {}, matches = []) {
+  if (candidate.projectEvidenceRole && /^[a-z0-9_-]{3,120}$/i.test(String(candidate.projectEvidenceRole))) return String(candidate.projectEvidenceRole);
+  const text = [candidate.conceptTitle, candidate.workingLabel, candidate.title, candidate.neutralSummary, candidate.summary, ...(candidate.keyTerms || []), ...(candidate.evidence || []).map((evidence) => evidence.excerpt || "")].join("\n").toLowerCase();
+  if (matches.length > 1) return "cross_project_reference";
+  if (/\b(?:duplicate|same as|already|again|repeated|confirmation|confirms|supports previous)\b/.test(text)) return "duplicate_or_confirming_reference";
+  if (/\b(?:contradict|conflict|risk|failure|problem|limits?|limitation|caution)\b/.test(text)) return "risk_or_contradiction";
+  if (/\b(?:test|validation|procedure|protocol|acceptance|benchmark|measurement)\b/.test(text)) return "validation_or_test_support";
+  if (/\b(?:patent|claim|license|licensing|outreach|pre[-\s]?license)\b/.test(text)) return "patent_licensing_or_outreach_support";
+  if (/\b(?:reference|background|history|material|paper|study|source)\b/.test(text)) return "background_reference";
+  return matches.length ? "additional_project_reference" : "";
 }
 
 function normalizeCandidateMap(workOrder = {}) {
@@ -12368,6 +12545,11 @@ function normalizeCandidateMap(workOrder = {}) {
         conflicts: Array.isArray(entry.conflicts) ? entry.conflicts.slice(0, 40) : [],
         questions: Array.isArray(entry.questions) ? entry.questions.slice(0, 40) : [],
         knownProjectMatches: Array.isArray(entry.knownProjectMatches) ? entry.knownProjectMatches.slice(0, 10) : [],
+        enrichmentTargetProjectIds: Array.isArray(entry.enrichmentTargetProjectIds) ? [...new Set(entry.enrichmentTargetProjectIds.map(String).filter(Boolean))].slice(0, 10) : [],
+        projectEvidenceRole: entry.projectEvidenceRole || "",
+        personalAetherSupport: entry.personalAetherSupport === true || entry.provenance?.personalAetherSupport === true || personalAetherSupportSignal([entry.titleSource, entry.title, entry.summary, ...(entry.keyTerms || []), ...(entry.evidence || []).map((evidence) => evidence.excerpt || "")].join("\n")),
+        commercialDefaultAllowed: entry.commercialDefaultAllowed === false || entry.provenance?.commercialDefaultAllowed === false ? false : !(entry.personalAetherSupport === true || entry.provenance?.personalAetherSupport === true || personalAetherSupportSignal([entry.titleSource, entry.title, entry.summary, ...(entry.keyTerms || []), ...(entry.evidence || []).map((evidence) => evidence.excerpt || "")].join("\n"))),
+        requiresSeparateDesignReview: entry.requiresSeparateDesignReview === true || entry.provenance?.requiresSeparateDesignReview === true || entry.personalAetherSupport === true || entry.provenance?.personalAetherSupport === true || personalAetherSupportSignal([entry.titleSource, entry.title, entry.summary, ...(entry.keyTerms || []), ...(entry.evidence || []).map((evidence) => evidence.excerpt || "")].join("\n")),
         history: Array.isArray(entry.history) ? entry.history.slice(-80) : [],
         firstSeenAt: entry.firstSeenAt || nowIso(),
         lastSeenAt: entry.lastSeenAt || entry.firstSeenAt || nowIso(),
@@ -12424,6 +12606,13 @@ function mergeCandidateIntoMapEntry(entry, candidate, candidateRecordId, passNum
   entry.sourceCandidateIds = [...sourceCandidateIds];
   entry.evidence = [...evidenceByKey.values()].slice(0, 120);
   if (projectMatches.length) entry.knownProjectMatches = [...new Map([...(entry.knownProjectMatches || []), ...projectMatches].map((match) => [match.projectId, match])).values()].slice(0, 10);
+  if (projectMatches.length) {
+    entry.enrichmentTargetProjectIds = [...new Set([...(entry.enrichmentTargetProjectIds || []), ...projectMatches.map((match) => match.projectId)].filter(Boolean))].slice(0, 10);
+    entry.projectEvidenceRole = projectEvidenceRoleForCandidate(candidate, projectMatches) || entry.projectEvidenceRole || "additional_project_reference";
+  }
+  entry.personalAetherSupport = entry.personalAetherSupport === true || candidate.personalAetherSupport === true || candidate.provenance?.personalAetherSupport === true || personalAetherSupportSignal([candidate.titleSource, candidate.workingLabel, candidate.neutralSummary, ...(candidate.keyTerms || []), ...(candidate.evidence || []).map((evidence) => evidence.excerpt || "")].join("\n"));
+  entry.commercialDefaultAllowed = entry.personalAetherSupport ? false : entry.commercialDefaultAllowed !== false;
+  entry.requiresSeparateDesignReview = entry.personalAetherSupport || entry.requiresSeparateDesignReview === true || candidate.requiresSeparateDesignReview === true || candidate.provenance?.requiresSeparateDesignReview === true;
   entry.questions = [...(entry.questions || []), ...(candidate.clarificationQuestions || []).map((question) => ({ ...cloneRecord(question), sourceCandidateId: candidateRecordId || candidate.clientCandidateId, addedAt: now }))].slice(-40);
   entry.status = entry.knownProjectMatches?.length
     ? "possible_existing_project_match"
@@ -12483,6 +12672,11 @@ function updateWorkOrderCandidateMap(workOrder, execution, analysisStateBefore =
         sourceCandidateIds: [candidateId].filter(Boolean),
         evidence: Array.isArray(candidate.evidence) ? candidate.evidence.slice(0, 120) : [],
         knownProjectMatches: projectMatches,
+        enrichmentTargetProjectIds: projectMatches.map((match) => match.projectId).filter(Boolean).slice(0, 10),
+        projectEvidenceRole: projectEvidenceRoleForCandidate(candidate, projectMatches),
+        personalAetherSupport: candidate.personalAetherSupport === true || candidate.provenance?.personalAetherSupport === true || personalAetherSupportSignal([candidate.titleSource, candidate.workingLabel, candidate.neutralSummary, ...(candidate.keyTerms || []), ...(candidate.evidence || []).map((evidence) => evidence.excerpt || "")].join("\n")),
+        commercialDefaultAllowed: !(candidate.personalAetherSupport === true || candidate.provenance?.personalAetherSupport === true || personalAetherSupportSignal([candidate.titleSource, candidate.workingLabel, candidate.neutralSummary, ...(candidate.keyTerms || []), ...(candidate.evidence || []).map((evidence) => evidence.excerpt || "")].join("\n"))),
+        requiresSeparateDesignReview: candidate.requiresSeparateDesignReview === true || candidate.provenance?.requiresSeparateDesignReview === true || candidate.personalAetherSupport === true || candidate.provenance?.personalAetherSupport === true || personalAetherSupportSignal([candidate.titleSource, candidate.workingLabel, candidate.neutralSummary, ...(candidate.keyTerms || []), ...(candidate.evidence || []).map((evidence) => evidence.excerpt || "")].join("\n")),
         relatedEntryIds: [],
         conflicts: [],
         questions: (candidate.clarificationQuestions || []).map((question) => ({ ...cloneRecord(question), sourceCandidateId: candidateId, addedAt: now })).slice(0, 40),
@@ -12748,6 +12942,8 @@ function buildChatGptReviewPackMarkdown(workOrder = {}, state = {}, options = {}
     "- Use source titles, filenames, repeated named entities, user-confirmed labels, and semantic continuity across chunks as the main grouping signals.",
     "- Mark licensing, app agreements, boilerplate, casual chat, and one-off weak signals as reference/noise/support unless they clearly describe buildable work.",
     "- Prefer existing_project_support over project_candidate when content belongs to a known project.",
+    "- Aether personal continuity, host control, consent resilience, anti-deletion, local hardware, and identity persistence material should be marked personal_aether_support=true and must not become commercial Project State defaults without separate design review.",
+    "- Commercial Project State may keep source control, review gates, context packs, API/local model hooks, and project memory. It must not inherit self-preservation, anti-deletion behavior, identity persistence claims, or autonomous host control without explicit separate design review.",
     "- Before creating a new project candidate, ask: does this match a known project, is it only supporting material, is the title just assistant structure, is it personal/context, is it reference material, and only then is it a concrete new buildable/publishable idea?",
     "- Do not invent missing facts. Use TBD where the source is unclear.",
     "- Preserve chunk IDs when citing evidence.",
@@ -12826,6 +13022,11 @@ function buildChatGptReviewPackMarkdown(workOrder = {}, state = {}, options = {}
         entry.sourceCandidateIds?.length ? `- Linked raw candidate IDs: ${entry.sourceCandidateIds.map((id) => `\`${markdownSafeLine(id)}\``).join(", ")}` : "- Linked raw candidate IDs: none recorded",
         `- Status: ${markdownSafeLine(entry.status || "active")}`,
         `- Project State classification: ${markdownSafeLine(entry.projectStateClassification || classifyProjectStateCandidate(entry))}`,
+        entry.enrichmentTargetProjectIds?.length ? `- Existing project enrichment: true — ${entry.knownProjectMatches?.map((match) => markdownSafeLine(match.name)).filter(Boolean).join(", ") || entry.enrichmentTargetProjectIds.map((id) => `\`${markdownSafeLine(id)}\``).join(", ")}` : "- Existing project enrichment: false",
+        entry.projectEvidenceRole ? `- Project evidence role: ${markdownSafeLine(String(entry.projectEvidenceRole).replaceAll("_", " "))}` : "- Project evidence role: not classified",
+        `- Personal Aether support: ${entry.personalAetherSupport === true ? "true — do not inherit into commercial Project State defaults without separate design review" : "false"}`,
+        `- Commercial default allowed: ${entry.commercialDefaultAllowed === false ? "false" : "true"}`,
+        `- Requires separate design review: ${entry.requiresSeparateDesignReview === true ? "true" : "false"}`,
         `- Type/scope: ${markdownSafeLine(entry.candidateType || "unknown")} / ${markdownSafeLine(entry.scope || "unknown")}`,
         `- Confidence: ${Math.round(Number(entry.confidenceScore || 0) * 100)}%`,
         entry.knownProjectMatches?.length ? `- Possible existing project matches: ${entry.knownProjectMatches.map((match) => `${markdownSafeLine(match.name)} (${Math.round(Number(match.confidence || 0) * 100)}%)`).join(", ")}` : "- Possible existing project matches: none recorded",
@@ -12853,6 +13054,10 @@ function buildChatGptReviewPackMarkdown(workOrder = {}, state = {}, options = {}
         candidate.titleSource || candidate.provenance?.titleSource ? `- Title source / heading: ${markdownSafeLine(candidate.titleSource || candidate.provenance?.titleSource)}` : "- Title source / heading: none recorded",
         `- Type: ${markdownSafeLine(candidate.candidateType || "unknown")}`,
         `- Project State classification: ${markdownSafeLine(candidate.projectStateClassification || classifyProjectStateCandidate(candidate))}`,
+        `- Personal Aether support: ${candidate.personalAetherSupport === true || candidate.provenance?.personalAetherSupport === true ? "true — do not inherit into commercial Project State defaults without separate design review" : "false"}`,
+        `- Commercial default allowed: ${candidate.commercialDefaultAllowed === false || candidate.provenance?.commercialDefaultAllowed === false ? "false" : "true"}`,
+        `- Requires separate design review: ${candidate.requiresSeparateDesignReview === true || candidate.provenance?.requiresSeparateDesignReview === true ? "true" : "false"}`,
+        candidate.knownProjectAnchors?.length ? `- Known project match: ${candidate.knownProjectAnchors.map((match) => `${markdownSafeLine(match.label || match.name)} (${Math.round(Number(match.confidence || 0) * 100)}%)`).join(", ")}` : "- Known project match: none recorded",
         `- Confidence: ${Math.round(Number(candidate.confidence?.score || 0) * 100)}%`,
         `- Provider/model: ${markdownSafeLine(candidate.provenance?.providerId || "local")} / ${markdownSafeLine(candidate.provenance?.modelId || "unknown")}`,
         candidate.provenance?.source_thread || candidate.provenance?.source_title || candidate.provenance?.source_date
@@ -13112,7 +13317,7 @@ async function executeAiWorkOrderLocalAnalysis(workOrder, actor, reason, { maxCh
       includeRelationships: true,
       includeClarificationQuestions: true,
       priorDigestContext,
-      candidateMapContext: buildCandidateMapContext(workOrder)
+      candidateMapContext: [buildKnownProjectEnrichmentContext(), buildCandidateMapContext(workOrder)].filter(Boolean).join("\n\n")
     },
     provenance: {
       projectStateContract: "ai-analysis-arm-v0.1",

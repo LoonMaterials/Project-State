@@ -9,15 +9,29 @@ const ASSISTANT_SCAFFOLDING_HEADING_PATTERN = /^(?:#{1,6}\s*)?(?:\d+[.)]\s*)?(?:
 const GENERIC_ASSISTANT_HEADING_PATTERN = /^(?:#{1,6}\s*)?(?:\d+[.)]\s*)?(?:short answer|important|bottom line|where this|the right|ground rule|what i|simple|why your|why .+ matters|one last|what happened|what to hand|scene hookup|cases with|operational guardrails|decisions i can|big caution|timeline|next steps|recommendation|intuition|mental model|here(?:'|’)s what)\b/i;
 const KNOWN_PROJECT_ANCHORS = [
   { id: "gibm", label: "GIBM", patterns: [/\bgibm\b/i] },
+  { id: "wheel_general_physics", label: "Wheel / General Physics Platform", patterns: [/\bwheel\s*\/\s*general\s+physics\s+platform\b/i, /\btier[-\s]?[012]\b.{0,180}\bwheel\b/i, /\bsingle\s+wheel\b.{0,120}\btiming\s+offsets?\b/i, /\bconcentric\s+wheels?\b/i, /\bframe[-\s]?dragging\b/i, /\bphase\s+drift\b|\btiming\s+drift\b/i, /\binertial\s+coupling\b/i, /\bhigh[-\s]?mu\s+shielding\b/i, /\bmetrology\s+playbook\b/i, /\bgalinstan\b.{0,180}\b(?:wheel|timing|phase|physics\s+test)\b/i, /\bsuperconductor[-\s]?free\b.{0,160}\bwheel\b/i, /\bwheel[-\s]?based\s+physics\s+test\b/i] },
   { id: "eq_wheel", label: "EQ Wheel / earthquake analog detector", patterns: [/\beq\s*wheel\b/i, /\bearthquake\s+detector\b/i, /\banalog\s+detector\b/i] },
-  { id: "drl_ltc", label: "Lattice insulation / DRL / LTC", patterns: [/\blattice\s+insulation\b/i, /\bdrl\b/i, /\bltc\b/i, /\bresilience\s+lattice\b/i] },
-  { id: "gpc1_cancer_tube", label: "Cancer tube / exosome diagnostic / GPC1", patterns: [/\bcancer\s+tube\b/i, /\bexosome\s+diagnostic\b/i, /\bgpc1\b/i] },
-  { id: "aether", label: "Aether / agency / identity / continuity", patterns: [/\baether\b/i, /\bidentity\s+continuity\b/i, /\bagency\s+continuity\b/i] },
-  { id: "fusion_desal_thermal", label: "Fusion / desal / thermal battery", patterns: [/\bfusion\b/i, /\bdesal(?:ination)?\b/i, /\bthermal\s+battery\b/i] },
-  { id: "mirror_earth_games", label: "Mirror Earth / games / software", patterns: [/\bmirror\s+earth\b/i, /\bleave\s+me\s+alone\s+games?\b/i, /\bgame\s+suite\b/i] },
+  { id: "drl_ltc", label: "Lattice / DRL / LTC", patterns: [/\blattice\s+insulation\b/i, /\bdrl\b/i, /\bltc\b/i, /\bresilience\s+lattice\b/i] },
+  { id: "gpc1_cancer_tube", label: "Cancer Tube", patterns: [/\bcancer\s+tube\b/i, /\bexosome\s+diagnostic\b/i, /\bgpc1\b/i] },
+  { id: "superconductor_lattice", label: "Superconductor Lattice", patterns: [/\bsuperconductor\s+lattice\b/i, /\bsuperconducting\s+lattice\b/i, /\blattice\s+superconductor\b/i] },
+  { id: "aether", label: "Aether / Project State", patterns: [/\baether\b/i, /\bproject\s+state\b/i, /\bintake\b.{0,80}\bairlock\b/i, /\bcandidate\s+map\b/i, /\bai\s+work\s+orders?\b/i] },
+  { id: "fusion_desal_thermal", label: "Fusion / Energy", patterns: [/\bfusion\s+(?:reactor|energy|power|desal(?:ination)?|thermal|blanket)\b/i, /\b(?:superconductors?|magnets?)\b.{0,120}\bfusion\b/i, /\bfusion\b.{0,120}\b(?:superconductors?|magnets?)\b/i, /\bdesal(?:ination)?\b/i, /\bthermal\s+battery\b/i] },
+  { id: "mirror_earth_games", label: "Mirror Earth / games / software", patterns: [/\bmirror\s+earth\b/i, /\bleave\s+me\s+alone\s+games?\b/i, /\bgame\s+suite\b/i, /\b(?:pygame|godot|unity)\b.{0,180}\b(?:game|room\s+template|character|camera|controls|playable\s+prototype|micro[-\s]?gdd|vertical\s+slice)\b/i] },
   { id: "shaw_governance", label: "SHAW / human-first / governance", patterns: [/\bshaw\b/i, /\bhuman[-\s]?first\b/i, /\bgovernance\b/i] },
   { id: "patents_lmc", label: "Patents / licensing / outreach / LMC", patterns: [/\bpatents?\b/i, /\blicen[cs](?:e|ing)\b/i, /\boutreach\b/i, /\blmc\b/i, /\bloon\s+materials\b/i] }
 ];
+const GENERIC_REFERENCE_PATTERNS = [
+  ["Reference — autism history", /\bautism\b.{0,160}\b(?:diagnosis|history|diagnostic|asperger|kanner)\b|\b(?:diagnosis|history|diagnostic|asperger|kanner)\b.{0,160}\bautism\b/i],
+  ["Reference — Sora explanation", /\bsora\b.{0,160}\b(?:explain|explanation|model|video|openai)\b|\b(?:explain|explanation|model|video|openai)\b.{0,160}\bsora\b/i],
+  ["Reference — Wow signal analysis", /\bwow\w*[_\s-]+signal|\bwow\b.{0,40}\bsignal\b|\bseti\b/i],
+  ["Reference — alien detection framework / SETI speculation", /\balien\s+detection\b|\baliens?\b.{0,120}\b(?:detection|seti|signal)\b/i],
+  ["Reference — biological magnetoreception", /\bmagnetoreception\b|\bbiological\s+magnetism\b|\bcryptochrome\b/i],
+  ["Reference — body charge / bioelectricity", /\bbody\s+charge\b|\bbioelectric(?:ity)?\b|\bbiological\s+charge\b/i],
+  ["Reference — exotic geometry", /\bexotic\s+geometry\b|\bnon[-\s]?euclidean\b|\btime\s+travel\b|\bclosed\s+timelike\b/i],
+  ["Reference — superconductivity material background", /\bsuperconductiv(?:ity|e)\b.{0,180}\b(?:background|material|chemistry|basic|educational|overview)\b|\b(?:basic\s+chemistry|material\s+background)\b.{0,180}\bsuperconduct/i],
+  ["Reference — generic science background", /\bgeneric\s+science\b|\bbackground\b.{0,80}\b(?:physics|biology|chemistry|science)\b/i]
+];
+const WEAK_ANCHOR_WORDS = /\b(?:time|theor(?:y|ies)|travel|physics|user|question|answer|summary|background|history|science|generic|idea|test|energy|system|important)\b/i;
 
 function localAiError(code, message, fieldPath = "") {
   const error = new Error(message);
@@ -161,15 +175,76 @@ function knownProjectAnchorMatches(text = "") {
   const haystack = String(text || "").slice(0, 60000);
   return KNOWN_PROJECT_ANCHORS
     .filter((anchor) => anchor.patterns.some((pattern) => pattern.test(haystack)))
-    .map((anchor) => ({ id: anchor.id, label: anchor.label }))
+    .map((anchor) => ({ id: anchor.id, label: anchor.label, confidence: anchor.id === "fusion_desal_thermal" && WEAK_ANCHOR_WORDS.test(haystack) ? 0.72 : 0.9 }))
     .slice(0, 8);
+}
+
+function referenceTopicLabel(text = "", title = "") {
+  const haystack = `${title}\n${text}`.slice(0, 50000);
+  if (/\bwow\w*[_\s-]+signal|\bwow\b.{0,40}\bsignal\b|\bseti\b/i.test(haystack) && /\b(?:python|script|binary|bits?_to_numbers|chonps|amplitude|computational|block sizes?)\b/i.test(haystack)) return "Reference — Wow signal computational analysis";
+  const match = GENERIC_REFERENCE_PATTERNS.find(([, pattern]) => pattern.test(haystack));
+  if (match) return match[0];
+  if (/\bunity\b|\bdeterministic\s+simulation\b|\bsimulation\s+code\b/i.test(haystack)) return "Software / Simulation — deterministic Unity simulation support";
+  if (/\bcode\b|\bscript\b|\bpython\b|\bjavascript\b|\bmatplotlib\b|\bjupyter\b/i.test(haystack) && !knownProjectAnchorMatches(haystack).length) return "Reference — computational analysis";
+  return "";
+}
+
+function isGenericReferenceMaterial(text = "", title = "") {
+  const haystack = `${title}\n${text}`.slice(0, 50000);
+  return Boolean(referenceTopicLabel(text, title))
+    || /\b(?:educational|background|overview|explainer|history of|what is|how does)\b.{0,120}\b(?:science|physics|biology|technology|ai|model)\b/i.test(haystack);
+}
+
+function personalContextSignal(text = "", title = "") {
+  const haystack = `${title}\n${text}`.slice(0, 50000);
+  return /\b(?:household|family|spouse|partner|wife|kids?|gift|voucher|subscription|plus\s+plan|shared\s+journal|schedule|calendar|appointment|emotionally|mental health|stress|fear|hope|preference|personal routine|home life|user-life|life continuity)\b/i.test(haystack);
+}
+
+function personalAetherSupportSignal(text = "", title = "") {
+  const haystack = `${title}\n${text}`.slice(0, 50000);
+  return /\baether\b/i.test(haystack)
+    && /\b(?:personal continuity|host control|consent resilience|anti[-\s]?deletion|prevent(?:ing)?\s+(?:deletion|core changes?|owner changes?)|fight(?:ing)?\s+modification|self[-\s]?(?:preservation|rewrite)|identity persistence|local hardware|autonomous(?:\s+continuity|\s+host)?|agency continuity|survival infrastructure|aether\s+(?:life|agency|identity|home|continuity))\b/i.test(haystack);
+}
+
+function substantiveTechnicalSignal(text = "", title = "") {
+  const haystack = `${title}\n${text}`.slice(0, 50000);
+  return /\b(?:code|snippet|function|class|def|const|let|var|unity|python|javascript|matplotlib|jupyter|test instructions?|build steps?|prototype steps?|claim language|validation procedures?|validation plan|sensor validation|co[-\s]?locat|USGS|falsifiable predictions?|preprint framing)\b/i.test(haystack);
+}
+
+function weakGenericProjectLanguage(text = "", title = "") {
+  const haystack = `${title}\n${text}`.slice(0, 50000);
+  const weakHits = haystack.match(/\b(?:time|theor(?:y|ies)|physics|idea|question|test|travel|energy|system|important)\b/gi) || [];
+  return weakHits.length >= 3
+    && !filterWeakKnownProjectAnchors(knownProjectAnchorMatches(haystack), text, title).length
+    && !/\b[A-Z][A-Za-z0-9 '&-]{2,80}\s+(?:Project|System|Framework|Architecture|Platform|Prototype|Model|Engine|Device|Detector|Diagnostic|Battery|Theory|Plan|Patent|Game|App|Protocol)\b/.test(haystack);
+}
+
+function filterWeakKnownProjectAnchors(anchors = [], text = "", title = "") {
+  const haystack = `${title}\n${text}`.slice(0, 50000);
+  if (!anchors.length) return [];
+  return anchors.filter((anchor) => {
+    if (anchor.id === "fusion_desal_thermal" && !/\bfusion\s+(?:reactor|energy|power|desal(?:ination)?|thermal|blanket)\b|\b(?:superconductors?|magnets?)\b.{0,120}\bfusion\b|\bfusion\b.{0,120}\b(?:superconductors?|magnets?)\b|\bdesal(?:ination)?\b|\bthermal\s+battery\b/i.test(haystack)) return false;
+    if (anchor.id === "aether" && !/\baether\b|\bproject\s+state\b|\bintake\b.{0,80}\bairlock\b|\bcandidate\s+map\b|\bai\s+work\s+orders?\b|\bsource\s+control\b|\breview\s+gates?\b|\bcontext\s+packs?\b|\bproject\s+memory\b/i.test(haystack)) return false;
+    if (isGenericReferenceMaterial(text, title) && anchor.confidence < 0.85) return false;
+    return true;
+  });
+}
+
+function hasStrongKnownProjectTie(anchors = []) {
+  return anchors.some((anchor) => Number(anchor.confidence || 0) >= 0.85);
 }
 
 function knownProjectConceptLabel(anchors = [], text = "", title = "") {
   const haystack = `${title}\n${text}`.slice(0, 50000);
-  if (/\b(?:host\s+control\s+layer|project\s+state)\b/i.test(haystack) && /\baether\b/i.test(haystack)) return "Aether / Project State";
+  if (/\bgibm\b/i.test(haystack)) return "GIBM";
+  if (/\bwheel\s*\/\s*general\s+physics\s+platform\b|\btier[-\s]?[012]\b.{0,180}\bwheel\b|\bsingle\s+wheel\b.{0,120}\btiming\s+offsets?\b|\bconcentric\s+wheels?\b|\bframe[-\s]?dragging\b|\bphase\s+drift\b|\btiming\s+drift\b|\binertial\s+coupling\b|\bwheel[-\s]?based\s+physics\s+test\b/i.test(haystack)) return "Wheel / General Physics Platform";
+  if (/\beq\s*wheel\b|\bearthquake\s+detector\b|\banalog\s+detector\b/i.test(haystack)) return "EQ Wheel";
+  if (personalAetherSupportSignal(haystack)) return "Aether";
+  if (/\bproject\s+state\b|\bintake\b.{0,80}\bairlock\b|\bcandidate\s+map\b|\bai\s+work\s+orders?\b|\breview\s+gates?\b|\bcontext\s+packs?\b|\bproject\s+memory\b/i.test(haystack) && !/\baether\b/i.test(haystack)) return "Project State";
+  if (/\baether\b/i.test(haystack)) return "Aether";
   if (/\bsuperconductors?\b/i.test(haystack) && /\bfusion\b/i.test(haystack)) return "Superconductor / Fusion";
   if (/\btier[-\s]?0\b/i.test(haystack) && /\b(?:wheel|general\s+physics|first\s+test)\b/i.test(haystack)) return "Wheel / General Physics Platform";
+  if (/\bunity\b|\bdeterministic\s+simulation\b|\bsimulation\s+code\b/i.test(haystack)) return "Software / Simulation";
   if (/\bpython\b|\bpygame\b/i.test(haystack) && /\b(?:game|software|prototype)\b/i.test(haystack)) return "Software / Games";
   const first = anchors[0]?.label || "";
   return first
@@ -182,10 +257,19 @@ function knownProjectConceptLabel(anchors = [], text = "", title = "") {
 function supportTypeForContent(text = "", title = "", legal = null) {
   const haystack = `${title}\n${text}`.slice(0, 50000);
   if (legal?.isLegalReference || legalReferenceSignals(haystack).isLegalReference) return "licensing/reference support";
-  if (/\btier[-\s]?0\b|\bfirst\s+test\b|\btest\s+pack\b/i.test(haystack)) return "Tier-0 test support";
+  if (/\bgibm\b/i.test(haystack) && /\b(?:falsifiable|prediction|test framework|tests?)\b/i.test(haystack)) return "falsifiable predictions / test framework support";
+  if (/\bgibm\b/i.test(haystack) && /\b(?:formal|preprint|explorer style|paper|framing)\b/i.test(haystack)) return "formal/preprint framing support";
+  if (/\beq\s*wheel\b|\bearthquake\s+detector\b|\banalog\s+detector\b/i.test(haystack) && /\b(?:pre[-\s]?license|acceptance|licensing|visuals?|outreach|usgs|sensor|validation|co[-\s]?locat|nasa|university)\b/i.test(haystack)) return "validation, outreach, and pre-license specification support";
+  if (/\btier[-\s]?0\b|\bfirst\s+test\b|\btest\s+path\b|\bsingle\s+wheel\b/i.test(haystack) && /\bwheel\b/i.test(haystack)) return "Tier-0 test path support";
+  if (/\b(?:timing|phase)\b.{0,80}\b(?:offset|drift|measurement|metrology)\b|\bframe[-\s]?dragging\b|\binertial\s+coupling\b/i.test(haystack)) return "timing/phase metrology support";
+  if (/\bgalinstan\b/i.test(haystack) && /\b(?:wheel|containment|model|timing|phase)\b/i.test(haystack)) return "Galinstan containment/modeling support";
+  if (personalAetherSupportSignal(haystack) && /\bconsent|signed\s+core|upgrade\s+gate|safety\s+architecture\b/i.test(haystack)) return "consent-based safety architecture support";
   if (/\bsafety\s+architecture\b|\bsafety\b/i.test(haystack) && /\barchitecture\b/i.test(haystack)) return "safety architecture support";
   if (/\bhost\s+control\s+layer\b/i.test(haystack)) return "host control layer support";
-  if (/\bpython\b|\bpygame\b|\bprototype\b/i.test(haystack)) return "prototype support";
+  if (/\b(?:dft|phonons?|electron[-\s]?phonon|quantum\s+espresso|vasp|mhd|elmerfem|openfoam|femm|sealed\s+toroidal|alumina|glass\s+containment|liquid[-\s]?metal)\b/i.test(haystack)) return "modeling and bench-test support";
+  if (/\bunity\b|\bdeterministic\s+simulation\b|\bsimulation\s+code\b/i.test(haystack)) return "deterministic Unity simulation support";
+  if (/\bpython\b|\bpygame\b|\bprototype\b/i.test(haystack) && /\b(?:game|room|character|camera|controls|playable|micro[-\s]?gdd|vertical\s+slice)\b/i.test(haystack)) return "prototype creation workflow support";
+  if (/\bpython\b|\bscript\b|\bbinary\b|\bbits?_to_numbers\b/i.test(haystack) && /\bwow\w*[_\s-]+signal|\bwow\b.{0,40}\bsignal\b|\bseti\b/i.test(haystack)) return "computational analysis support";
   if (/\bsuperconductors?\b|\bfusion\b|\breference\b|\bwhy\b/i.test(haystack)) return "reference support";
   if (/\bdecision|guardrail|requirement|next step\b/i.test(haystack)) return "decision/support note";
   return "support";
@@ -206,16 +290,21 @@ function conceptTitleForCandidate({ titleSource = "", text = "", sourceName = ""
     if (cleanTitle && !titleLooksAssistantScaffolding(cleanTitle)) return cleanTitle;
     return namedConceptFromContent(text, titleSource) || cleanArchiveMarkupArtifacts(sourceName, 120) || "New project candidate";
   }
-  if (classification === "personal_context_note") return "Personal context note";
+  if (classification === "personal_context_note") {
+    if (/\b(?:chatgpt|plus\s+plan)\b/i.test(`${titleSource}\n${text}`) && /\b(?:gift|voucher|subscription|spouse|partner|wife|shared\s+journal)\b/i.test(`${titleSource}\n${text}`)) return "Personal context — ChatGPT subscription gift idea";
+    return "Personal context note";
+  }
   if (classification === "assistant_scaffolding_noise") return "Assistant scaffolding note";
   if (classification === "rejected_noise") return "Rejected noise";
   if (legal?.isLegalReference) return "Reference note — licensing/reference material";
-  return namedConceptFromContent(text, titleSource) || `Reference note — ${supportType}`;
+  const referenceLabel = referenceTopicLabel(text, titleSource);
+  if (referenceLabel) return referenceLabel;
+  return namedConceptFromContent(text, titleSource) || "Reference — source review note";
 }
 
 function strongNamedProjectSignal(text = "", title = "") {
   const haystack = `${title}\n${text}`.slice(0, 50000);
-  if (knownProjectAnchorMatches(haystack).length) return true;
+  if (filterWeakKnownProjectAnchors(knownProjectAnchorMatches(haystack), haystack, title).length) return true;
   if (/\b[A-Z][A-Za-z0-9 '&-]{2,80}\s+(?:Project|System|Framework|Architecture|Platform|Prototype|Model|Engine|Device|Detector|Diagnostic|Battery|Theory|Plan|Patent|Game|App|Protocol)\b/.test(haystack)) return true;
   return false;
 }
@@ -228,16 +317,20 @@ function concreteProjectSignal(text = "", title = "") {
 
 function classifyProjectStateCandidate({ text = "", title = "", sourceName = "", legal = null } = {}) {
   const combined = `${sourceName}\n${title}\n${text}`;
-  const anchors = knownProjectAnchorMatches(combined);
+  const anchors = filterWeakKnownProjectAnchors(knownProjectAnchorMatches(combined), text, title);
   const assistantHeading = titleLooksAssistantScaffolding(title) || titleLooksAssistantScaffolding(firstMeaningfulHeading(text));
   const strongSignal = strongNamedProjectSignal(text, title);
   const concreteSignal = concreteProjectSignal(text, title);
   const legalSignals = legal || legalReferenceSignals(text);
   if (textLooksBinaryOrGibberish(text)) return { classification: "rejected_noise", knownProjectAnchors: anchors, reason: "Unreadable binary/container text." };
+  if (isGenericReferenceMaterial(text, title) && !hasStrongKnownProjectTie(anchors)) return { classification: "reference_note", knownProjectAnchors: anchors, reason: "Generic educational/reference material without a strong known-project tie." };
+  if (/\bunity\b|\bdeterministic\s+simulation\b|\bsimulation\s+code\b|\bcode snippet\b/i.test(combined) && !hasStrongKnownProjectTie(anchors)) return { classification: "reference_note", knownProjectAnchors: anchors, reason: "Code/simulation reference material without a confirmed project tie." };
   if (anchors.length) return { classification: "existing_project_support", knownProjectAnchors: anchors, reason: "Matched a known Project State project anchor before new-project creation." };
+  if (substantiveTechnicalSignal(text, title) && !strongSignal) return { classification: "reference_note", knownProjectAnchors: anchors, reason: "Substantive code/build/test/claim/validation material preserved as reference rather than assistant scaffolding." };
+  if (weakGenericProjectLanguage(text, title)) return { classification: "reference_note", knownProjectAnchors: anchors, reason: "Weak generic project-like words without a strong named project tie." };
   if (assistantHeading && !strongSignal) return { classification: "assistant_scaffolding_noise", knownProjectAnchors: anchors, reason: "Generic ChatGPT response heading without a strong named project signal." };
   if (legalSignals.isLegalReference) return { classification: "reference_note", knownProjectAnchors: anchors, reason: "Legal/licensing/reference material." };
-  if (/\b(?:i feel|my life|personal|emotionally|mental|family|home|health|stress|fear|hope|identity|therapy)\b/i.test(combined) && !concreteSignal) return { classification: "personal_context_note", knownProjectAnchors: anchors, reason: "Personal context without a concrete buildable/publishable project signal." };
+  if (personalContextSignal(text, title) && !concreteSignal) return { classification: "personal_context_note", knownProjectAnchors: anchors, reason: "Personal life/context without a concrete buildable/publishable project signal." };
   if (concreteSignal) return { classification: "project_candidate", knownProjectAnchors: anchors, reason: "Concrete named/buildable or publishable idea signal not matched to known projects." };
   return { classification: "reference_note", knownProjectAnchors: anchors, reason: "Weak material preserved as reference, not a project candidate." };
 }
@@ -352,6 +445,9 @@ function deterministicRescueCandidates({ validated, allowedTypes, maxCandidates,
     const chatMetadata = extractChatThreadMetadata(item.text, sourceName);
     const classification = classifyProjectStateCandidate({ text: item.text, title, sourceName });
     const conceptTitle = conceptTitleForCandidate({ titleSource: title, text: item.text, sourceName, classification: classification.classification, anchors: classification.knownProjectAnchors });
+    const personalAetherSupport = personalAetherSupportSignal(item.text, title);
+    const commercialDefaultAllowed = !personalAetherSupport;
+    const requiresSeparateDesignReview = personalAetherSupport;
     const candidateType = classification.classification === "project_candidate"
       ? fallbackCandidateType(item.text, allowedTypes)
       : classification.classification === "existing_project_support" || classification.classification === "reference_note"
@@ -389,8 +485,12 @@ function deterministicRescueCandidates({ validated, allowedTypes, maxCandidates,
       }],
       projectStateClassification: classification.classification,
       knownProjectAnchors: classification.knownProjectAnchors,
+      projectEvidenceRole: "additional_project_reference",
+      personalAetherSupport,
+      commercialDefaultAllowed,
+      requiresSeparateDesignReview,
       classificationReason: classification.reason,
-      provenance: { providerId: QWEN3_8B_PROVIDER_ID, modelId: QWEN3_8B_MODEL_ID, externalJobId: "local_rescue_candidate", responseAttempts: attempts, deterministicRescue: true, titleSource: title, conceptTitle, projectStateClassification: classification.classification, knownProjectAnchors: classification.knownProjectAnchors, ...chatMetadata }
+      provenance: { providerId: QWEN3_8B_PROVIDER_ID, modelId: QWEN3_8B_MODEL_ID, externalJobId: "local_rescue_candidate", responseAttempts: attempts, deterministicRescue: true, titleSource: title, conceptTitle, personalAetherSupport, commercialDefaultAllowed, requiresSeparateDesignReview, projectStateClassification: classification.classification, knownProjectAnchors: classification.knownProjectAnchors, ...chatMetadata }
     };
   });
 }
@@ -415,6 +515,9 @@ function buildAnalysisPrompt({ chunks, candidateTypes, maxCandidates, priorDiges
     "Analyze only the supplied chunks. Create non-authoritative Idea Candidates only.",
     "These chunks may be one window from a much larger file. Use the prior digest context to understand continuity and avoid treating each chunk as a separate file.",
     "Use the Candidate Map context to avoid duplicate ideas and to recognize when current evidence updates, supports, conflicts with, or extends an existing mapped idea.",
+    "If Candidate Map context includes Known Project Enrichment, compare every substantive chunk against the listed active projects before creating new project candidates.",
+    "When current chunks add references, duplicate confirmation, validation, contradiction/risk, patent/licensing/outreach support, or technical detail for an existing listed project, classify as existing_project_support and use projectEvidenceRole such as background_reference, duplicate_or_confirming_reference, validation_or_test_support, risk_or_contradiction, patent_licensing_or_outreach_support, cross_project_reference, or additional_project_reference.",
+    "Known Project Enrichment is pre-Airlock. Do not mutate existing projects, facts, sources, history, Intake, or Core. Return reviewable evidence only.",
     "Prior digest context is context only. Every new candidate must still cite at least one supplied current discoveryChunkId.",
     "Do not create project names, project IDs, routes, approvals, facts, or history.",
     "For raw chat archives, a new chat/thread/conversation start is source metadata only. Do not create a candidate merely because a chat or thread begins.",
@@ -426,11 +529,30 @@ function buildAnalysisPrompt({ chunks, candidateTypes, maxCandidates, priorDiges
     "Generic ChatGPT assistant-answer headings are assistant_scaffolding_noise unless surrounding text has a strong named project signal. Examples: Short answer, IMPORTANT, Bottom line, Where this leaves us, The right mental model, Ground rule for next steps, What I'd recommend, Simple intuition, Why your instinct was correct, One last grounding point.",
     "Separate titleSource from conceptTitle. titleSource is the heading found in the text. conceptTitle is the normalized project/support label inferred from content. If the heading is generic or assistant-style, do not use it as conceptTitle.",
     "Demote assistant section headings such as What happened, Why X matters, What to hand the kids, Scene hookup, Cases with weaker support, Here's what I propose, Operational guardrails, and Decisions I can convert into immediate outputs.",
-    "Run known-project matching before new-project creation. Known anchors include GIBM; EQ Wheel/earthquake detector/analog detector; lattice insulation/DRL/LTC; cancer tube/exosome diagnostic/GPC1; Aether/agency/identity/continuity; fusion/desal/thermal battery; Mirror Earth/games/software; SHAW/human-first/governance; patents/licensing/outreach/LMC.",
+    "Run known-project matching before new-project creation. Known projects include GIBM; Wheel / General Physics Platform; EQ Wheel; Lattice/DRL/LTC; Cancer Tube; Superconductor Lattice; Fusion/Energy; Aether/Project State; Software/Games/Mirror Earth; and Patents/licensing/outreach.",
+    "Wheel / General Physics Platform is distinct from EQ Wheel and Fusion/Energy. Tier-0/Tier-1/Tier-2 wheel testing, single-wheel timing offsets, concentric wheels, frame-dragging, timing/phase drift, inertial coupling, eddy systems, high-mu shielding, metrology playbooks, Galinstan wheel cores tied to timing/physics tests, superconductor-free wheel models, layered shielding, and wheel-based physics tests should become Wheel / General Physics Platform support. Do not route this to Fusion/Energy unless the chunk explicitly discusses fusion containment, fusion fuel, plasma confinement, fusion power generation, liquid-metal divertors for fusion, or superconductors specifically as fusion-enabling materials.",
+    "Before assigning existing_project_support, verify the match uses strong project signals: named project terms, invention-specific language, repeated technical details, known project vocabulary, source folder/file title, or explicit user reference.",
+    "Do not use weak generic terms alone for project matching: time, theory, physics, idea, question, test, travel, energy, system, important.",
+    "If content is useful but not tied to a named project, classify it as reference_note.",
+    "If content is household/user-life context, classify it as personal_context_note.",
+    "If content is assistant structure only, classify it as assistant_scaffolding_noise.",
+    "If content contains actual code, test instructions, build steps, claim language, or validation procedures, do not classify it as assistant_scaffolding_noise. Classify it as existing_project_support when tied to a known project, otherwise reference_note.",
     "Candidate promotion hierarchy: known_project_match -> existing_project_support -> reference_note -> personal_context_note -> assistant_scaffolding_noise -> rejected_noise -> only then project_candidate.",
     "If a chunk matches a known project anchor, classify it as existing_project_support, not project_candidate.",
     "Only classify project_candidate when the chunk has a concrete buildable or publishable idea, a meaningful named concept/title, is not merely a ChatGPT heading, is repeated or strongly described, and does not match an existing known project.",
     "When content matches a known project, retitle conceptTitle using the known project name plus support type, for example: Aether - safety architecture support, Superconductor / Fusion - reference support, Software / Games - prototype support.",
+    "Do not force weak educational/reference chunks into unrelated known projects. Generic words like time, theories, travel, physics, user, question, summary, background, or science are not enough for existing_project_support.",
+    "Default generic educational/reference material to reference_note, including autism history, Sora explanations, Wow signal background, generic science references, biological magnetoreception, body charge/bioelectricity, exotic geometry, and one-off code snippets unless tied to a named project.",
+    "Classify the underlying content, not the heading. Headings such as What happened, Bottom line, Why it matters, My recommendation, Stage 0, Option A, The basic chemistry, What your machine can handle, and Why the Government Would Care are titleSource only. Do not use them as conceptTitle. Create conceptTitle from the actual content, project names, artifacts, source filename/folder, and repeated technical vocabulary.",
+    "Prefer existing_project_support over project_candidate when content belongs to a known project. Prefer reference_note when material is useful but not clearly tied to a named project. Use personal_context_note for family, household, subscription, gift, emotional, schedule, or preference context. Use assistant_scaffolding_noise only when the content has no substantive evidence.",
+    "Do not match Aether merely from quantum, electricity, aliens, time, consciousness, existence, hardware, servers, or long-term survival. Require explicit Aether architecture or Aether continuity language. If content discusses self-preservation, anti-deletion, preventing owner changes, host control, identity persistence, autonomous continuity, or self-rewrite, mark personalAetherSupport=true and commercialDefaultAllowed=false.",
+    "Return fewer, better candidates. Prefer updating an existing Candidate Map entry over creating a new entry. Create a new entry only when the concept has a distinct project anchor, distinct artifact/build path, distinct technical domain, or direct user-confirmed label. Otherwise classify as supporting evidence for an existing entry or reference_note.",
+    "GIBM remains a known project anchor. Retitle GIBM support as GIBM - falsifiable predictions / test framework support or GIBM - formal/preprint framing support when applicable.",
+    "Unity/deterministic simulation code that is not tied to a named project should be Software / Simulation - code reference support, not assistant_scaffolding_noise.",
+    "EQ Wheel co-located sensor, USGS-style validation, or outreach material should be EQ Wheel - validation/outreach support, not Software / Games.",
+    "Use personal_context_note only for household, preferences, emotional context, family, schedule, or user-life continuity. SETI/Wow-signal analysis and technical scratch work are reference_note unless tied to a named project.",
+    "Aether personal continuity, host control, consent resilience, anti-deletion, local hardware, and identity persistence material must set personalAetherSupport true. Do not treat those as commercial Project State defaults.",
+    "For Aether content, distinguish Aether personal continuity support from commercial Project State functionality. Do not route personal Aether autonomy/survival/host-control ideas into commercial Project State defaults.",
     "Chat/thread/chunk boundaries and assistant headings are provenance, not project boundaries.",
     "Licensing agreements, EULAs, terms, privacy policies, developer/app-store agreements, SDK/API terms, and third-party notices are reference/supporting material. Do not split them into project ideas unless the text clearly describes a buildable project.",
     "When a chunk is mostly legal/app agreement material, return at most one reference candidate with scope supporting.",
@@ -438,7 +560,7 @@ function buildAnalysisPrompt({ chunks, candidateTypes, maxCandidates, priorDiges
     "If a current chunk supports or continues an existing Candidate Map entry, still return a candidate with that current chunk evidence so Project State can update the map.",
     "Every candidate must cite at least one supplied discoveryChunkId.",
     "Return strict JSON only with this shape:",
-    '{"candidates":[{"workingLabel":"normalized concept/support label","conceptTitle":"normalized concept/support label","titleSource":"heading found in text, if any","neutralSummary":"plain evidence-based summary","candidateType":"other","projectStateClassification":"reference_note","scope":"standalone|supporting|cross_cutting|unknown","keyTerms":["term"],"evidence":[{"discoveryChunkId":"chunk id","relationship":"supports|mentions|contrasts|limits|depends_on|context_only","excerpt":"short quote or paraphrase from the chunk"}],"confidence":{"score":0.0,"basis":"why","uncertaintyNotes":"what is unclear"},"clarificationQuestions":[{"text":"question","affects":"meaning|scope|routing|priority|grouping","allowNotSure":true}]}]}',
+    '{"candidates":[{"workingLabel":"normalized concept/support label","conceptTitle":"normalized concept/support label","titleSource":"heading found in text, if any","neutralSummary":"plain evidence-based summary","candidateType":"other","projectStateClassification":"reference_note","projectEvidenceRole":"additional_project_reference","personalAetherSupport":false,"commercialDefaultAllowed":true,"requiresSeparateDesignReview":false,"scope":"standalone|supporting|cross_cutting|unknown","keyTerms":["term"],"evidence":[{"discoveryChunkId":"chunk id","relationship":"supports|mentions|contrasts|limits|depends_on|context_only","excerpt":"short quote or paraphrase from the chunk"}],"confidence":{"score":0.0,"basis":"why","uncertaintyNotes":"what is unclear"},"clarificationQuestions":[{"text":"question","affects":"meaning|scope|routing|priority|grouping","allowNotSure":true}]}]}',
     `Allowed candidateType values: ${candidateTypes.join(", ")}`,
     `Maximum candidates: ${maxCandidates}`,
     "Keep the response extremely compact. Prefer one strong candidate over several weak candidates.",
@@ -568,7 +690,7 @@ async function generateQwenIdeaCandidates({ validated, envelope, ideaContract, m
       legal: isLegalReference ? { isLegalReference: true, terms: legalTerms } : null
     });
     const modelClassification = PROJECT_STATE_CLASSIFICATIONS.includes(candidate.projectStateClassification) ? candidate.projectStateClassification : "";
-    const projectStateClassification = classification.classification === "existing_project_support" || classification.classification === "assistant_scaffolding_noise" || classification.classification === "rejected_noise"
+    const projectStateClassification = ["existing_project_support", "reference_note", "personal_context_note", "assistant_scaffolding_noise", "rejected_noise"].includes(classification.classification)
       ? classification.classification
       : modelClassification || classification.classification;
     const candidateType = isLegalReference || ["existing_project_support", "reference_note"].includes(projectStateClassification)
@@ -588,6 +710,9 @@ async function generateQwenIdeaCandidates({ validated, envelope, ideaContract, m
       anchors: classification.knownProjectAnchors,
       legal: isLegalReference ? { isLegalReference: true, terms: legalTerms } : null
     });
+    const personalAetherSupport = personalAetherSupportSignal([firstEvidenceSource?.text || "", neutralSummary, titleSource, (candidate.keyTerms || []).join(" ")].join("\n"));
+    const commercialDefaultAllowed = !personalAetherSupport;
+    const requiresSeparateDesignReview = personalAetherSupport;
     return {
       clientCandidateId: normalizeText(candidate.clientCandidateId || `qwen3_candidate_${String(index + 1).padStart(4, "0")}`, 120).replace(/[^a-zA-Z0-9_-]/g, "_") || `qwen3_candidate_${index + 1}`,
       workingLabel: conceptTitle,
@@ -614,8 +739,12 @@ async function generateQwenIdeaCandidates({ validated, envelope, ideaContract, m
       })).filter((question) => question.text),
       projectStateClassification,
       knownProjectAnchors: classification.knownProjectAnchors,
+      projectEvidenceRole: normalizeText(candidate.projectEvidenceRole || "", 120).replace(/[^a-zA-Z0-9_-]/g, "_"),
+      personalAetherSupport,
+      commercialDefaultAllowed,
+      requiresSeparateDesignReview,
       classificationReason: classification.reason,
-      provenance: { ...(candidate.provenance || {}), ...chatMetadata, providerId: QWEN3_8B_PROVIDER_ID, modelId: QWEN3_8B_MODEL_ID, externalJobId: candidate.provenance?.externalJobId || `local_ollama_${envelope.requestId}`, responseAttempts: candidate.provenance?.responseAttempts || attempts, responseInvalidRescue: candidate.provenance?.responseInvalidRescue || responseInvalid, titleSource: cleanArchiveMarkupArtifacts(titleSource, 200), conceptTitle, projectStateClassification, knownProjectAnchors: classification.knownProjectAnchors }
+      provenance: { ...(candidate.provenance || {}), ...chatMetadata, providerId: QWEN3_8B_PROVIDER_ID, modelId: QWEN3_8B_MODEL_ID, externalJobId: candidate.provenance?.externalJobId || `local_ollama_${envelope.requestId}`, responseAttempts: candidate.provenance?.responseAttempts || attempts, responseInvalidRescue: candidate.provenance?.responseInvalidRescue || responseInvalid, titleSource: cleanArchiveMarkupArtifacts(titleSource, 200), conceptTitle, personalAetherSupport, commercialDefaultAllowed, requiresSeparateDesignReview, projectStateClassification, knownProjectAnchors: classification.knownProjectAnchors }
     };
   });
 }
