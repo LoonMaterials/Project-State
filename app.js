@@ -3282,6 +3282,11 @@ const defaultSettings = () => ({
   lastRestoreReason: "",
   lastRestoreSourceFile: "",
   archivedDeletionLog: [],
+  localAiSetupPreference: "detect_local_ai",
+  localAiProviderId: "",
+  localAiSetupStatus: "not_checked",
+  localAiSetupCheckedAt: "",
+  localAiSetupInstallHint: "",
   uiState: {
     recentProjectIds: [],
     lastProjectId: "",
@@ -3325,7 +3330,7 @@ const flowDrafts = new Map();
 let fileImportDialogInProgress = false;
 let fileImportFlowState = { status: "idle", kind: "", message: "", updatedAt: "" };
 let pendingFileImportReviewSelection = null;
-let auditWorkSession = { actorName: "", reason: "", updatedAt: "" };
+let auditWorkSession = { actorName: "", updatedAt: "" };
 let searchQuery = "";
 let armTransportStatus = {
   available: false,
@@ -3337,6 +3342,17 @@ let armTransportStatus = {
   encryptionAvailable: false,
   tokenConfigured: false,
   lastError: ""
+};
+let localAiSetupStatus = {
+  checked: false,
+  checking: false,
+  available: false,
+  providerId: "",
+  providerName: "",
+  providerMode: "unknown",
+  installHint: "",
+  error: "",
+  checkedAt: ""
 };
 let discoveryWorkspace = { loaded: false, loading: false, cases: [], extractions: [], error: "" };
 let saveState = {
@@ -4529,6 +4545,11 @@ function normalizeSettings(settings = {}) {
     lastRestoreReason: settings.lastRestoreReason || "",
     lastRestoreSourceFile: settings.lastRestoreSourceFile || "",
     archivedDeletionLog: Array.isArray(settings.archivedDeletionLog) ? settings.archivedDeletionLog : [],
+    localAiSetupPreference: ["detect_local_ai", "install_later", "skip"].includes(settings.localAiSetupPreference) ? settings.localAiSetupPreference : defaults.localAiSetupPreference,
+    localAiProviderId: String(settings.localAiProviderId || ""),
+    localAiSetupStatus: ["not_checked", "checking", "available", "missing", "unavailable", "error", "skipped"].includes(settings.localAiSetupStatus) ? settings.localAiSetupStatus : defaults.localAiSetupStatus,
+    localAiSetupCheckedAt: String(settings.localAiSetupCheckedAt || ""),
+    localAiSetupInstallHint: String(settings.localAiSetupInstallHint || ""),
     uiState: normalizeUiState(settings.uiState),
     historyPolicyVersion: settings.historyPolicyVersion || defaults.historyPolicyVersion,
     mandatoryHistory: settings.mandatoryHistory !== false,
@@ -4543,6 +4564,8 @@ function normalizeSettings(settings = {}) {
     settings.recoveryWarnings !== normalized.recoveryWarnings ||
     settings.storageSystem !== normalized.storageSystem ||
     settings.backupSystem !== normalized.backupSystem ||
+    settings.localAiSetupPreference !== normalized.localAiSetupPreference ||
+    settings.localAiSetupStatus !== normalized.localAiSetupStatus ||
     !Array.isArray(settings.archivedDeletionLog) ||
     settings.historyPolicyVersion !== normalized.historyPolicyVersion ||
     settings.mandatoryHistory !== normalized.mandatoryHistory ||
@@ -5715,15 +5738,15 @@ function currentActorCan(permission, project = getProject()) {
 
 function actionPermission(action = "") {
   if (["create-project", "add-decision", "add-fact", "add-conflict", "add-source", "add-relationship", "add-question", "add-action", "add-extract", "read-file-extract", "suggest-extract", "create-draft-project", "import-files", "import-folder", "import-project-files", "import-project-folder"].includes(action)) return "create";
-  if (["edit-status", "edit-object", "assign-object", "mark-complete", "attach-source", "attach-image", "archive-object", "unarchive-project", "manage-project-roles", "review-source-freshness", "verify-source-file", "verify-all-source-files", "archive-ai-work-order", "start-local-ai-work-order", "edit-file-source", "archive-file-source"].includes(action)) return "edit";
+  if (["edit-status", "edit-object", "rename-project", "assign-object", "mark-complete", "attach-source", "attach-image", "archive-object", "unarchive-project", "manage-project-roles", "review-source-freshness", "verify-source-file", "verify-all-source-files", "archive-ai-work-order", "start-local-ai-work-order", "edit-file-source", "archive-file-source"].includes(action)) return "edit";
   if (["approve-intake", "approve-extract", "approve-draft-project"].includes(action)) return "approve";
-  if (["export-project", "export-handoff", "context-pack", "view-object-history", "show-history", "view-history", "show-changes-since", "history-file-source", "view-ai-work-order-results", "export-chatgpt-review-pack", "refresh-storage"].includes(action)) return "audit";
+  if (["export-project", "export-handoff", "context-pack", "view-object-history", "show-history", "view-history", "show-changes-since", "history-file-source", "view-ai-work-order-results", "export-chatgpt-review-pack", "refresh-storage", "refresh-local-ai-setup"].includes(action)) return "audit";
   if (["show-settings", "backup-storage", "restore-storage", "reset-local-data", "export-current-raw-data", "enable-arm-transport", "disable-arm-transport", "rotate-arm-transport-token", "revoke-arm-transport"].includes(action)) return "admin";
   return "";
 }
 
 function actionAllowedForCurrentActor(action = "", project = getProject()) {
-  if (needsFirstRunSetup() && action === "restore-storage") return true;
+  if (needsFirstRunSetup() && ["restore-storage", "refresh-local-ai-setup"].includes(action)) return true;
   const actor = currentActor();
   const role = normalizeActorRole(actor?.role, actor?.type);
   if (["create-intake", "create-ai-work-order", "propose-correction"].includes(action)) return actorHasPermission(actor, "create", project);
@@ -6779,7 +6802,7 @@ function renderBrowserDevModeGate() {
 }
 
 function browserDevActionAllowed(action) {
-  return ["export-failed-data"].includes(action);
+  return ["export-failed-data", "refresh-local-ai-setup"].includes(action);
 }
 
 function renderFirstRunSetup() {
@@ -6830,6 +6853,7 @@ function renderFirstRunSetup() {
             <input name="recoveryWarnings" type="checkbox" ${store.settings?.recoveryWarnings !== false ? "checked" : ""}>
             <span>${escapeHtml(t("recoveryWarnings"))}</span>
           </label>
+          ${renderLocalAiSetupPanel({ firstRun: true })}
           <div class="form-footer">
             <button class="btn" type="submit">${escapeHtml(t("saveSetup"))}</button>
           </div>
@@ -6839,6 +6863,7 @@ function renderFirstRunSetup() {
   `;
   applyInputLimits(app.querySelector("[data-first-run-setup]"));
   wireLocalFilePickers(app.querySelector("[data-first-run-setup]"));
+  refreshLocalAiSetupStatus({ persist: false });
 }
 
 function backupReminderOptions(selected = "manual") {
@@ -7023,6 +7048,41 @@ function renderSettings() {
         <div class="settings-list role-definitions">
           ${renderRoleDefinitions()}
         </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <h2 class="panel-title">Local AI setup</h2>
+        </div>
+        <form class="form" data-settings-ai>
+          <p class="notice">Local AI remains pre-Airlock. It can digest Discovery material and produce review packs, but it cannot approve Core records.</p>
+          <div class="meta-grid">
+            <div>
+              <p class="meta-label">Status</p>
+              <p data-local-ai-setup-status>${escapeDisplay(localAiSetupSummary(), DISPLAY_META_LIMIT)}</p>
+            </div>
+            <div>
+              <p class="meta-label">Provider</p>
+              <p data-local-ai-setup-provider>${escapeDisplay(localAiSetupStatus.providerName || store.settings?.localAiProviderId || "Qwen3 8B through Ollama", DISPLAY_META_LIMIT)}</p>
+            </div>
+          </div>
+          <div class="field">
+            <label for="settingsLocalAiPreference">Local AI choice</label>
+            <select id="settingsLocalAiPreference" name="localAiSetupPreference">
+              ${localAiPreferenceOptions(store.settings?.localAiSetupPreference || "detect_local_ai")}
+            </select>
+          </div>
+          <div class="field">
+            <label for="aiSettingsReason">${escapeHtml(t("reason"))}</label>
+            <textarea id="aiSettingsReason" name="reason" required placeholder="Record why local AI setup changed."></textarea>
+          </div>
+          <div class="button-row">
+            <button class="btn secondary" type="button" data-action="refresh-local-ai-setup">Check local AI now</button>
+          </div>
+          <div class="form-footer">
+            <button class="btn" type="submit">Save local AI setup</button>
+          </div>
+        </form>
       </section>
 
       <section class="panel">
@@ -7780,7 +7840,7 @@ function appendArchivedDeletionAudit(projects = [], actor, reason = "") {
 
 function renderProjectCard(project) {
   return `
-    <div class="project-card">
+    <div class="project-card" data-action="open-project" data-project-id="${escapeHtml(project.id)}" role="button" tabindex="0" aria-label="Open ${escapeHtml(project.name)}">
       <button class="card-open" data-action="open-project" data-project-id="${project.id}">
         <h2>${escapeDisplay(project.name, DISPLAY_META_LIMIT)}</h2>
         <p>${escapeDisplay(project.currentStatus || t("noCurrentStatusRecorded"))}</p>
@@ -7794,6 +7854,7 @@ function renderProjectCard(project) {
       </div>
       ${renderObjectActions("Project", project.id, project.archived)}
       <div class="item-actions">
+        <button class="btn secondary compact" data-action="rename-project" data-project-id="${project.id}">Rename project</button>
         ${project.archived ? `<button class="btn secondary compact" data-action="unarchive-project" data-project-id="${project.id}">${escapeHtml(t("unarchiveProject"))}</button>` : ""}
         ${project.archived
           ? `<button class="btn danger compact" data-action="delete-archived-project" data-project-id="${project.id}">Delete archived</button>`
@@ -8102,9 +8163,12 @@ async function beginFileImport(kind = "files") {
     if (activeRootView === "files") render();
     const selection = await platformAdapter.files.inspectImportSelection({ paths });
     if (!selection.candidates?.length) {
-      setFileImportFlowState("no_supported_files", "No supported files were found in that selection.", kind);
+      const skippedReason = selection.skipped?.length
+        ? ` ${selection.skipped.map((item) => `${item.localPath || item.name || "Selected file"}: ${item.reason || "not supported"}`).join(" · ")}`
+        : "";
+      setFileImportFlowState("no_supported_files", `No supported files were found in that selection.${skippedReason}`, kind);
       if (activeRootView === "files") render();
-      window.alert(t("fileImportFailed"));
+      window.alert(`${t("fileImportFailed")}${skippedReason}`);
       return;
     }
     setFileImportFlowState("reviewing", `Found ${selection.candidates.length} supported ${selection.candidates.length === 1 ? "file" : "files"} for ${isKnownProjectImport ? "project import" : "Discovery review"}.`, kind);
@@ -8168,7 +8232,7 @@ function partitionDiscoveryCandidates(candidates = [], mode = "folder_groups", r
     const label = mode === "one_project_folder"
       ? `Project folder: ${folderName}`
       : mode === "one_case"
-        ? "Selected folder"
+        ? (rootPath ? "Selected folder" : candidate.name || "Selected file")
         : mode === "each_file"
           ? candidate.name || "Selected file"
           : folderGroupReviewLabel(folderGroup);
@@ -9332,6 +9396,7 @@ function renderProject(project) {
       <div class="item-actions">
         <button class="btn" data-action="${escapeHtml(nextStep.action)}">${escapeHtml(nextStep.buttonLabel || nextStep.label)}</button>
         ${(nextStep.secondaryActions || []).map((secondary) => `<button class="btn secondary" data-action="${escapeHtml(secondary.action)}">${escapeHtml(secondary.label)}</button>`).join("")}
+        <button class="btn secondary" data-action="rename-project" data-project-id="${escapeHtml(project.id)}">Rename project</button>
       </div>
     </article>
     <section class="meta-grid">
@@ -11378,9 +11443,8 @@ function showModal({ title, body, submitText, onSubmit, draftKey = "", flowStep 
         return;
       }
       flowDrafts.delete(resolvedDraftKey);
-      if (data.actorName || data.reason) auditWorkSession = {
+      if (data.actorName) auditWorkSession = {
         actorName: String(data.actorName || auditWorkSession.actorName || "").trim(),
-        reason: String(data.reason || auditWorkSession.reason || "").trim(),
         updatedAt: nowIso()
       };
       modal.remove();
@@ -11467,7 +11531,50 @@ function showModal({ title, body, submitText, onSubmit, draftKey = "", flowStep 
   });
 
   document.body.appendChild(modal);
+  wireDraggableModal(modal.querySelector(".modal"));
   modal.querySelector("input, textarea, select")?.focus();
+}
+
+function wireDraggableModal(dialog) {
+  if (!dialog) return;
+  const handle = dialog.querySelector(".modal-head");
+  if (!handle) return;
+  let dragState = null;
+  handle.addEventListener("pointerdown", (event) => {
+    if (event.button !== 0 || event.target.closest("button, input, select, textarea, a")) return;
+    const rect = dialog.getBoundingClientRect();
+    dialog.style.position = "fixed";
+    dialog.style.left = `${rect.left}px`;
+    dialog.style.top = `${rect.top}px`;
+    dialog.style.margin = "0";
+    dialog.style.transform = "none";
+    dialog.classList.add("dragging");
+    dragState = {
+      pointerId: event.pointerId,
+      offsetX: event.clientX - rect.left,
+      offsetY: event.clientY - rect.top
+    };
+    handle.setPointerCapture?.(event.pointerId);
+    event.preventDefault();
+  });
+  handle.addEventListener("pointermove", (event) => {
+    if (!dragState || dragState.pointerId !== event.pointerId) return;
+    const rect = dialog.getBoundingClientRect();
+    const maxLeft = Math.max(12, window.innerWidth - rect.width - 12);
+    const maxTop = Math.max(12, window.innerHeight - Math.min(rect.height, window.innerHeight - 24) - 12);
+    const nextLeft = Math.min(Math.max(12, event.clientX - dragState.offsetX), maxLeft);
+    const nextTop = Math.min(Math.max(12, event.clientY - dragState.offsetY), maxTop);
+    dialog.style.left = `${nextLeft}px`;
+    dialog.style.top = `${nextTop}px`;
+  });
+  const stopDrag = (event) => {
+    if (!dragState || dragState.pointerId !== event.pointerId) return;
+    handle.releasePointerCapture?.(event.pointerId);
+    dialog.classList.remove("dragging");
+    dragState = null;
+  };
+  handle.addEventListener("pointerup", stopDrag);
+  handle.addEventListener("pointercancel", stopDrag);
 }
 
 function renderGovernedStateStrip(item = {}) {
@@ -11665,7 +11772,7 @@ function wireFlowControls(form) {
 
 function auditFields({ actorLabel = t("approvedBy"), reasonLabel = t("reason"), reasonOptions = null } = {}) {
   const defaultActorName = auditWorkSession.actorName || currentActor()?.name || "";
-  const defaultReason = auditWorkSession.reason || "";
+  const defaultReason = "";
   const options = activeActorOptions(defaultActorName);
   return `
     <div class="field">
@@ -11683,7 +11790,7 @@ function auditFields({ actorLabel = t("approvedBy"), reasonLabel = t("reason"), 
         <option value="custom">Other / custom</option>
       </select>
       <textarea id="reason" name="reason" required>${escapeHtml(defaultReason)}</textarea>
-      ${auditWorkSession.updatedAt ? `<p class="field-help">Inherited from this work session · ${escapeHtml(formatDate(auditWorkSession.updatedAt))}. Edit it whenever the reason changes.</p>` : `<p class="field-help">Required for immutable history. This may be reused during the current work session.</p>`}
+      <p class="field-help">Required for immutable history. Reasons start blank so unrelated actions do not inherit the last choice.</p>
     </div>
   `;
 }
@@ -12050,6 +12157,109 @@ function analysisInstallSuggestion(capabilities = {}) {
   const suggestion = capabilities.installSuggestions?.[0];
   if (!suggestion) return "Install and start a supported local AI provider, then try again.";
   return `Install ${suggestion.displayName || suggestion.modelId || "the local model"} with: ${suggestion.command || "ollama pull qwen3:8b"}`;
+}
+
+function localAiPreferenceOptions(selected = "detect_local_ai") {
+  const options = [
+    ["detect_local_ai", "Use local AI if Project State finds it"],
+    ["install_later", "Show install instructions; I will install it later"],
+    ["skip", "Skip local AI setup for now"]
+  ];
+  return options
+    .map(([value, label]) => `<option value="${value}" ${selected === value ? "selected" : ""}>${escapeHtml(label)}</option>`)
+    .join("");
+}
+
+function localAiSetupSummary() {
+  if (localAiSetupStatus.checking) return "Checking this computer for Ollama/Qwen…";
+  if (localAiSetupStatus.error) return `Local AI check failed: ${localAiSetupStatus.error}`;
+  if (localAiSetupStatus.available) return `${localAiSetupStatus.providerName || "Local AI"} is available and will stay pre-Airlock.`;
+  if (localAiSetupStatus.checked) return `${localAiSetupStatus.installHint || "Install and start a supported local AI provider, then refresh."}`;
+  if (store.settings?.localAiSetupCheckedAt) {
+    const stored = store.settings.localAiSetupStatus === "available"
+      ? "Local AI was detected during setup."
+      : store.settings.localAiSetupStatus === "skipped"
+        ? "Local AI setup was skipped."
+        : store.settings.localAiSetupInstallHint || "Local AI was not detected yet.";
+    return `${stored} Last checked ${formatDate(store.settings.localAiSetupCheckedAt)}.`;
+  }
+  return "Project State has not checked this computer for local AI yet.";
+}
+
+function renderLocalAiSetupPanel({ firstRun = false } = {}) {
+  return `
+    <section class="panel local-ai-setup-panel">
+      <div class="panel-head">
+        <h2 class="panel-title">Local AI setup</h2>
+      </div>
+      <p class="notice">Optional. Local AI is used only before the Airlock for Discovery digestion and candidate mapping. It cannot approve Core changes.</p>
+      <div class="meta-grid">
+        <div>
+          <p class="meta-label">Status</p>
+          <p data-local-ai-setup-status>${escapeDisplay(localAiSetupSummary(), DISPLAY_META_LIMIT)}</p>
+        </div>
+        <div>
+          <p class="meta-label">Provider</p>
+          <p data-local-ai-setup-provider>${escapeDisplay(localAiSetupStatus.providerName || store.settings?.localAiProviderId || "Qwen3 8B through Ollama", DISPLAY_META_LIMIT)}</p>
+        </div>
+      </div>
+      <div class="field">
+        <label for="${firstRun ? "setupLocalAiPreference" : "settingsLocalAiPreference"}">Local AI choice</label>
+        <select id="${firstRun ? "setupLocalAiPreference" : "settingsLocalAiPreference"}" name="localAiSetupPreference">
+          ${localAiPreferenceOptions(store.settings?.localAiSetupPreference || "detect_local_ai")}
+        </select>
+      </div>
+      <div class="button-row">
+        <button class="btn secondary" type="button" data-action="refresh-local-ai-setup">Check local AI now</button>
+      </div>
+    </section>
+  `;
+}
+
+function updateLocalAiSetupDom() {
+  document.querySelectorAll("[data-local-ai-setup-status]").forEach((node) => {
+    node.textContent = localAiSetupSummary();
+  });
+  document.querySelectorAll("[data-local-ai-setup-provider]").forEach((node) => {
+    node.textContent = localAiSetupStatus.providerName || store.settings?.localAiProviderId || "Qwen3 8B through Ollama";
+  });
+}
+
+async function refreshLocalAiSetupStatus({ persist = false } = {}) {
+  localAiSetupStatus = { ...localAiSetupStatus, checking: true, error: "" };
+  updateLocalAiSetupDom();
+  try {
+    const capabilities = platformAdapter.analysis?.available ? await platformAdapter.analysis.describeCapabilities() : null;
+    const provider = capabilities?.localProviders?.find((item) => item.providerId === "ollama_qwen3_8b_local") || null;
+    const available = Boolean(provider?.available || capabilities?.realProviderInstalled);
+    localAiSetupStatus = {
+      checked: true,
+      checking: false,
+      available,
+      providerId: provider?.providerId || capabilities?.defaultProviderId || "",
+      providerName: provider?.displayName || capabilities?.arm?.displayName || "Qwen3 8B through Ollama",
+      providerMode: capabilities?.providerMode || "unknown",
+      installHint: available ? "" : analysisInstallSuggestion(capabilities || {}),
+      error: "",
+      checkedAt: nowIso()
+    };
+  } catch (error) {
+    localAiSetupStatus = {
+      ...localAiSetupStatus,
+      checked: true,
+      checking: false,
+      available: false,
+      error: error.message || "Local AI check failed.",
+      checkedAt: nowIso()
+    };
+  }
+  store.settings = normalizeSettings(store.settings || {});
+  store.settings.localAiProviderId = localAiSetupStatus.providerId;
+  store.settings.localAiSetupStatus = localAiSetupStatus.error ? "error" : localAiSetupStatus.available ? "available" : "missing";
+  store.settings.localAiSetupCheckedAt = localAiSetupStatus.checkedAt;
+  store.settings.localAiSetupInstallHint = localAiSetupStatus.installHint;
+  updateLocalAiSetupDom();
+  if (persist && storageReady) await saveStore({ allowWithoutCoreApproval: true, reason: "local-ai-setup-check" });
 }
 
 const AI_WORK_ORDER_DIGESTION_STAGES = [
@@ -16897,6 +17107,16 @@ function saveSettingsCore(data, form) {
   render();
 }
 
+function saveSettingsAi(data, form) {
+  if (!validateSettingsReason(form, data)) return;
+  store.settings = normalizeSettings(store.settings || {});
+  store.settings.localAiSetupPreference = ["detect_local_ai", "install_later", "skip"].includes(data.localAiSetupPreference) ? data.localAiSetupPreference : "detect_local_ai";
+  if (store.settings.localAiSetupPreference === "skip") store.settings.localAiSetupStatus = "skipped";
+  stampSettingsUpdate(store.settings.primaryActorId, data.reason);
+  saveStore({ allowWithoutCoreApproval: true, reason: "settings-local-ai-update" });
+  render();
+}
+
 function saveSettingsStorage(data, form) {
   if (!validateSettingsReason(form, data)) return;
   if (data.storageOverrideAcknowledged === "on" && !String(data.storageOverrideReason || "").trim()) {
@@ -17074,9 +17294,18 @@ app.addEventListener("click", (event) => {
   }
 });
 
+app.addEventListener("keydown", (event) => {
+  if (!["Enter", " "].includes(event.key)) return;
+  const card = event.target.closest?.(".project-card[data-action='open-project']");
+  if (!card || event.target.closest("button, input, select, textarea, a, summary")) return;
+  event.preventDefault();
+  card.click();
+});
+
 app.addEventListener("click", (event) => {
   const button = event.target.closest("[data-action]");
   if (!button) return;
+  if (button.classList?.contains("project-card") && event.target.closest("button, details, summary, input, select, textarea, a")) return;
 
   const action = button.dataset.action;
   for (const menu of app.querySelectorAll("details.action-menu[open]")) menu.open = false;
@@ -17171,9 +17400,17 @@ app.addEventListener("click", (event) => {
     activeRootView = "settings";
     activeProjectId = null;
     render();
+    refreshLocalAiSetupStatus({ persist: false });
     refreshArmTransportStatus().then(() => {
       if (activeRootView === "settings") render();
     });
+  }
+  if (action === "refresh-local-ai-setup") {
+    refreshLocalAiSetupStatus({ persist: !needsFirstRunSetup() }).catch((error) => {
+      console.error("Local AI setup check failed.", error);
+      window.alert(error.message || "Local AI setup check failed.");
+    });
+    return;
   }
   if (action === "import-files") {
     setFileImportFlowState("click_received", "Add files to Discovery clicked. Asking Windows for the file picker…", "files");
@@ -17358,6 +17595,13 @@ app.addEventListener("click", (event) => {
     render();
   }
   if (action === "edit-status") openEditStatusModal();
+  if (action === "rename-project") {
+    const projectId = button.dataset.projectId || activeProjectId;
+    if (projectId) activeProjectId = projectId;
+    const project = getProject(projectId);
+    if (!project) window.alert(t("missingProject"));
+    else openEditProjectModal(project);
+  }
   if (action === "propose-correction") openProposeCorrectionModal(button.dataset.objectType, button.dataset.objectId);
   if (action === "edit-object") {
     if (button.dataset.objectType === "Project") activeProjectId = button.dataset.objectId;
@@ -17456,7 +17700,12 @@ app.addEventListener("submit", (event) => {
     backupReminder: ["manual", "weekly", "monthly"].includes(data.backupReminder) ? data.backupReminder : "manual",
     language: normalizeLanguage(data.language),
     localMode: "single_user_local",
-    recoveryWarnings: data.recoveryWarnings === "on"
+    recoveryWarnings: data.recoveryWarnings === "on",
+    localAiSetupPreference: ["detect_local_ai", "install_later", "skip"].includes(data.localAiSetupPreference) ? data.localAiSetupPreference : "detect_local_ai",
+    localAiProviderId: localAiSetupStatus.providerId || store.settings?.localAiProviderId || "",
+    localAiSetupStatus: data.localAiSetupPreference === "skip" ? "skipped" : localAiSetupStatus.error ? "error" : localAiSetupStatus.available ? "available" : "missing",
+    localAiSetupCheckedAt: localAiSetupStatus.checkedAt || store.settings?.localAiSetupCheckedAt || "",
+    localAiSetupInstallHint: localAiSetupStatus.installHint || store.settings?.localAiSetupInstallHint || ""
   };
   saveStore({ allowWithoutCoreApproval: true, reason: "first-run-setup" });
   render();
@@ -17474,6 +17723,13 @@ app.addEventListener("submit", (event) => {
   if (settingsStorageForm) {
     event.preventDefault();
     saveSettingsStorage(enforceInputLimitsOnData(Object.fromEntries(new FormData(settingsStorageForm).entries())), settingsStorageForm);
+    return;
+  }
+
+  const settingsAiForm = event.target.closest("[data-settings-ai]");
+  if (settingsAiForm) {
+    event.preventDefault();
+    saveSettingsAi(enforceInputLimitsOnData(Object.fromEntries(new FormData(settingsAiForm).entries())), settingsAiForm);
     return;
   }
 
