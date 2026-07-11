@@ -64,7 +64,7 @@ async function main() {
     assert(proposedCount === 1, "Proposed-project record was not created per routed unit.", { proposedCount });
     assert(projectCount === coreBefore, "Multi-unit promotion changed Core before approval.", { coreBefore, projectCount });
     const appSource = fs.readFileSync(path.join(__dirname, "..", "app.js"), "utf8");
-    for (const required of ["Treat it as one item", "Review several ideas separately", "Scan the selection for multiple ideas", "Keep the selection together as one item", "Review each file separately", "data-multiple-discovery-routes", "unitReviewMode", "fileReviewMode"]) assert(appSource.includes(required), `Multi-idea review UI is missing: ${required}`);
+    for (const required of ["Treat it as one item", "Review several ideas separately", "Scan the selection for multiple ideas", "Keep the selection together as one AI scan", "Create a separate AI scan for each file", "data-multiple-discovery-routes", "unitReviewMode", "fileReviewMode"]) assert(appSource.includes(required), `Multi-idea review UI is missing: ${required}`);
     console.log("Multi-Idea Document Flow Check");
     console.log(JSON.stringify({ detectedUnits: analysis.documentUnits.length, independentRoutes: confirmation.routing.routes.length, intakeProposals: items.length, sharedFileVersion: true, sharedChecksum: true, managedBytesNotDuplicated: true, coreUnchanged: true, individualApprovalPreserved: true }, null, 2));
     console.log("Multi-idea document flow: ok");

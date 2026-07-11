@@ -31,19 +31,31 @@ async function main() {
       runButton: Boolean(document.querySelector('[data-run-idea-analysis]')),
       confirmIdeaReview: Boolean(document.querySelector('[data-confirm-idea-review]')),
       panelText: document.querySelector('[data-idea-analysis-panel]')?.innerText || '',
-      workingLabel: document.querySelector('[name="proposedProjectName"]')?.previousElementSibling?.textContent || ''
+      workingLabel: document.querySelector('[name="proposedProjectName"]')?.previousElementSibling?.textContent || '',
+      destination: document.querySelector('[name="destination"]')?.value || '',
+      unitMode: document.querySelector('[name="unitReviewMode"]')?.value || ''
     }))()`);
     assert(boundary.runButton === false && boundary.confirmIdeaReview === false, "Discovery still exposes inline AI idea-analysis controls.", boundary);
-    assert(boundary.panelText.includes("AI Work Orders") && boundary.panelText.includes("No AI is called from this Discovery screen."), "Discovery does not show the AI Work Order boundary.", boundary);
-    assert(boundary.workingLabel.includes("Working file-based name"), "File-derived name was not demoted from project authority.", boundary);
+    assert(boundary.panelText.includes("AI Work Order") && boundary.panelText.includes("Start local AI digestion"), "Discovery does not show the AI Work Order boundary.", boundary);
+    assert(boundary.workingLabel.includes("Editable source/work-order label"), "Unknown file label was not demoted from project authority.", boundary);
+    assert(boundary.destination === "ai_work_order" && boundary.unitMode === "one_item", "Small unknown file did not default to one AI Work Order scan.", boundary);
 
-    await client.evaluate(`(() => { const mode=document.querySelector('[name="unitReviewMode"]'); if(mode){ mode.value='one_item'; mode.dispatchEvent(new Event('change',{bubbles:true})); } const destination=document.querySelector('[name="destination"]'); destination.value='ai_work_order'; destination.dispatchEvent(new Event('change',{bubbles:true})); document.querySelector('.modal form').requestSubmit(); return true; })()`);
+    await client.evaluate(`document.querySelector('.modal form').requestSubmit(); true`);
     await waitFor(client.evaluate, `!document.querySelector('.modal')`, 30000);
     const result = await client.evaluate(`(() => ({ workOrders:(store.aiWorkOrders||[]).length, intake:(store.intakeItems||[]).filter(x=>Boolean(x.discoveryCaseId)).length, inlineRunControls:Boolean(document.querySelector('[data-run-idea-analysis]')) }))()`);
     assert(result.workOrders > 0 && result.intake === 0 && result.inlineRunControls === false, "AI follow-up did not route cleanly to Work Orders.", result);
 
+    await client.evaluate(`showModal({title:'Add Recovery Test',submitText:'Save',body:'<div class="field"><label>Editable value<input name="recoveryValue" value="Needs correction"></label></div>',onSubmit:()=>false}); true`);
+    await client.evaluate(`document.querySelector('.modal form').requestSubmit(); true`);
+    await waitFor(client.evaluate, `document.querySelector('[data-final-review]')?.hidden === false`);
+    await client.evaluate(`document.querySelector('.modal button[type="submit"]').click(); true`);
+    await waitFor(client.evaluate, `document.querySelector('.modal form')?.hidden === false`);
+    const recovery = await client.evaluate(`(() => { const field=document.querySelector('[name="recoveryValue"]'); return {editable:Boolean(field)&&!field.disabled&&!field.readOnly,finalReviewHidden:document.querySelector('[data-final-review]')?.hidden===true}; })()`);
+    assert(recovery.editable && recovery.finalReviewHidden, "Failed confirmation did not return to editable fields.", recovery);
+    await client.evaluate(`document.querySelector('[data-close-modal]')?.click(); true`);
+
     console.log("Idea Review Live UI Check");
-    console.log(JSON.stringify({ inlineAiRemoved: true, aiWorkOrders: result.workOrders, pendingIntake: result.intake, rendererExceptions: client.exceptions.length }, null, 2));
+    console.log(JSON.stringify({ inlineAiRemoved: true, aiWorkOrders: result.workOrders, pendingIntake: result.intake, failedConfirmationReturnsToEdit: true, rendererExceptions: client.exceptions.length }, null, 2));
     console.log("Idea Review live UI: ok");
   } finally {
     client.socket.close();

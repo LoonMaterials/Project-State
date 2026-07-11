@@ -56,6 +56,7 @@ function main() {
 
   const packagedFiles = packageJson.build?.files || [];
   assert(packagedFiles.includes("desktop/**/*"), "Desktop runtime files are not included.");
+  assert(packagedFiles.includes("fixtures/*-v0.1-contract.json"), "Release must package every v0.1 runtime contract fixture.");
   assert(!packagedFiles.some((entry) => entry.includes("Project State Storage") || entry.includes("project-state.db")), "Package file rules include user data.");
   const extraResources = packageJson.build?.extraResources || [];
   assert(extraResources.some((entry) => entry.to === "connectors/api-arm-submit.js"), "Generic metadata connector is missing from release resources.");

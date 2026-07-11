@@ -7079,7 +7079,7 @@ function renderSettings() {
             <textarea id="aiSettingsReason" name="reason" required placeholder="Record why local AI setup changed."></textarea>
           </div>
           <div class="button-row">
-            <button class="btn secondary" type="button" data-action="refresh-local-ai-setup">Check local AI now</button>
+            <button class="btn secondary" type="button" data-action="refresh-local-ai-setup">Check and connect local AI</button>
           </div>
           <div class="form-footer">
             <button class="btn" type="submit">Save local AI setup</button>
@@ -8598,7 +8598,7 @@ function openFileImportReviewModal(selection) {
         </div>
       </div>
       ${isFolderImport ? `<div class="field"><label for="folderGroupingMode">How should this unknown folder be reviewed?</label><select id="folderGroupingMode" name="folderGroupingMode"><option value="folder_groups" selected>Use unknown-folder flow: subfolders to AI follow-up, loose files through Discovery (${suggestedFolderGroups.length})</option><option value="each_file">Emergency: review every file separately</option></select><p class="item-meta">Recommended for unknown folders: catalog every selected file. Subfolders are packaged for AI follow-up. Loose files continue through Discovery so known/checked files can move to Intake and large files can become AI Work Orders.</p></div>` : ""}
-      ${!isFolderImport ? `<div class="field"><label for="fileReviewMode">How should these selected files be scanned?</label><select id="fileReviewMode" name="fileReviewMode"><option value="scan_for_ideas" selected>Scan the selection for multiple ideas</option><option value="one_item">Keep the selection together as one item</option><option value="each_file">Review each file separately</option></select><p class="item-meta">Scanning for ideas reviews content across the selection. It does not assume that every file is a separate project. Choose per-file review only when each file truly needs its own decision.</p></div>` : ""}
+      ${!isFolderImport ? `<div class="field"><label for="fileReviewMode">How should these selected files be scanned?</label><select id="fileReviewMode" name="fileReviewMode"><option value="scan_for_ideas" selected>Scan the selection for multiple ideas with local AI</option><option value="one_item">Keep the selection together as one AI scan</option><option value="each_file">Create a separate AI scan for each file</option></select><p class="item-meta">Unknown selected files go to AI Work Orders before Intake. File size only changes whether Project State can use existing chunks or must index the source first; it does not decide whether AI scanning happens.</p></div>` : ""}
       <div class="field"><label for="privacyClass">Privacy</label><select id="privacyClass" name="privacyClass"><option value="local_only">Keep local only</option><option value="personal">Personal</option><option value="confidential">Confidential</option><option value="restricted">Restricted</option><option value="provider_allowed">Configured provider allowed later</option></select></div>
       ${confirmationField("externalSecurityAcknowledged", "I understand Project State does not scan files. I trust these files and accept responsibility for checking them with my own security tools.")}
       ${selection.skipped?.length ? `<p class="notice">${escapeHtml(t("unsupportedFilesSkipped"))}: ${selection.skipped.length}</p>` : ""}
@@ -8955,18 +8955,18 @@ function openDiscoveryReviewModal({ discoveryCaseId, analysis, extractions = [],
     : discoverySuggestedProjectNames(analysis, suggestedUnits);
   const slotCount = Math.min(DISCOVERY_REVIEW_UNIT_LIMIT, Math.max(3, suggestedUnits.length + 2));
   let unitSlots = Array.from({ length: slotCount }, (_, index) => suggestedUnits[index] || { id: `manual_unit_${index + 1}`, title: "", summary: "", fileVersionIds: [], evidence: [], suggested: false });
-  const suggestedMode = folderDiscoveryIntent || reviewMode === "one_item" || reviewMode === "each_file"
+  const suggestedMode = folderDiscoveryIntent || reviewMode === "one_item" || reviewMode === "each_file" || reviewMode === "scan_for_ideas"
     ? "one_item"
-    : reviewMode === "scan_for_ideas" || analysis.unitModeSuggestion === "multiple_units"
+    : analysis.unitModeSuggestion === "multiple_units"
       ? "multiple_units"
       : "one_item";
-  const defaultSingleDestination = folderDiscoveryIntent ? "unassigned" : "proposed_new_project";
-  const defaultUnitDestination = folderDiscoveryIntent ? "unassigned" : "proposed_new_project";
   const corpusIntake = analysis.corpusIntake?.recommended ? analysis.corpusIntake : null;
+  const unknownFileAiDefault = ["scan_for_ideas", "one_item", "each_file"].includes(reviewMode) || looseFolderGroup || folderIntent === "each_file";
+  const defaultAiDestination = corpusIntake ? "large_ai_work_order" : "ai_work_order";
+  const defaultSingleDestination = unknownFileAiDefault ? defaultAiDestination : folderDiscoveryIntent ? "unassigned" : "proposed_new_project";
+  const defaultUnitDestination = unknownFileAiDefault ? defaultAiDestination : folderDiscoveryIntent ? "unassigned" : "proposed_new_project";
   const ideaAnalysisPanel = platformAdapter.analysis?.available
-    ? corpusIntake
-      ? `<section class="panel" data-idea-analysis-panel data-corpus-index-required><p class="meta-label">AI follow-up</p><p class="notice">Large-file digestion now belongs in AI Work Orders. Choose <strong>Create Large-file/folder AI Work Order</strong> above to park this safely for later indexing and review.</p><div data-idea-analysis-output><p class="item-meta">Discovery stays fast; AI Work Orders handle the slow bench.</p></div></section>`
-      : `<section class="panel" data-idea-analysis-panel><p class="meta-label">AI follow-up</p><p class="notice">AI follow-up now belongs in AI Work Orders. Choose <strong>Create AI Work Order</strong> above when this material needs slower digestion after first-pass Discovery triage.</p><div data-idea-analysis-output><p class="item-meta">No AI is called from this Discovery screen.</p></div></section>`
+    ? `<section class="panel" data-idea-analysis-panel${corpusIntake ? " data-corpus-index-required" : ""}><p class="meta-label">AI scan</p><p class="notice">Unknown material is queued to an AI Work Order before it can reach Intake. ${corpusIntake ? "This source will be indexed in resumable windows first." : "This source already has readable chunks for local AI digestion."}</p><div data-idea-analysis-output><p class="item-meta">Confirming creates the Work Order. Start local AI digestion from AI Work Orders; Qwen results remain pre-Airlock for human review.</p></div></section>`
     : "";
   showModal({
     title: sequencePosition ? `Review Discovery (${sequencePosition.index} of ${sequencePosition.total})` : "Review Discovery",
@@ -9013,8 +9013,8 @@ function openDiscoveryReviewModal({ discoveryCaseId, analysis, extractions = [],
       <p class="notice">Project State found a possible name and routing. These are suggestions, not decisions.</p>
       <div class="field"><label for="unitReviewMode">How should this material be reviewed?</label><select id="unitReviewMode" name="unitReviewMode"><option value="one_item"${suggestedMode === "one_item" ? " selected" : ""}>Treat it as one item</option>${folderDiscoveryIntent ? "" : `<option value="multiple_units"${suggestedMode === "multiple_units" ? " selected" : ""}>Review several ideas separately</option>`}</select>${folderDiscoveryIntent ? `<p class="item-meta">Folder-sourced Discovery starts container-first. Use a later deeper scan when you want to split contents into separate ideas.</p>` : reviewMode === "scan_for_ideas" ? `<p class="item-meta">You asked Project State to look across the selected content for ideas. Suggested sections are editable; blank rows let you add an idea the first pass did not name.</p>` : ""}</div>
       <div data-single-discovery-route>
-        <div class="field"><label for="suggestedProjectNameChoice">Suggested new project name</label><select id="suggestedProjectNameChoice" name="suggestedProjectNameChoice">${suggestedProjectNameOptions(suggestedProjectNames, bestName)}</select></div>
-        <div class="field"><label>Working file-based name, only if treated as one item</label><input name="proposedProjectName" value="${escapeHtml(bestName)}"></div>
+        <div class="field"><label for="suggestedProjectNameChoice">${unknownFileAiDefault ? "AI Work Order source label" : "Suggested new project name"}</label><select id="suggestedProjectNameChoice" name="suggestedProjectNameChoice">${suggestedProjectNameOptions(suggestedProjectNames, bestName)}</select></div>
+        <div class="field"><label>${unknownFileAiDefault ? "Editable source/work-order label" : "Working file-based name, only if treated as one item"}</label><input name="proposedProjectName" value="${escapeHtml(bestName)}"></div>
       </div>
       ${ideaAnalysisPanel}
       <div data-multiple-discovery-routes>
@@ -9028,7 +9028,7 @@ function openDiscoveryReviewModal({ discoveryCaseId, analysis, extractions = [],
         <div class="field"><label for="destination">Where should this go?</label><select id="destination" name="destination" required>${discoveryDestinationOptions(defaultSingleDestination)}</select></div>
         <div class="field"><label for="projectId">Existing project, if selected</label><select id="projectId" name="projectId"><option value="">None</option>${projectOptions()}</select></div>
       </div>
-      <p class="notice">${folderDiscoveryIntent ? "Confirming records this Discovery review. Needs Attention is created only if you deliberately choose an Intake route." : "Confirming creates Intake proposals only. Core still requires separate human approval."}</p>
+      <p class="notice">${unknownFileAiDefault ? "Confirming queues this unknown material to AI Work Orders. It does not create Intake unless you deliberately change the destination to an Intake route." : folderDiscoveryIntent ? "Confirming records this Discovery review. Needs Attention is created only if you deliberately choose an Intake route." : "Confirming creates Intake proposals only. Core still requires separate human approval."}</p>
     `,
     async onSubmit(data) {
       for (const question of visibleQuestions) {
@@ -11408,6 +11408,15 @@ function showModal({ title, body, submitText, onSubmit, draftKey = "", flowStep 
   let submitting = false;
   let reviewing = false;
   let draftTimer = null;
+  const returnToEditableForm = () => {
+    reviewing = false;
+    form.hidden = false;
+    finalReview.hidden = true;
+    reviewBack.hidden = true;
+    submitButton.textContent = requiresFinalReview ? "Review" : submitText;
+    setFlowGuideStep(modal, resolvedFlowStep);
+    form.querySelector("input, textarea, select")?.focus();
+  };
   form.id = "modal-form";
   applyInputLimits(form);
   wireLocalFilePickers(form);
@@ -11456,6 +11465,7 @@ function showModal({ title, body, submitText, onSubmit, draftKey = "", flowStep 
       if (shouldClose === false) {
         submitting = false;
         if (submitButton) submitButton.disabled = false;
+        if (reviewing) returnToEditableForm();
         return;
       }
       flowDrafts.delete(resolvedDraftKey);
@@ -11473,6 +11483,7 @@ function showModal({ title, body, submitText, onSubmit, draftKey = "", flowStep 
       console.error("Project State modal action failed.", error);
       submitting = false;
       if (submitButton) submitButton.disabled = false;
+      if (reviewing) returnToEditableForm();
     }
   });
 
@@ -11520,13 +11531,7 @@ function showModal({ title, body, submitText, onSubmit, draftKey = "", flowStep 
       return;
     }
     if (event.target.closest("[data-review-back]")) {
-      reviewing = false;
-      form.hidden = false;
-      finalReview.hidden = true;
-      reviewBack.hidden = true;
-      submitButton.textContent = "Review";
-      setFlowGuideStep(modal, resolvedFlowStep);
-      form.querySelector("input, textarea, select")?.focus();
+      returnToEditableForm();
       return;
     }
     if (event.target.closest("[data-draft-stay]")) {

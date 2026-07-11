@@ -38,6 +38,9 @@ function main() {
   assert(fs.existsSync(ASAR), "Unpacked app.asar is missing.");
   const asar = findAsarModule();
   const entries = asar.listPackage(ASAR).map((entry) => entry.replace(/\\/g, "/"));
+  const packagedBridgeSource = asar.extractFile(ASAR, "desktop/project-state-desktop-bridge.cjs").toString("utf8");
+  const runtimeContractEntries = [...packagedBridgeSource.matchAll(/path\.join\(ROOT,\s*"fixtures",\s*"([^"]+-contract\.json)"\)/g)]
+    .map((match) => `/fixtures/${match[1]}`);
   const required = [
     "/index.html",
     "/app.js",
@@ -48,7 +51,8 @@ function main() {
     "/desktop/api-arm-file-intake.cjs",
     "/fixtures/api-arm-v0.1-contract.json",
     "/fixtures/local-arm-transport-v0.1-contract.json",
-    "/fixtures/file-arm-v0.1-contract.json"
+    "/fixtures/file-arm-v0.1-contract.json",
+    ...runtimeContractEntries
   ];
   const missing = required.filter((entry) => !entries.includes(entry));
   assert(!missing.length, "Unpacked ASAR is missing release files.", { missing });
@@ -79,15 +83,27 @@ function main() {
   const runtimeInfo = JSON.parse(runtimeLine || "{}");
   assert(runtimeInfo.value === "ok", "Packaged runtime SQLite read-back failed.", runtimeInfo);
 
+  const analysisProbe = spawnSync(EXE, ["-e", "const path=require('node:path'); const {createProjectStateDesktopBridge}=require('./resources/app.asar/desktop/project-state-desktop-bridge.cjs'); const bridge=createProjectStateDesktopBridge({storageRoot:path.join(process.env.TEMP||'.','project-state-packaged-analysis-probe')}); bridge.analysisArms.describeCapabilities().then((value)=>console.log(JSON.stringify({providerMode:value.providerMode,realProviderInstalled:value.realProviderInstalled,selectedProviderId:value.selectedProviderId||'',providerLinkState:value.providerLinkState||''}))).catch((error)=>{console.error(error.stack||error.message);process.exit(1);});"], {
+    cwd: UNPACKED,
+    env: { ...process.env, ELECTRON_RUN_AS_NODE: "1" },
+    encoding: "utf8"
+  });
+  assert(analysisProbe.status === 0, "Packaged AI Analysis bridge capability probe failed.", { status: analysisProbe.status, stderr: analysisProbe.stderr });
+  const analysisLine = String(analysisProbe.stdout || "").trim().split(/\r?\n/).find((line) => line.startsWith("{"));
+  const analysisInfo = JSON.parse(analysisLine || "{}");
+  assert(["local_fixture", "local_ai"].includes(analysisInfo.providerMode), "Packaged AI Analysis bridge returned an invalid provider mode.", analysisInfo);
+
   console.log("Desktop Release Artifact Check");
   console.log(JSON.stringify({
     executable: path.relative(ROOT, EXE),
     asarEntries: entries.length,
     unpackedFiles: unpackedFiles.length,
     connectors: connectors.length,
+    runtimeContracts: [...new Set(runtimeContractEntries)].length,
     userDataBundled: false,
     secretsBundled: false,
-    packagedRuntime: runtimeInfo
+    packagedRuntime: runtimeInfo,
+    packagedAnalysisBridge: analysisInfo
   }, null, 2));
   console.log("Desktop release artifact: ok");
 }

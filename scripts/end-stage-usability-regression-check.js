@@ -15,6 +15,7 @@ assert(app.includes("function refreshLocalAiSetupStatus"), "Local AI setup detec
 assert(app.includes('data-action="refresh-local-ai-setup"'), "Local AI setup refresh action is not exposed in setup/settings UI.");
 assert(app.includes("analysisInstallSuggestion(capabilities || {})"), "Missing local AI install guidance fallback.");
 assert(app.includes("Check and connect local AI"), "Local AI setup does not expose an explicit connect action.");
+assert(!app.includes("Check local AI now"), "A stale Local AI setup button remains in the Settings flow.");
 assert(app.includes("connected and selected for AI Work Orders"), "Local AI status does not confirm its Work Order link.");
 assert(app.includes('localAiSetupError: String(settings.localAiSetupError || "")'), "Local AI detection errors are not preserved for diagnosis.");
 
@@ -36,6 +37,10 @@ assert(app.includes('candidates.length === 1 ? candidate.name || "Selected file"
 assert(app.includes('name="fileReviewMode"'), "Selected-file Discovery is missing its review-mode choice.");
 assert(app.includes('value="scan_for_ideas" selected'), "Selected-file Discovery must default to scanning across content for ideas.");
 assert(app.includes('value="each_file"'), "Per-file Discovery review must remain an explicit option.");
+assert(app.includes('const unknownFileAiDefault = ["scan_for_ideas", "one_item", "each_file"].includes(reviewMode)'), "Unknown selected files do not default to the AI Work Order lane.");
+assert(app.includes('const defaultAiDestination = corpusIntake ? "large_ai_work_order" : "ai_work_order"'), "Small and large unknown files do not share the AI scanning route.");
+assert(app.includes("It does not create Intake unless you deliberately change the destination"), "Unknown-file AI scanning can still silently default into Intake.");
+assert(app.includes("if (reviewing) returnToEditableForm();"), "Failed final confirmation does not reopen editable fields.");
 assert(app.includes("selection.skipped?.length"), "Unsupported single-file selection does not expose skipped-file reason.");
 
 console.log("End-stage usability regression check passed.");

@@ -41,6 +41,7 @@ assert(inventory.includes("### Flow hardening extension"), "Inventory does not r
 assert(app.includes('if (/\\b(add|create|attach|assign|import|read)\\b/.test(titleText)) return 2;'), "Add/create forms could skip the final review because their submit button says approve.");
 assert(app.includes('if (/\\b(approve|confirm|reject|delete|archive|restore|reset)\\b/.test(titleText)) return 4;'), "Existing approval/confirm forms could receive a redundant review stage.");
 assert(app.includes('if (!validateAuditFields(form, data)) return;'), "Final review could bypass actor/reason validation.");
+assert(app.includes("const returnToEditableForm = () =>") && app.includes("if (reviewing) returnToEditableForm();"), "A failed final confirmation must return to editable fields.");
 
 console.log("Flow Hardening Check");
 console.log(JSON.stringify({ contextualNextStep: true, directWarningCorrection: true, progressiveDisclosure: true, finalReview: true, approvalBoundaryPreserved: true, auditValidationPreserved: true }, null, 2));
