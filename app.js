@@ -3287,6 +3287,7 @@ const defaultSettings = () => ({
   localAiSetupStatus: "not_checked",
   localAiSetupCheckedAt: "",
   localAiSetupInstallHint: "",
+  localAiSetupError: "",
   uiState: {
     recentProjectIds: [],
     lastProjectId: "",
@@ -4550,6 +4551,7 @@ function normalizeSettings(settings = {}) {
     localAiSetupStatus: ["not_checked", "checking", "available", "missing", "unavailable", "error", "skipped"].includes(settings.localAiSetupStatus) ? settings.localAiSetupStatus : defaults.localAiSetupStatus,
     localAiSetupCheckedAt: String(settings.localAiSetupCheckedAt || ""),
     localAiSetupInstallHint: String(settings.localAiSetupInstallHint || ""),
+    localAiSetupError: String(settings.localAiSetupError || ""),
     uiState: normalizeUiState(settings.uiState),
     historyPolicyVersion: settings.historyPolicyVersion || defaults.historyPolicyVersion,
     mandatoryHistory: settings.mandatoryHistory !== false,
@@ -8231,8 +8233,8 @@ function partitionDiscoveryCandidates(candidates = [], mode = "folder_groups", r
     const folderGroup = folderRelativeGroup(candidate.localPath, rootPath);
     const label = mode === "one_project_folder"
       ? `Project folder: ${folderName}`
-      : mode === "one_case"
-        ? (rootPath ? "Selected folder" : candidate.name || "Selected file")
+      : ["one_case", "scan_for_ideas", "one_item"].includes(mode)
+        ? (rootPath ? "Selected folder" : candidates.length === 1 ? candidate.name || "Selected file" : "Selected file collection")
         : mode === "each_file"
           ? candidate.name || "Selected file"
           : folderGroupReviewLabel(folderGroup);
@@ -8252,7 +8254,14 @@ function partitionDiscoveryCandidates(candidates = [], mode = "folder_groups", r
         : mode === "each_file"
           ? "file_discovery"
           : "discovery_review";
-      groups.push({ label: `${label}${part}`, candidates: mode === "one_project_folder" ? files : chunk, folderIntent: mode, folderReviewLane, folderRootPath: rootPath });
+      const reviewMode = mode === "scan_for_ideas"
+        ? "scan_for_ideas"
+        : mode === "one_item"
+          ? "one_item"
+          : mode === "each_file"
+            ? "each_file"
+            : "automatic";
+      groups.push({ label: `${label}${part}`, candidates: mode === "one_project_folder" ? files : chunk, folderIntent: mode, folderReviewLane, folderRootPath: rootPath, reviewMode });
     }
   }
   return groups;
@@ -8561,7 +8570,9 @@ function openFileImportReviewModal(selection) {
   const updateImportReviewSelectionStatus = () => {
     const reviewModal = document.querySelector(".modal-backdrop");
     const selectedCount = reviewModal ? reviewModal.querySelectorAll("[data-import-path]:checked").length : selection.candidates.length;
-    const groupingMode = isFolderImport ? reviewModal?.querySelector("#folderGroupingMode")?.selectedOptions?.[0]?.textContent || "folder groups" : "one Discovery case";
+    const groupingMode = isFolderImport
+      ? reviewModal?.querySelector("#folderGroupingMode")?.selectedOptions?.[0]?.textContent || "folder groups"
+      : reviewModal?.querySelector("#fileReviewMode")?.selectedOptions?.[0]?.textContent || "scan together for ideas";
     setFileImportFlowState(
       "review_modal_open",
       `Discovery review open: ${selectedCount} of ${selection.candidates.length} files selected · ${groupingMode}.`,
@@ -8587,6 +8598,7 @@ function openFileImportReviewModal(selection) {
         </div>
       </div>
       ${isFolderImport ? `<div class="field"><label for="folderGroupingMode">How should this unknown folder be reviewed?</label><select id="folderGroupingMode" name="folderGroupingMode"><option value="folder_groups" selected>Use unknown-folder flow: subfolders to AI follow-up, loose files through Discovery (${suggestedFolderGroups.length})</option><option value="each_file">Emergency: review every file separately</option></select><p class="item-meta">Recommended for unknown folders: catalog every selected file. Subfolders are packaged for AI follow-up. Loose files continue through Discovery so known/checked files can move to Intake and large files can become AI Work Orders.</p></div>` : ""}
+      ${!isFolderImport ? `<div class="field"><label for="fileReviewMode">How should these selected files be scanned?</label><select id="fileReviewMode" name="fileReviewMode"><option value="scan_for_ideas" selected>Scan the selection for multiple ideas</option><option value="one_item">Keep the selection together as one item</option><option value="each_file">Review each file separately</option></select><p class="item-meta">Scanning for ideas reviews content across the selection. It does not assume that every file is a separate project. Choose per-file review only when each file truly needs its own decision.</p></div>` : ""}
       <div class="field"><label for="privacyClass">Privacy</label><select id="privacyClass" name="privacyClass"><option value="local_only">Keep local only</option><option value="personal">Personal</option><option value="confidential">Confidential</option><option value="restricted">Restricted</option><option value="provider_allowed">Configured provider allowed later</option></select></div>
       ${confirmationField("externalSecurityAcknowledged", "I understand Project State does not scan files. I trust these files and accept responsibility for checking them with my own security tools.")}
       ${selection.skipped?.length ? `<p class="notice">${escapeHtml(t("unsupportedFilesSkipped"))}: ${selection.skipped.length}</p>` : ""}
@@ -8596,7 +8608,7 @@ function openFileImportReviewModal(selection) {
       const candidates = selection.candidates.filter((file) => selectedPaths.includes(file.localPath));
       if (!candidates.length) return false;
       const actor = defaultUiActor();
-      const groupingMode = isFolderImport ? data.folderGroupingMode || "folder_groups" : "one_case";
+      const groupingMode = isFolderImport ? data.folderGroupingMode || "folder_groups" : data.fileReviewMode || "scan_for_ideas";
       const candidateGroups = partitionDiscoveryCandidates(candidates, groupingMode, selection.rootPath);
       const reviewReason = isFolderImport
         ? groupingMode === "one_project_folder"
@@ -8625,7 +8637,7 @@ function openFileImportReviewModal(selection) {
           }
           extractions.push({ fileVersionId: staged.fileVersionId, originalName: staged.originalName, deduplicated: staged.deduplicated === true, status: result.extraction?.status || "failed", text, textBytes: result.extraction?.textBytes || 0, chunkCount: result.extraction?.chunkCount || 0, error: result.extraction?.error || null });
         }
-        const analysis = await platformAdapter.discovery.analyzeCase({ discoveryCaseId, actorId: "project_state_deterministic" });
+        const analysis = await platformAdapter.discovery.analyzeCase({ discoveryCaseId, actorId: "project_state_deterministic", reviewMode: candidateGroup.reviewMode || "automatic" });
         if (candidateGroup.folderReviewLane === "subfolder_ai_followup") {
           const title = String(candidateGroup.label || "").replace(/^(?:Project folder candidate|Known project folder to check):\s*/i, "").trim() || "Subfolder follow-up";
           const routing = await platformAdapter.discovery.confirmRouting({
@@ -8647,7 +8659,7 @@ function openFileImportReviewModal(selection) {
           aiFollowUpCount += 1;
         } else {
           const reviewIntent = candidateGroup.folderReviewLane === "loose_files_discovery" ? "loose_files_discovery" : candidateGroup.folderIntent || groupingMode;
-          discoveryReviews.push({ discoveryCaseId, analysis, extractions, actor, reason: reviewReason, groupLabel: candidateGroup.label, privacyClass: data.privacyClass || "local_only", folderIntent: reviewIntent, folderRootPath: candidateGroup.folderRootPath || selection.rootPath || "" });
+          discoveryReviews.push({ discoveryCaseId, analysis, extractions, actor, reason: reviewReason, groupLabel: candidateGroup.label, privacyClass: data.privacyClass || "local_only", folderIntent: reviewIntent, folderRootPath: candidateGroup.folderRootPath || selection.rootPath || "", reviewMode: candidateGroup.reviewMode || "automatic" });
         }
       }
       if (!discoveryReviews.length && !aiFollowUpCount) { window.alert(t("fileImportFailed")); return false; }
@@ -8923,7 +8935,7 @@ async function createDiscoveryAiWorkOrders({ discoveryCaseId, routes = [], extra
   return orders;
 }
 
-function openDiscoveryReviewModal({ discoveryCaseId, analysis, extractions = [], actor, reason, groupLabel = "", privacyClass = "local_only", folderIntent = "", folderRootPath = "", sequencePosition = null, onConfirmed = null }) {
+function openDiscoveryReviewModal({ discoveryCaseId, analysis, extractions = [], actor, reason, groupLabel = "", privacyClass = "local_only", folderIntent = "", folderRootPath = "", reviewMode = "automatic", sequencePosition = null, onConfirmed = null }) {
   const folderCollectionIntent = ["one_project_folder", "folder_groups"].includes(folderIntent);
   const folderDiscoveryIntent = ["one_project_folder", "folder_groups", "each_file", "loose_files_discovery", "subfolder_ai_followup"].includes(folderIntent);
   const folderContainerFirst = folderIntent === "folder_groups";
@@ -8943,7 +8955,11 @@ function openDiscoveryReviewModal({ discoveryCaseId, analysis, extractions = [],
     : discoverySuggestedProjectNames(analysis, suggestedUnits);
   const slotCount = Math.min(DISCOVERY_REVIEW_UNIT_LIMIT, Math.max(3, suggestedUnits.length + 2));
   let unitSlots = Array.from({ length: slotCount }, (_, index) => suggestedUnits[index] || { id: `manual_unit_${index + 1}`, title: "", summary: "", fileVersionIds: [], evidence: [], suggested: false });
-  const suggestedMode = folderDiscoveryIntent ? "one_item" : analysis.unitModeSuggestion === "multiple_units" ? "multiple_units" : "one_item";
+  const suggestedMode = folderDiscoveryIntent || reviewMode === "one_item" || reviewMode === "each_file"
+    ? "one_item"
+    : reviewMode === "scan_for_ideas" || analysis.unitModeSuggestion === "multiple_units"
+      ? "multiple_units"
+      : "one_item";
   const defaultSingleDestination = folderDiscoveryIntent ? "unassigned" : "proposed_new_project";
   const defaultUnitDestination = folderDiscoveryIntent ? "unassigned" : "proposed_new_project";
   const corpusIntake = analysis.corpusIntake?.recommended ? analysis.corpusIntake : null;
@@ -8995,7 +9011,7 @@ function openDiscoveryReviewModal({ discoveryCaseId, analysis, extractions = [],
         </div>
       </div>
       <p class="notice">Project State found a possible name and routing. These are suggestions, not decisions.</p>
-      <div class="field"><label for="unitReviewMode">How should this material be reviewed?</label><select id="unitReviewMode" name="unitReviewMode"><option value="one_item"${suggestedMode === "one_item" ? " selected" : ""}>Treat it as one item</option>${folderDiscoveryIntent ? "" : `<option value="multiple_units"${suggestedMode === "multiple_units" ? " selected" : ""}>Review several ideas separately</option>`}</select>${folderDiscoveryIntent ? `<p class="item-meta">Folder-sourced Discovery starts container-first. Use a later deeper scan when you want to split contents into separate ideas.</p>` : ""}</div>
+      <div class="field"><label for="unitReviewMode">How should this material be reviewed?</label><select id="unitReviewMode" name="unitReviewMode"><option value="one_item"${suggestedMode === "one_item" ? " selected" : ""}>Treat it as one item</option>${folderDiscoveryIntent ? "" : `<option value="multiple_units"${suggestedMode === "multiple_units" ? " selected" : ""}>Review several ideas separately</option>`}</select>${folderDiscoveryIntent ? `<p class="item-meta">Folder-sourced Discovery starts container-first. Use a later deeper scan when you want to split contents into separate ideas.</p>` : reviewMode === "scan_for_ideas" ? `<p class="item-meta">You asked Project State to look across the selected content for ideas. Suggested sections are editable; blank rows let you add an idea the first pass did not name.</p>` : ""}</div>
       <div data-single-discovery-route>
         <div class="field"><label for="suggestedProjectNameChoice">Suggested new project name</label><select id="suggestedProjectNameChoice" name="suggestedProjectNameChoice">${suggestedProjectNameOptions(suggestedProjectNames, bestName)}</select></div>
         <div class="field"><label>Working file-based name, only if treated as one item</label><input name="proposedProjectName" value="${escapeHtml(bestName)}"></div>
@@ -12173,14 +12189,15 @@ function localAiPreferenceOptions(selected = "detect_local_ai") {
 function localAiSetupSummary() {
   if (localAiSetupStatus.checking) return "Checking this computer for Ollama/Qwen…";
   if (localAiSetupStatus.error) return `Local AI check failed: ${localAiSetupStatus.error}`;
-  if (localAiSetupStatus.available) return `${localAiSetupStatus.providerName || "Local AI"} is available and will stay pre-Airlock.`;
+  if (localAiSetupStatus.available && localAiSetupStatus.persistenceError) return `${localAiSetupStatus.providerName || "Local AI"} is connected and selected for AI Work Orders, but Project State could not save the connection status: ${localAiSetupStatus.persistenceError}`;
+  if (localAiSetupStatus.available) return `${localAiSetupStatus.providerName || "Local AI"} is connected and selected for AI Work Orders. It will stay pre-Airlock.`;
   if (localAiSetupStatus.checked) return `${localAiSetupStatus.installHint || "Install and start a supported local AI provider, then refresh."}`;
   if (store.settings?.localAiSetupCheckedAt) {
     const stored = store.settings.localAiSetupStatus === "available"
       ? "Local AI was detected during setup."
       : store.settings.localAiSetupStatus === "skipped"
         ? "Local AI setup was skipped."
-        : store.settings.localAiSetupInstallHint || "Local AI was not detected yet.";
+        : store.settings.localAiSetupError || store.settings.localAiSetupInstallHint || "Local AI was not detected yet.";
     return `${stored} Last checked ${formatDate(store.settings.localAiSetupCheckedAt)}.`;
   }
   return "Project State has not checked this computer for local AI yet.";
@@ -12210,7 +12227,7 @@ function renderLocalAiSetupPanel({ firstRun = false } = {}) {
         </select>
       </div>
       <div class="button-row">
-        <button class="btn secondary" type="button" data-action="refresh-local-ai-setup">Check local AI now</button>
+        <button class="btn secondary" type="button" data-action="refresh-local-ai-setup">Check and connect local AI</button>
       </div>
     </section>
   `;
@@ -12236,7 +12253,7 @@ async function refreshLocalAiSetupStatus({ persist = false } = {}) {
       checked: true,
       checking: false,
       available,
-      providerId: provider?.providerId || capabilities?.defaultProviderId || "",
+      providerId: provider?.providerId || capabilities?.selectedProviderId || store.settings?.localAiProviderId || "",
       providerName: provider?.displayName || capabilities?.arm?.displayName || "Qwen3 8B through Ollama",
       providerMode: capabilities?.providerMode || "unknown",
       installHint: available ? "" : analysisInstallSuggestion(capabilities || {}),
@@ -12249,6 +12266,7 @@ async function refreshLocalAiSetupStatus({ persist = false } = {}) {
       checked: true,
       checking: false,
       available: false,
+      providerId: localAiSetupStatus.providerId || store.settings?.localAiProviderId || "",
       error: error.message || "Local AI check failed.",
       checkedAt: nowIso()
     };
@@ -12258,8 +12276,17 @@ async function refreshLocalAiSetupStatus({ persist = false } = {}) {
   store.settings.localAiSetupStatus = localAiSetupStatus.error ? "error" : localAiSetupStatus.available ? "available" : "missing";
   store.settings.localAiSetupCheckedAt = localAiSetupStatus.checkedAt;
   store.settings.localAiSetupInstallHint = localAiSetupStatus.installHint;
+  store.settings.localAiSetupError = localAiSetupStatus.error || "";
   updateLocalAiSetupDom();
-  if (persist && storageReady) await saveStore({ allowWithoutCoreApproval: true, reason: "local-ai-setup-check" });
+  if (persist && storageReady) {
+    try {
+      await saveStore({ allowWithoutCoreApproval: true, reason: "local-ai-setup-check" });
+    } catch (error) {
+      console.error("Local AI connection was detected but its setup status could not be saved.", error);
+      localAiSetupStatus.persistenceError = error.message || "Connection status could not be saved.";
+      updateLocalAiSetupDom();
+    }
+  }
 }
 
 const AI_WORK_ORDER_DIGESTION_STAGES = [
@@ -17705,7 +17732,8 @@ app.addEventListener("submit", (event) => {
     localAiProviderId: localAiSetupStatus.providerId || store.settings?.localAiProviderId || "",
     localAiSetupStatus: data.localAiSetupPreference === "skip" ? "skipped" : localAiSetupStatus.error ? "error" : localAiSetupStatus.available ? "available" : "missing",
     localAiSetupCheckedAt: localAiSetupStatus.checkedAt || store.settings?.localAiSetupCheckedAt || "",
-    localAiSetupInstallHint: localAiSetupStatus.installHint || store.settings?.localAiSetupInstallHint || ""
+    localAiSetupInstallHint: localAiSetupStatus.installHint || store.settings?.localAiSetupInstallHint || "",
+    localAiSetupError: localAiSetupStatus.error || ""
   };
   saveStore({ allowWithoutCoreApproval: true, reason: "first-run-setup" });
   render();
@@ -17794,6 +17822,11 @@ async function initializeApp() {
   await refreshArmTransportStatus();
   storageReady = true;
   render();
+  if (!needsFirstRunSetup() && store.settings?.localAiSetupPreference === "detect_local_ai") {
+    refreshLocalAiSetupStatus({ persist: true }).catch((error) => {
+      console.error("Automatic local AI connection check failed.", error);
+    });
+  }
 }
 
 initializeApp();

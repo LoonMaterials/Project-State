@@ -15,6 +15,7 @@ async function main() {
     const qwen = providers.find((provider) => provider.providerId === QWEN3_8B_PROVIDER_ID);
     assert(qwen, "Qwen3 8B local provider is not discoverable.");
     assert.equal(qwen.modelId, QWEN3_8B_MODEL_ID, "Qwen3 8B model ID changed unexpectedly.");
+    assert.equal(qwen.selectedForWorkOrders, qwen.available, "Available Qwen must be selected for AI Work Orders.");
     assert(Array.isArray(capabilities.localProviders), "Analysis capabilities do not include local provider inventory.");
     assert(capabilities.localProviders.some((provider) => provider.providerId === QWEN3_8B_PROVIDER_ID), "Analysis capabilities are missing Qwen3 8B.");
     assert.equal(capabilities.arm.executionLocation, "local", "Default analysis arm must remain local.");
@@ -30,6 +31,8 @@ async function main() {
     assert(indexSource.includes("connect-src http://127.0.0.1:11434 http://localhost:11434"), "CSP must permit local-only Ollama loopback checks.");
     assert(!/connect-src[^"]*(https?:\/\/(?!127\.0\.0\.1:11434|localhost:11434)[^"'\s;]+)/.test(indexSource), "CSP must not permit non-loopback provider connections.");
     assert(providerSource.includes("PROJECT_STATE_LOCAL_AI_TIMEOUT_MS"), "Local AI generation timeout must be configurable for offline models.");
+    assert(providerSource.includes("PROJECT_STATE_LOCAL_AI_DISCOVERY_TIMEOUT_MS") && providerSource.includes("attempt < 3"), "Local AI detection must tolerate Ollama startup delays and retry before failing.");
+    assert(bridgeSource.includes('providerLinkState: selected ? "connected_for_ai_work_orders"'), "Capabilities must expose the actual AI Work Order connection state.");
     assert(providerSource.includes("PROJECT_STATE_LOCAL_AI_NUM_PREDICT") && providerSource.includes("num_predict: OLLAMA_NUM_PREDICT"), "Local AI generation should keep responses bounded but configurable for offline models.");
     assert(providerSource.includes("PROJECT_STATE_LOCAL_AI_PROMPT_TEXT_BUDGET") && providerSource.includes("boundedChunkTextForPrompt"), "Local AI prompt text must be bounded for huge-file passes.");
     assert(providerSource.includes("deterministicRescueCandidates") && providerSource.includes("Qwen returned no candidates"), "Local AI must preserve substantive chunk-window signals when Qwen returns an empty candidate list.");
@@ -105,6 +108,9 @@ async function main() {
       "view-ai-work-order-results",
       "start-local-ai-work-order"
     ]) assert(appSource.includes(required), `AI Work Order local execution UI missing: ${required}`);
+    assert(appSource.includes("Check and connect local AI") && appSource.includes("connected and selected for AI Work Orders"), "Setup UI must clearly connect the detected provider to AI Work Orders.");
+    assert(appSource.includes('refreshLocalAiSetupStatus({ persist: true })') && appSource.includes('store.settings?.localAiSetupPreference === "detect_local_ai"'), "Project State must reconnect local AI automatically after startup.");
+    assert(appSource.includes('providerId: localAiSetupStatus.providerId || store.settings?.localAiProviderId || ""'), "A temporary detection failure must not erase the saved provider choice.");
     assert(appSource.includes('workOrder.status = sourceFullyAnalyzed ? "completed" : "submitted";'), "AI Work Orders must complete only when source coverage is fully analyzed.");
     assert(appSource.includes("unanalyzedChunks") && appSource.includes("alreadyAnalyzedChunkIds"), "AI Work Order execution must continue through new chunk windows instead of repeating the first pass.");
     assert(appSource.includes("!capabilities.realProviderInstalled"), "AI Work Order execution should require a real local provider instead of the fake fixture arm.");

@@ -1,5 +1,5 @@
 const path = require("node:path");
-const { app, BrowserWindow, dialog, ipcMain, safeStorage, shell } = require("electron");
+const { app, BrowserWindow, dialog, ipcMain, safeStorage } = require("electron");
 const { createProjectStateDesktopBridge } = require("./project-state-desktop-bridge.cjs");
 const { createApiArmTransportManager } = require("./api-arm-transport-manager.cjs");
 const { createApiArmFileIntake } = require("./api-arm-file-intake.cjs");
@@ -32,9 +32,11 @@ function createMainWindow() {
   mainWindow = window;
 
   window.loadFile(INDEX_HTML);
-  window.webContents.setWindowOpenHandler(({ url }) => {
-    if (/^https?:\/\//i.test(url)) shell.openExternal(url);
-    return { action: "deny" };
+  // Project State is an offline desktop app. Never hand links to a browser or
+  // trigger a browser/runtime installer from the packaged application.
+  window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+  window.webContents.on("will-navigate", (event, url) => {
+    if (url !== window.webContents.getURL()) event.preventDefault();
   });
   window.on("closed", () => {
     if (mainWindow === window) mainWindow = null;

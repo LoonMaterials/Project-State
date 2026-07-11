@@ -1310,6 +1310,8 @@ async function describeAnalysisArmCapabilities() {
     retention: selected?.retention || fake.retention,
     localProviders: providers,
     defaultProviderId: selected?.providerId || FAKE_ANALYSIS_PROVIDER_ID,
+    selectedProviderId: selected?.providerId || "",
+    providerLinkState: selected ? "connected_for_ai_work_orders" : "not_connected",
     providerMode: selected ? "local_ai" : "local_fixture",
     realProviderInstalled: Boolean(selected),
     installSuggestions: [{
@@ -1984,6 +1986,7 @@ async function analyzeDiscoveryCase({ storageRoot, dbPath, payload = {} }) {
   const discoveryCaseId = requiredDiscoveryId(payload.discoveryCaseId, "Discovery Case ID");
   const actorId = requiredDiscoveryId(payload.actorId || "project_state_deterministic", "Discovery analysis actor ID");
   const createdAt = requiredDiscoveryTimestamp(payload.createdAt || nowIso(), "Discovery analysis createdAt");
+  const reviewMode = ["automatic", "scan_for_ideas", "one_item", "each_file"].includes(payload.reviewMode) ? payload.reviewMode : "automatic";
   const db = openDatabase(dbPath);
   let discoveryCase;
   let versions;
@@ -2023,7 +2026,9 @@ async function analyzeDiscoveryCase({ storageRoot, dbPath, payload = {} }) {
   }
   const corpusExtractions = extractions.filter((item) => item.status === "large_corpus_pending");
   if (corpusExtractions.length) questions.unshift({ id: "large_corpus_intake_mode", text: "This looks like a large corpus. Should Project State index it first before creating project candidates?", affects: "processing", allowNotSure: true });
-  const documentUnits = detectDiscoveryDocumentUnits({ versions, extractionTexts, extractions });
+  const documentUnits = reviewMode === "one_item"
+    ? []
+    : detectDiscoveryDocumentUnits({ versions, extractionTexts, extractions });
   const corpusIntake = corpusExtractions.length
     ? {
       recommended: true,
@@ -2033,7 +2038,12 @@ async function analyzeDiscoveryCase({ storageRoot, dbPath, payload = {} }) {
       nextStep: "Index the large file in resumable passes before promoting project candidates."
     }
     : { recommended: false };
-  const suggestion = { suggestedProjectNames: [{ name: suggestedName, confidence: baseNames.length === 1 ? 0.65 : 0.55, evidence: baseNames }], projectCandidates, questions, documentUnits, unitModeSuggestion: documentUnits.length > 1 ? "multiple_units" : "one_item", corpusIntake, deterministic: true, provider: "project_state_local_rules_v0.1" };
+  const unitModeSuggestion = reviewMode === "scan_for_ideas"
+    ? "multiple_units"
+    : reviewMode === "one_item" || reviewMode === "each_file"
+      ? "one_item"
+      : documentUnits.length > 1 ? "multiple_units" : "one_item";
+  const suggestion = { suggestedProjectNames: [{ name: suggestedName, confidence: baseNames.length === 1 ? 0.65 : 0.55, evidence: baseNames }], projectCandidates, questions, documentUnits, unitModeSuggestion, requestedReviewMode: reviewMode, corpusIntake, deterministic: true, provider: "project_state_local_rules_v0.1" };
   await appendDiscoveryInteraction({ storageRoot, dbPath, payload: { id: makeId("interaction"), discoveryCaseId, actorId, actorType: "tool", interactionType: "machine_suggestion", createdAt, content: suggestion, evidence: versions.map((version) => ({ fileVersionId: version.id, sha256: version.sha256 })) } });
   for (const question of questions) await appendDiscoveryInteraction({ storageRoot, dbPath, payload: { id: makeId("interaction"), discoveryCaseId, actorId, actorType: "tool", interactionType: "system_question", createdAt, content: question } });
   await updateDiscoveryCaseRecord({ dbPath, discoveryCaseId, changes: { stage: "questions", status: "questioning", updatedAt: createdAt, suggestedName } });
@@ -2165,8 +2175,6 @@ function detectDiscoveryDocumentUnits({ versions = [], extractionTexts = [], ext
         const summary = lines.slice(heading.lineIndex + 1, endLine).join(" ").replace(/\s+/g, " ").trim().slice(0, 600);
         units.push({ id: `unit_${units.length + 1}`, title: heading.title, summary, fileVersionIds: [extraction.fileVersionId], evidence: [{ fileVersionId: extraction.fileVersionId, extractionId: extraction.id, fileName, heading: heading.title, line: heading.lineIndex + 1 }], suggested: true });
       }
-    } else if (versions.length > 1) {
-      units.push({ id: `unit_${units.length + 1}`, title: path.basename(fileName, path.extname(fileName)) || fileName, summary: String(text || "").replace(/\s+/g, " ").trim().slice(0, 600), fileVersionIds: [extraction.fileVersionId], evidence: [{ fileVersionId: extraction.fileVersionId, extractionId: extraction.id, fileName }], suggested: true });
     }
   }
   for (const extraction of extractions.filter((item) => item.status === "large_corpus_pending")) {

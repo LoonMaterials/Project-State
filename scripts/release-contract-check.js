@@ -37,6 +37,8 @@ function main() {
   assert(mainSource.includes("contextIsolation: true"), "Context isolation is not enabled.");
   assert(mainSource.includes("nodeIntegration: false"), "Renderer Node integration is not disabled.");
   assert(mainSource.includes("loadFile(INDEX_HTML)"), "Desktop entry must load bundled index.html.");
+  assert(!mainSource.includes("shell.openExternal"), "Packaged Project State must not launch an external browser.");
+  assert(!/webview|edge/i.test(JSON.stringify(packageJson.build || {})), "Release configuration must not bundle or bootstrap Edge/WebView.");
   assert(preloadSource.includes("PROJECT_STATE_STORAGE_ROOT"), "Controlled storage-root override is missing.");
   assert(preloadSource.includes('"Project State Storage"'), "Default storage root is missing.");
   assert(bridgeSource.includes('require("node:sqlite")'), "Desktop bridge no longer declares node:sqlite runtime dependency.");

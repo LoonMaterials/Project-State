@@ -60,7 +60,7 @@ async function main() {
       "const folderDiscoveryIntent = [\"one_project_folder\", \"folder_groups\", \"each_file\", \"loose_files_discovery\", \"subfolder_ai_followup\"].includes(folderIntent)",
       "const folderContainerFirst = folderIntent === \"folder_groups\"",
       "const suggestedUnits = folderContainerFirst ? []",
-      "const suggestedMode = folderDiscoveryIntent ? \"one_item\"",
+      "const suggestedMode = folderDiscoveryIntent || reviewMode === \"one_item\" || reviewMode === \"each_file\"",
       "const defaultSingleDestination = folderDiscoveryIntent ? \"unassigned\"",
       "const defaultUnitDestination = folderDiscoveryIntent ? \"unassigned\"",
       "discoveryDestinationOptions(defaultSingleDestination)",

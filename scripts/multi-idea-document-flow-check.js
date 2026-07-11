@@ -24,6 +24,21 @@ async function main() {
     const analysis = await bridge.discoveryStorage.analyzeCase({ discoveryCaseId: staged.discoveryCaseId, actorId: "deterministic_discovery", createdAt: "2026-06-20T13:02:00.000Z" });
     assert(analysis.documentUnits.length === 2, "Deterministic document map did not find both headings.", analysis.documentUnits);
     assert(analysis.unitModeSuggestion === "multiple_units", "Several detected units did not suggest unit review.", analysis);
+    const scanRequested = await bridge.discoveryStorage.analyzeCase({ discoveryCaseId: staged.discoveryCaseId, actorId: "deterministic_discovery", reviewMode: "scan_for_ideas", createdAt: "2026-06-20T13:02:30.000Z" });
+    assert(scanRequested.unitModeSuggestion === "multiple_units", "Explicit small-file idea scanning must keep multi-idea review available.", scanRequested);
+    assert(scanRequested.requestedReviewMode === "scan_for_ideas", "Requested file review mode was not preserved.", scanRequested);
+
+    const firstPlainPath = path.join(inputRoot, "first-reference.txt");
+    const secondPlainPath = path.join(inputRoot, "second-reference.txt");
+    await fsp.writeFile(firstPlainPath, "Background reference material without a project heading.\n", "utf8");
+    await fsp.writeFile(secondPlainPath, "Additional evidence that may support the same or another idea.\n", "utf8");
+    const firstPlain = await bridge.discoveryStorage.stageTrustedFile({ path: firstPlainPath, caseTitle: "Selected file collection", actorId: "actor_owner", reason: "Trusted fixtures checked outside Project State.", externalSecurityAcknowledged: true, timestamp: "2026-06-20T13:10:00.000Z" });
+    const secondPlain = await bridge.discoveryStorage.stageTrustedFile({ path: secondPlainPath, discoveryCaseId: firstPlain.discoveryCaseId, actorId: "actor_owner", reason: "Trusted fixtures checked outside Project State.", externalSecurityAcknowledged: true, timestamp: "2026-06-20T13:10:01.000Z" });
+    await bridge.discoveryStorage.extractFileVersion({ discoveryCaseId: firstPlain.discoveryCaseId, fileVersionId: firstPlain.fileVersionId, actorId: "deterministic_extractor", createdAt: "2026-06-20T13:11:00.000Z" });
+    await bridge.discoveryStorage.extractFileVersion({ discoveryCaseId: firstPlain.discoveryCaseId, fileVersionId: secondPlain.fileVersionId, actorId: "deterministic_extractor", createdAt: "2026-06-20T13:11:01.000Z" });
+    const plainCollection = await bridge.discoveryStorage.analyzeCase({ discoveryCaseId: firstPlain.discoveryCaseId, actorId: "deterministic_discovery", reviewMode: "scan_for_ideas", createdAt: "2026-06-20T13:12:00.000Z" });
+    assert(plainCollection.unitModeSuggestion === "multiple_units", "A selected collection must retain the requested multi-idea lane.", plainCollection);
+    assert(plainCollection.documentUnits.length === 0, "Selected files were incorrectly converted into one project idea per file.", plainCollection.documentUnits);
     const routes = [
       { ...analysis.documentUnits[0], destination: "existing_project", projectId: "project_alpha", proposedProjectName: analysis.documentUnits[0].title },
       { ...analysis.documentUnits[1], destination: "proposed_new_project", projectId: null, proposedProjectName: "Independent Sensor Project" }
@@ -49,7 +64,7 @@ async function main() {
     assert(proposedCount === 1, "Proposed-project record was not created per routed unit.", { proposedCount });
     assert(projectCount === coreBefore, "Multi-unit promotion changed Core before approval.", { coreBefore, projectCount });
     const appSource = fs.readFileSync(path.join(__dirname, "..", "app.js"), "utf8");
-    for (const required of ["Treat it as one item", "Review several ideas separately", "data-multiple-discovery-routes", "unitReviewMode"]) assert(appSource.includes(required), `Multi-idea review UI is missing: ${required}`);
+    for (const required of ["Treat it as one item", "Review several ideas separately", "Scan the selection for multiple ideas", "Keep the selection together as one item", "Review each file separately", "data-multiple-discovery-routes", "unitReviewMode", "fileReviewMode"]) assert(appSource.includes(required), `Multi-idea review UI is missing: ${required}`);
     console.log("Multi-Idea Document Flow Check");
     console.log(JSON.stringify({ detectedUnits: analysis.documentUnits.length, independentRoutes: confirmation.routing.routes.length, intakeProposals: items.length, sharedFileVersion: true, sharedChecksum: true, managedBytesNotDuplicated: true, coreUnchanged: true, individualApprovalPreserved: true }, null, 2));
     console.log("Multi-idea document flow: ok");

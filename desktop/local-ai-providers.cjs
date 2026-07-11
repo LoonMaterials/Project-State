@@ -3,6 +3,7 @@ const QWEN3_8B_ARM_ID = "project_state_ollama_qwen3_8b";
 const QWEN3_8B_MODEL_ID = "qwen3:8b";
 const OLLAMA_BASE_URL = process.env.PROJECT_STATE_OLLAMA_BASE_URL || "http://127.0.0.1:11434";
 const OLLAMA_GENERATE_TIMEOUT_MS = positiveInteger(process.env.PROJECT_STATE_LOCAL_AI_TIMEOUT_MS, 300000);
+const OLLAMA_DISCOVERY_TIMEOUT_MS = positiveInteger(process.env.PROJECT_STATE_LOCAL_AI_DISCOVERY_TIMEOUT_MS, 5000);
 const OLLAMA_NUM_PREDICT = positiveInteger(process.env.PROJECT_STATE_LOCAL_AI_NUM_PREDICT, 2400);
 const PROJECT_STATE_CLASSIFICATIONS = ["project_candidate", "existing_project_support", "reference_note", "personal_context_note", "assistant_scaffolding_noise", "rejected_noise"];
 const ASSISTANT_SCAFFOLDING_HEADING_PATTERN = /^(?:#{1,6}\s*)?(?:\d+[.)]\s*)?(?:short answer|important|bottom line|where this (?:all )?leaves us|the right mental model|ground rule for next steps|what i(?:'|’)d recommend|simple intuition|why your instinct was correct|one last grounding point|what happened|why (?:.+?\s+)?matters|the big caution|simple timeline|next steps|here(?:'|’)s (?:what i propose|the point)|the key point|in plain english|quick answer|quick note|my honest recommendation|what to hand the kids|scene hookup|cases with (?:weaker|more speculative|weaker\s*\/\s*more speculative) support|operational guardrails|decisions i can convert into immediate outputs)\s*[:.!-]*$/i;
@@ -62,8 +63,17 @@ async function fetchJson(url, options = {}, timeoutMs = 2500) {
 }
 
 async function ollamaTags() {
-  const payload = await fetchJson(`${OLLAMA_BASE_URL}/api/tags`, {}, 1500);
-  return Array.isArray(payload.models) ? payload.models : [];
+  let lastError = null;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      const payload = await fetchJson(`${OLLAMA_BASE_URL}/api/tags`, {}, OLLAMA_DISCOVERY_TIMEOUT_MS);
+      return Array.isArray(payload.models) ? payload.models : [];
+    } catch (error) {
+      lastError = error;
+      if (attempt < 2) await new Promise((resolve) => setTimeout(resolve, 250 * (attempt + 1)));
+    }
+  }
+  throw lastError || localAiError("PROVIDER_UNAVAILABLE", "Ollama did not answer the local model check.");
 }
 
 function modelMatches(model = {}, modelId = QWEN3_8B_MODEL_ID) {
@@ -91,6 +101,7 @@ async function describeLocalAiProviders() {
     modelId: QWEN3_8B_MODEL_ID,
     installed: qwenInstalled,
     available: ollamaAvailable && qwenInstalled,
+    selectedForWorkOrders: ollamaAvailable && qwenInstalled,
     lastError,
     arm: {
       armId: QWEN3_8B_ARM_ID,

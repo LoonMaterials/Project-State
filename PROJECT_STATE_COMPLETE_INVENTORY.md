@@ -1134,3 +1134,27 @@ Notable verification points:
 - The local Qwen prompt was updated to ask for fewer, better candidates; to classify underlying content instead of headings; to distinguish Wheel / General Physics Platform from Fusion/Energy and EQ Wheel; to prefer `existing_project_support`, `reference_note`, or `personal_context_note` before `project_candidate`; to require explicit Aether/Project State architecture language for Aether matches; and to return `commercialDefaultAllowed` / `requiresSeparateDesignReview` with personal Aether support. New guards `scripts/local-ai-prompt-boundary-check.js` and `scripts/candidate-map-merge-regression-check.js` were added to the AI foundation suite alongside the expanded classification regression check.
 - Existing Project Enrichment was added for massive reference/archive files. Before local Qwen creates new-project candidates, the app now builds a bounded pre-Airlock known-project context from active project names plus stored source titles, facts, decisions, open questions, and next actions. Qwen is instructed to classify chunks that add references, duplicate confirmation, validation, contradictions/risks, patent/licensing/outreach support, or technical details for existing projects as `existing_project_support`, not new projects. Candidate Map entries now preserve `enrichmentTargetProjectIds` and `projectEvidenceRole` values such as `background_reference`, `duplicate_or_confirming_reference`, `validation_or_test_support`, `risk_or_contradiction`, `patent_licensing_or_outreach_support`, `cross_project_reference`, and `additional_project_reference`.
 - Existing Project Enrichment remains pre-Airlock: it can show matched projects and reviewable evidence in the AI results panel and ChatGPT Review Pack, but it does not mutate project Core facts, source records, history, Intake approval, or authoritative project state without human approval. `scripts/existing-project-enrichment-regression-check.js` was added to the AI foundation and Candidate Map suites to guard known-project-first context, project-memory matching, source-title matching, enrichment target storage, evidence-role storage, and the pre-Airlock boundary.
+
+## 29. Offline Installer and Selected-File Discovery Corrections
+
+Status: implemented and regression-checked 2026-07-11 after offline installation and small-document testing.
+
+- The packaged desktop app no longer hands HTTP/HTTPS links to an external browser. New-window requests and renderer navigation away from the bundled local app are denied. Project State does not bundle, bootstrap, install, repair, or require Microsoft Edge or WebView.
+- The release contract check now fails if external-browser launch code returns or if Edge/WebView is added to the packaged release configuration.
+- Selected-file Discovery now asks how the selection should be reviewed before staging: **Scan the selection for multiple ideas**, **Keep the selection together as one item**, or **Review each file separately**.
+- **Scan the selection for multiple ideas** is the default for unknown selected files, including one small document. It keeps multi-idea review available even when the deterministic first pass finds few or no headings, so the user can correct/add idea boundaries rather than having the filename silently become the decision.
+- Selecting multiple documents no longer invokes the old fallback that treated every file as one separate project idea. Per-file review now happens only when the user explicitly chooses it.
+- The selected-file review mode is carried through staging and deterministic Discovery analysis as provenance (`requestedReviewMode`) and controls the review screen default without changing Core or bypassing Intake/Airlock approval.
+- Offline testing then exposed a local-AI setup/link mismatch: the saved setup record could say `error` with an empty provider ID even while Ollama and `qwen3:8b` were running. Provider discovery now allows a configurable five-second check, retries three times for cold Ollama startup, preserves the last selected Qwen provider across a temporary detection failure, retains useful setup error text, and automatically reconnects when the app starts with **Use local AI if Project State finds it** selected.
+- The setup action is now labeled **Check and connect local AI**. A successful check explicitly reports that **Qwen3 8B via Ollama is connected and selected for AI Work Orders**; analysis capabilities also expose `selectedProviderId` and `providerLinkState: connected_for_ai_work_orders`.
+- A real local-only smoke run on 2026-07-11 confirmed the installed machine runtime: Ollama `0.31.2`, model `qwen3:8b`, one authorized chunk, one returned candidate, `externalTransmission: false`, Core unchanged, and the pre-Airlock boundary preserved.
+
+Verification completed for this correction:
+
+- syntax checks for `app.js`, `desktop/main.cjs`, and `desktop/project-state-desktop-bridge.cjs`
+- `pnpm run check:flow-hardening`
+- `pnpm run check:multi-idea`
+- `pnpm run check:release`
+- `pnpm run check:ai-analysis-foundation`
+- `pnpm run check:local-ai-qwen` against the real installed Ollama/Qwen runtime
+- a new multi-file regression proving two plain selected files are not converted into two automatic project ideas
