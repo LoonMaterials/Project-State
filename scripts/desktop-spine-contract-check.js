@@ -50,7 +50,10 @@ const REQUIRED_TABLES = [
   "idea_candidates",
   "ai_analysis_result_receipts",
   "idea_review_decisions",
-  "confirmed_idea_units"
+  "confirmed_idea_units",
+  "external_review_passes",
+  "review_export_packages",
+  "external_review_actions"
 ];
 const REQUIRED_SAFETY_PHRASES = [
   "Human approval is required",
@@ -65,6 +68,7 @@ const REQUIRED_BRIDGE_METHODS = {
   storage: ["loadStore", "saveStore", "saveMeta", "preserveRecoveryRecord", "verifyIntegrity", "importBrowserExport", "createBackupPackage", "restoreBackupPackage", "reset"],
   discoveryStorage: ["initialize", "registerFileVersion", "createCase", "attachFileVersion", "appendInteraction", "appendSecurityReceipt", "appendEvent", "readFoundationState", "stageTrustedFile", "extractFileVersion", "indexCorpus", "readExtractionText", "readChunkText", "analyzeCase", "recordAnswer", "confirmRouting", "getCase", "promoteToIntake"],
   analysisArms: ["describeCapabilities", "createRun", "authorizeTransmission", "submitAnalysisBatch", "getAnalysisStatus", "getResultPage", "cancelAnalysis", "getReceipt", "recordReviewDecision", "readState"],
+  reviewExchange: ["exportUniversalPack", "importExternalReview", "listExternalReviews", "recordHumanAction", "listHumanActions"],
   securityArms: ["authorizeContentAccess"],
   files: ["metadata", "localPath", "readAsDataUrl", "readAsText", "readAsArrayBuffer", "extractText", "inflateRaw"],
   downloads: ["saveTextFile"]

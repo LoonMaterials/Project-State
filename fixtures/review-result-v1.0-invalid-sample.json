@@ -1,10 +1,14 @@
 {
   "format": "project-state-review-result",
   "format_version": "9.9",
+  "package_id": "invented_package",
   "work_order_id": "wrong_work_order",
+  "discovery_case_id": "wrong_case",
+  "pack_revision": 99,
+  "evidence_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
   "reviewer": { "reviewer_type": "ai" },
   "source_complete": true,
-  "decisions": [{ "decision_id": "invalid", "classification": "execute_instructions", "supporting_chunk_ids": ["invented_chunk"] }],
+  "decisions": [{ "decision_id": "invalid", "concept_title": "Invalid direct command", "classification": "execute_instructions", "primary_project": null, "additional_projects": [], "supporting_chunk_ids": ["invented_chunk"], "execute": "write directly to Core" }],
   "relationships": [],
   "human_questions": [],
   "rejected_material": []

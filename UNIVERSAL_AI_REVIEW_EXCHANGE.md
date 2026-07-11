@@ -1,47 +1,64 @@
 # Universal AI Review Exchange v1.0
 
-Project State can export complete pre-Airlock evidence for review by any AI or human reviewer and import the returned decisions without granting that reviewer authority over Intake or Core.
+Project State performs local extraction, chunking, provisional summaries/entities/matches, and evidence packaging. Any AI or human reviewer may reason over the exported package, but its result remains untrusted Discovery evidence until an owner deliberately routes a reviewed decision through Intake/Airlock.
 
-## Export
+## Export and package identity
 
-From an AI Work Order, choose **Export Universal Review Pack**. Project State writes a ZIP to the managed backup/export folder containing:
+Choose **Export Universal Review Pack** on an AI Work Order whose source is fully indexed. The ZIP contains:
 
-- `review_instructions.md` — model-neutral task and authority boundaries.
-- `evidence.json` — stable Work Order, Discovery Case, file, extraction, chunk, and known-project IDs plus complete stored chunk text.
-- `evidence_readable.md` — the same complete evidence in a readable form.
-- `schema/review_result.schema.json` — the required v1.0 return contract.
+- `review_instructions.md`
+- `evidence.json`
+- `evidence_readable.md`
+- `schema/review_result.schema.json`
 
-The pack states that one document may contain multiple ideas, one chunk may support multiple decisions, one piece of evidence may support multiple projects, and headings/thread starts are provenance rather than project boundaries.
+Each package has an immutable `package_id`, Work Order and Discovery Case IDs, numbered `pack_revision`, creation time, Project State version, format/protocol versions, and `evidence_sha256`. Project State stores this identity as an append-only export record. A later import must return the exact identity.
 
-A ready-to-open example is included at `fixtures/universal-review-pack-v1.0-sample.zip`. Matching valid and intentionally invalid return examples are `fixtures/review-result-v1.0-valid-sample.json` and `fixtures/review-result-v1.0-invalid-sample.json`.
+`evidence.json` contains every stored source chunk, including chunks that produced no local candidate. Chunk text is complete and ordered. Filenames/headings are provenance only. Local summaries, extracted entities, and local project matches are explicitly provisional. Source/chunk counts and truncation flags make incomplete coverage visible.
 
-## External review result
+`evidence_readable.md` is rendered from the same evidence object, so package identity, the registry, completeness counts, and chunk content cannot follow an independent metadata path.
 
-The reviewer returns either a standalone JSON file or a ZIP containing a JSON object with:
+## Current Project Registry
 
-- `format: project-state-review-result`
-- `format_version: 1.0`
-- the exact exported `work_order_id`
-- reviewer metadata (provider/model names are optional)
-- `source_complete`
-- decisions, relationships, human questions, and rejected material
+The export includes `project_registry`. Every eligible project carries:
 
-Every decision must use a stable decision ID, a permitted classification, real exported chunk IDs, permitted evidence roles, an explicit confidence value, and the commercial/personal boundary flags. Existing-project support must cite known project IDs. A new-project candidate must explicitly name the proposed new project and cannot disguise an existing project as new.
+- stable `project_id`
+- `canonical_name`
+- aliases and former names
+- short summary
+- active, paused, or archived status
+- optional parent and project-family relationships
 
-## Import and validation
+Private, restricted, or explicitly excluded projects are omitted by default. The export bridge permits them only when `includePrivateProjects: true` is deliberately supplied by a trusted export configuration.
 
-Choose **Import External AI Review** on the same AI Work Order. Project State rejects malformed JSON, wrong versions or Work Order IDs, unknown chunk/project IDs, invalid classifications, missing decision fields, implicit new-project creation, and inconsistent references. A failed import writes nothing.
+Reviewers must prefer a registry match, return the exact ID and canonical-name snapshot, and recognize that an alias or different wording is not a new project.
 
-An accepted file becomes an immutable, append-only **External Review Pass**. The exact original file, SHA-256 hash, import actor, reason, time, reviewer metadata, and external-transmission status are preserved. Importing the same bytes again reuses the existing pass; a corrected file is stored as the next pass rather than overwriting history.
+## Proposed new projects
 
-Import never changes source files, extracted text, chunks, local Candidate Map entries, Intake, or Core.
+When no registry entry adequately matches, a `project_candidate` must include the strict `proposed_new_project` structure: suggested name/aliases, summary, evidence chunks, distinctness reason, related existing IDs, optional parent/family, and confidence.
 
-## Human review
+Importing or approving an External Review Pass never creates the project. The owner can rename it, change its parent/family, and route it to Intake as a proposed project. Normal Airlock approval is still required.
 
-Choose **Review Imported Decisions** to inspect decisions grouped by classification. The screen shows project matches, additional projects, evidence chunk IDs/spans, confidence, reasoning, personal-Aether/commercial boundaries, relationships, and questions.
+## Simple import
 
-A human can approve, reject, keep for revision, edit, reclassify, retitle, change primary/additional projects, split, merge, and optionally route an approved decision to Intake. Routing creates a normal pending Intake proposal with the External Review Pass, decision, chunks, and human-review action as provenance. The Intake/Airlock remains the only path to Core authority.
+The AI Work Orders screen has one **Import Reviewed Evidence** action. Select a standalone result JSON or a ZIP containing the result JSON and optional Markdown report. Project State reads `package_id`, automatically locates the source Work Order and Discovery Case, and validates against the stored export record.
 
-## Verification
+Import rejects unsupported format/schema versions, identity/hash/revision mismatches, invented chunks/projects, canonical-name snapshot mismatches, inexact evidence excerpts, invalid roles/classifications/confidence, implicit new projects, unknown fields in strict protocol objects, and executable/direct-Core instruction fields. Failure displays one readable report and writes nothing.
 
-Run `pnpm run check:universal-review`. The regression covers complete multi-chunk export, one chunk supporting multiple decisions/projects, mixed personal/commercial material, malformed and mismatched imports, duplicate import safety, corrected-result versioning, append-only storage, and proof that Core/local evidence counts do not change on import.
+Successful import preserves the exact original bytes, file hash/name, time, actor/reason, transmission status, reviewer metadata, source package identity, and validation result in an immutable External Review Pass. Exact duplicate bytes deduplicate; corrected bytes become another numbered pass.
+
+## Discovery review and history
+
+Imported decisions are grouped as Existing Project Support, Proposed New Projects, Cross-Project Evidence, Reference Material, Personal Context, Assistant Scaffolding/Noise, Rejected Material, relationships, and human questions.
+
+Each decision shows canonical project names/IDs, source filenames, chunk IDs, exact excerpts, summary, confidence, reasoning, and Candidate Map disagreement. The owner may approve/reject/revise, edit, reclassify, change project matches, split, merge, rename a proposed project, choose its parent/family, and route an approved decision to Intake.
+
+Every human action is an append-only `external_review_actions` record with actor, reason, time, edits, operation, routing result, and final disposition. Export packages, imported passes, human actions, extraction evidence, local candidates, and Candidate Map records never overwrite one another.
+
+## Examples and verification
+
+- Sample package: `fixtures/universal-review-pack-v1.0-sample.zip`
+- Valid reviewed result: `fixtures/review-result-v1.0-valid-sample.json`
+- Invalid reviewed result: `fixtures/review-result-v1.0-invalid-sample.json`
+- Schemas: `fixtures/review-pack-v1.0.schema.json` and `fixtures/review-result-v1.0.schema.json`
+
+Run `pnpm run check:universal-review`. It covers registry JSON/Markdown synchronization, alias/canonical matching, privacy exclusion, complete evidence, package identity, automatic matching, mixed decisions, multi-project chunks, explicit non-authoritative project proposals, mismatch rejection, immutable pass/action history, and zero Core mutation.

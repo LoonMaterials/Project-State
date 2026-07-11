@@ -70,6 +70,8 @@ Use SQLite for structured records:
 - `idea_review_decisions`
 - `confirmed_idea_units`
 - `external_review_passes` (immutable imported model-neutral review results; never Core authority)
+- `review_export_packages` (immutable package identity, registry snapshot, revision, and evidence hash used for automatic import matching)
+- `external_review_actions` (immutable owner edits, dispositions, split/merge operations, and Intake routing provenance)
 
 Managed Folders
 

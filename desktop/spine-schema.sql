@@ -323,6 +323,53 @@ BEGIN
   SELECT RAISE(ABORT, 'external_review_passes are append-only');
 END;
 
+CREATE TABLE IF NOT EXISTS review_export_packages (
+  id TEXT PRIMARY KEY,
+  work_order_id TEXT NOT NULL,
+  discovery_case_id TEXT NOT NULL,
+  pack_revision INTEGER NOT NULL,
+  evidence_sha256 TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  record_json TEXT NOT NULL,
+  UNIQUE(work_order_id, pack_revision),
+  UNIQUE(id, evidence_sha256),
+  FOREIGN KEY(discovery_case_id) REFERENCES discovery_cases(id)
+);
+
+CREATE TRIGGER IF NOT EXISTS review_export_packages_no_update
+BEFORE UPDATE ON review_export_packages
+BEGIN
+  SELECT RAISE(ABORT, 'review_export_packages are append-only');
+END;
+
+CREATE TRIGGER IF NOT EXISTS review_export_packages_no_delete
+BEFORE DELETE ON review_export_packages
+BEGIN
+  SELECT RAISE(ABORT, 'review_export_packages are append-only');
+END;
+
+CREATE TABLE IF NOT EXISTS external_review_actions (
+  id TEXT PRIMARY KEY,
+  external_review_pass_id TEXT NOT NULL,
+  work_order_id TEXT NOT NULL,
+  decision_id TEXT NOT NULL,
+  recorded_at TEXT NOT NULL,
+  record_json TEXT NOT NULL,
+  FOREIGN KEY(external_review_pass_id) REFERENCES external_review_passes(id)
+);
+
+CREATE TRIGGER IF NOT EXISTS external_review_actions_no_update
+BEFORE UPDATE ON external_review_actions
+BEGIN
+  SELECT RAISE(ABORT, 'external_review_actions are append-only');
+END;
+
+CREATE TRIGGER IF NOT EXISTS external_review_actions_no_delete
+BEFORE DELETE ON external_review_actions
+BEGIN
+  SELECT RAISE(ABORT, 'external_review_actions are append-only');
+END;
+
 CREATE TABLE IF NOT EXISTS idea_analysis_runs (
   id TEXT PRIMARY KEY,
   discovery_case_id TEXT NOT NULL,

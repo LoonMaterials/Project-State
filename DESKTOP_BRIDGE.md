@@ -100,7 +100,9 @@ window.ProjectStateDesktop = {
   reviewExchange: {
     async exportUniversalPack(payload) {},
     async importExternalReview(payload) {},
-    async listExternalReviews(payload) {}
+    async listExternalReviews(payload) {},
+    async recordHumanAction(payload) {},
+    async listHumanActions(payload) {}
   },
   securityArms: {
     async authorizeContentAccess(reference) {}

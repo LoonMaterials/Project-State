@@ -188,7 +188,9 @@ const REQUIRED_TABLES = [
   "ai_analysis_result_receipts",
   "idea_review_decisions",
   "confirmed_idea_units",
-  "external_review_passes"
+  "external_review_passes",
+  "review_export_packages",
+  "external_review_actions"
 ];
 
 function createProjectStateDesktopBridge(options = {}) {
@@ -339,6 +341,12 @@ function createProjectStateDesktopBridge(options = {}) {
       },
       async listExternalReviews(payload = {}) {
         return listExternalReviewPasses({ storageRoot, dbPath, payload });
+      },
+      async recordHumanAction(payload = {}) {
+        return recordExternalReviewAction({ storageRoot, dbPath, payload });
+      },
+      async listHumanActions(payload = {}) {
+        return listExternalReviewActions({ storageRoot, dbPath, payload });
       }
     },
     securityArms: {
@@ -4206,13 +4214,26 @@ function reviewPackHeadings(text = "") {
   return String(text || "").split(/\r?\n/).map((line) => line.trim()).filter((line) => /^#{1,6}\s+\S/.test(line) || (/^[A-Z][A-Z0-9 '&/()_-]{3,100}$/.test(line) && line.length <= 120)).slice(0, 100);
 }
 
-function reviewPackProjectRegistry(projects = []) {
-  return (projects || []).filter((project) => project?.id && !project.archived).map((project) => ({
-    project_id: String(project.id),
-    name: String(project.name || "Untitled project"),
-    aliases: [...new Set([...(project.aliases || []), ...(project.tags || [])].map(String).filter(Boolean))].slice(0, 30),
-    concise_summary: String(project.currentSummary || project.currentStatus || "").slice(0, 1000)
-  }));
+function reviewProjectIsPrivate(project = {}) {
+  const privacy = String(project.privacyClass || project.privacy || "").toLowerCase();
+  return project.private === true || project.exportExcluded === true || project.excludeFromAiReview === true || project.excludeFromReviewExport === true || ["personal", "confidential", "restricted", "private"].includes(privacy);
+}
+
+function reviewPackProjectRegistry(projects = [], { includePrivateProjects = false } = {}) {
+  return (projects || []).filter((project) => project?.id && (includePrivateProjects || !reviewProjectIsPrivate(project))).map((project) => {
+    const rawStatus = String(project.status || project.healthFlag || "").toLowerCase();
+    const status = project.archived ? "archived" : rawStatus === "paused" || rawStatus === "on_hold" ? "paused" : "active";
+    return {
+      project_id: String(project.id),
+      canonical_name: String(project.name || project.canonicalName || "Untitled project"),
+      aliases: [...new Set([...(project.aliases || []), ...(project.tags || [])].map(String).filter(Boolean))].slice(0, 50),
+      former_names: [...new Set([...(project.formerNames || []), ...(project.previousNames || [])].map(String).filter(Boolean))].slice(0, 50),
+      short_summary: String(project.currentSummary || project.shortSummary || project.currentStatus || "").slice(0, 2000),
+      status,
+      parent_project_id: project.parentProjectId ? String(project.parentProjectId) : null,
+      ...(project.projectFamily ? { project_family: String(project.projectFamily) } : {})
+    };
+  });
 }
 
 function reviewPackInstructions(evidence) {
@@ -4227,16 +4248,21 @@ function reviewPackInstructions(evidence) {
     "",
     "## Required reasoning behavior",
     "",
-    "- One document may contain multiple ideas.",
-    "- One chunk may support multiple decisions.",
-    "- Evidence may support more than one existing project.",
-    "- Assistant headings and chat/thread boundaries are provenance only, not project boundaries.",
-    "- Use stable IDs from `evidence.json`; never invent chunk IDs or existing project IDs.",
+    "- Prefer matching evidence to a project listed in `project_registry` before proposing a new project.",
+    "- Return the exact project_id and canonical_name snapshot for every existing-project match.",
+    "- Different wording, an alias, or a former name does not justify a new project.",
+    "- One evidence item may support multiple projects and one chunk may support multiple decisions.",
+    "- One document may contain several related or unrelated projects.",
+    "- Filenames, assistant headings, thread names, and chunk boundaries are provenance only, not project boundaries.",
+    "- Use stable IDs from `evidence.json`; never invent a chunk ID or existing project ID.",
+    "- When no registry entry adequately matches, use the fully defined proposed_new_project object and explain why it is distinct.",
     "- External decisions are proposals, not Core truth.",
     "- Preserve uncertainty and set `human_review_required` to true.",
     "",
-    `Work Order: \`${evidence.work_order.work_order_id}\``,
-    `Discovery Case: \`${evidence.work_order.discovery_case_id}\``
+    `Package: \`${evidence.package_id}\` · revision ${evidence.pack_revision}`,
+    `Work Order: \`${evidence.work_order_id}\``,
+    `Discovery Case: \`${evidence.discovery_case_id}\``,
+    `Evidence SHA-256: \`${evidence.evidence_sha256}\``
   ].join("\n");
 }
 
@@ -4246,13 +4272,18 @@ function reviewPackReadableMarkdown(evidence) {
     "",
     "> External review is non-authoritative. One document may contain multiple ideas; one chunk may support multiple decisions; evidence may support more than one project. Assistant headings and thread boundaries are provenance only. Every imported decision requires human review before Intake/Airlock and Core.",
     "",
-    `- Work Order ID: \`${evidence.work_order.work_order_id}\``,
-    `- Discovery Case ID: \`${evidence.work_order.discovery_case_id}\``,
-    `- Source complete: ${evidence.work_order.source_complete ? "yes" : "no"}`,
+    `- Package ID: \`${evidence.package_id}\``,
+    `- Pack revision: ${evidence.pack_revision}`,
+    `- Work Order ID: \`${evidence.work_order_id}\``,
+    `- Discovery Case ID: \`${evidence.discovery_case_id}\``,
+    `- Evidence SHA-256: \`${evidence.evidence_sha256}\``,
+    `- Source complete: ${evidence.source_complete ? "yes" : "no"}`,
+    `- Sources: ${evidence.source_counts.total} · complete: ${evidence.source_counts.complete} · truncated: ${evidence.source_counts.truncated}`,
+    `- Chunks: ${evidence.chunk_counts.exported} of ${evidence.chunk_counts.detected} detected`,
     "",
-    "## Known project registry",
+    "## Current Project Registry",
     "",
-    ...evidence.known_project_registry.map((project) => `- \`${project.project_id}\` — **${project.name}**${project.concise_summary ? `: ${project.concise_summary}` : ""}`),
+    ...evidence.project_registry.map((project) => `- \`${project.project_id}\` — **${project.canonical_name}** · ${project.status}${project.aliases.length ? ` · aliases: ${project.aliases.join(", ")}` : ""}${project.former_names.length ? ` · former names: ${project.former_names.join(", ")}` : ""}${project.parent_project_id ? ` · parent: ${project.parent_project_id}` : ""}${project.project_family ? ` · family: ${project.project_family}` : ""}${project.short_summary ? `\n  ${project.short_summary}` : ""}`),
     "",
     "## Complete evidence chunks",
     ""
@@ -4260,12 +4291,14 @@ function reviewPackReadableMarkdown(evidence) {
   for (const chunk of evidence.chunks) {
     lines.push(`### Chunk \`${chunk.chunk_id}\``);
     lines.push("");
-    lines.push(`Source: \`${chunk.source_id}\` · File version: \`${chunk.file_version_id}\` · Order: ${chunk.chunk_order}`);
-    if (chunk.source_filename) lines.push(`Filename provenance: ${chunk.source_filename}`);
-    if (chunk.source_headings?.length) lines.push(`Heading provenance: ${chunk.source_headings.join(" | ")}`);
+    lines.push(`Source: \`${chunk.source_id}\` · File version: \`${chunk.file_version_id}\` · Sequence: ${chunk.sequence}`);
+    if (chunk.provenance?.source_filename) lines.push(`Filename provenance: ${chunk.provenance.source_filename}`);
+    if (chunk.provenance?.headings?.length) lines.push(`Heading provenance: ${chunk.provenance.headings.join(" | ")}`);
+    if (chunk.provisional_local_summaries?.length) lines.push(`Provisional local summaries: ${chunk.provisional_local_summaries.map((item) => item.summary || item.title).filter(Boolean).join(" | ")}`);
+    if (chunk.provisional_project_matches?.length) lines.push(`Provisional project matches: ${chunk.provisional_project_matches.map((item) => `${item.canonical_name} (${item.project_id})`).join(" | ")}`);
     lines.push("");
     lines.push("```text");
-    lines.push(chunk.text);
+    lines.push(chunk.complete_text);
     lines.push("```");
     lines.push("");
   }
@@ -4344,6 +4377,12 @@ async function createUniversalReviewPack({ storageRoot, dbPath, payload = {} }) 
   const workOrder = cloneJson(payload.workOrder || {});
   const workOrderId = requiredDiscoveryId(workOrder.id || payload.workOrderId, "Work Order ID");
   const discoveryCaseId = requiredDiscoveryId(workOrder.source?.discoveryCaseId || payload.discoveryCaseId, "Discovery Case ID");
+  const packageId = payload.packageId || makeId("review_package");
+  const createdAt = payload.exportedAt || nowIso();
+  const revisionDb = openDatabase(dbPath);
+  let packRevision;
+  try { packRevision = Number(revisionDb.prepare("SELECT COALESCE(MAX(pack_revision), 0) AS revision FROM review_export_packages WHERE work_order_id = ?").get(workOrderId).revision || 0) + 1; }
+  finally { revisionDb.close(); }
   const caseView = await getDiscoveryCase({ storageRoot, dbPath, payload: { discoveryCaseId } });
   const extractionById = new Map(caseView.extractions.map((item) => [item.id, item]));
   const versionById = new Map(caseView.fileVersions.map((item) => [item.id, item]));
@@ -4354,43 +4393,54 @@ async function createUniversalReviewPack({ storageRoot, dbPath, payload = {} }) 
     const version = versionById.get(extraction.fileVersionId) || {};
     chunks.push({
       chunk_id: chunk.id,
-      chunk_order: Number(chunk.chunkIndex || 0),
+      sequence: Number(chunk.chunkIndex || 0),
       source_id: version.fileAssetId || extraction.fileAssetId || "",
       file_version_id: extraction.fileVersionId || "",
-      extraction_id: extraction.id || "",
-      source_filename: version.originalName || "",
-      source_headings: reviewPackHeadings(read.text),
+      provenance: { extraction_id: extraction.id || "", source_filename: version.originalName || "", headings: reviewPackHeadings(read.text) },
       text_sha256: chunk.textSha256,
-      text: read.text,
-      extracted_entities: reviewPackEntities(read.text),
-      local_summaries: (workOrder.candidateMap?.entries || []).filter((entry) => (entry.evidence || []).some((item) => item.discoveryChunkId === chunk.id)).map((entry) => ({ candidate_map_id: entry.id, title: entry.title, summary: entry.neutralSummary || entry.summary || "", classification: entry.projectStateClassification || "" })).slice(0, 50),
-      provisional_local_matches: (workOrder.candidateMap?.entries || []).filter((entry) => (entry.evidence || []).some((item) => item.discoveryChunkId === chunk.id)).flatMap((entry) => entry.knownProjectMatches || []).map((match) => ({ project_id: match.projectId, name: match.name, confidence: match.confidence, provisional: true })).slice(0, 50)
+      complete_text: read.text,
+      provisional_local_summaries: (workOrder.candidateMap?.entries || []).filter((entry) => (entry.evidence || []).some((item) => item.discoveryChunkId === chunk.id)).map((entry) => ({ candidate_map_id: entry.id, title: entry.title, summary: entry.neutralSummary || entry.summary || "", classification: entry.projectStateClassification || "", provisional: true })).slice(0, 50),
+      provisional_entities: reviewPackEntities(read.text).map((value) => ({ value, provisional: true })),
+      provisional_project_matches: (workOrder.candidateMap?.entries || []).filter((entry) => (entry.evidence || []).some((item) => item.discoveryChunkId === chunk.id)).flatMap((entry) => entry.knownProjectMatches || []).map((match) => ({ project_id: match.projectId, canonical_name: match.name, confidence: match.confidence, provisional: true })).slice(0, 50)
     });
   }
   if (!chunks.length) throw new Error("Universal review export requires extracted or indexed Discovery chunks.");
-  const sourceManifest = caseView.fileVersions.map((version) => ({
-    source_id: version.fileAssetId,
-    file_version_id: version.id,
-    original_filename: version.originalName,
-    sha256: version.sha256,
-    byte_size: version.byteSize,
-    extraction_ids: caseView.extractions.filter((item) => item.fileVersionId === version.id).map((item) => item.id),
-    chunk_ids: chunks.filter((item) => item.file_version_id === version.id).map((item) => item.chunk_id)
-  }));
-  const projectRegistry = reviewPackProjectRegistry(payload.knownProjects || []);
-  const evidence = {
+  const sourceManifest = caseView.fileVersions.map((version) => {
+    const extractions = caseView.extractions.filter((item) => item.fileVersionId === version.id);
+    const truncated = extractions.some((item) => item.status === "large_corpus_pending") && workOrder.lastAnalysis?.sourceFullyAnalyzed !== true;
+    return {
+      source_id: version.fileAssetId, file_version_id: version.id, original_filename: version.originalName, sha256: version.sha256, byte_size: version.byteSize,
+      extraction_ids: extractions.map((item) => item.id), extraction_statuses: extractions.map((item) => item.status), chunk_ids: chunks.filter((item) => item.file_version_id === version.id).map((item) => item.chunk_id),
+      complete: !truncated, truncated
+    };
+  });
+  const projectRegistry = reviewPackProjectRegistry(payload.knownProjects || [], { includePrivateProjects: payload.includePrivateProjects === true });
+  const sourceComplete = sourceManifest.every((source) => source.complete);
+  const packageVersion = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8")).version || "unknown";
+  const evidenceWithoutHash = {
+    package_id: packageId,
+    work_order_id: workOrderId,
+    discovery_case_id: discoveryCaseId,
+    pack_revision: packRevision,
+    created_at: createdAt,
+    project_state_version: packageVersion,
     format: "project-state-review-pack",
     format_version: "1.0",
-    exported_at: payload.exportedAt || nowIso(),
-    work_order: { work_order_id: workOrderId, discovery_case_id: discoveryCaseId, title: workOrder.title || "", task: workOrder.task || "", source_complete: workOrder.lastAnalysis?.sourceFullyAnalyzed === true || !workOrder.source?.corpusIntake?.recommended },
+    review_protocol: "project-state-model-neutral-review",
+    review_protocol_version: "1.0",
+    source_complete: sourceComplete,
+    source_counts: { total: sourceManifest.length, complete: sourceManifest.filter((source) => source.complete).length, truncated: sourceManifest.filter((source) => source.truncated).length },
     source_manifest: sourceManifest,
+    chunk_counts: { exported: chunks.length, detected: Number(workOrder.lastAnalysis?.totalDetectedChunks || chunks.length), omitted: 0, truncated_sources: sourceManifest.filter((source) => source.truncated).length },
     chunks,
-    known_project_registry: projectRegistry,
+    project_registry: projectRegistry,
     boundary_rules: ["External review decisions are non-authoritative proposals.", "No imported result may write directly to Core.", "Human Intake/Airlock approval is required.", "Chat/thread starts and assistant headings are provenance only.", "Stable IDs, not filenames or headings, control evidence linkage.", "One chunk may support multiple decisions and projects."],
     allowed_classifications: EXTERNAL_REVIEW_CLASSIFICATIONS,
     allowed_evidence_roles: EXTERNAL_REVIEW_EVIDENCE_ROLES,
     local_analysis: { candidate_map_preserved: true, candidate_map_entry_count: Number(workOrder.candidateMap?.entries?.length || 0), local_ai_runs_preserved: true }
   };
+  const evidenceSha256 = crypto.createHash("sha256").update(JSON.stringify(evidenceWithoutHash)).digest("hex");
+  const evidence = { ...evidenceWithoutHash, evidence_sha256: evidenceSha256 };
   const resultSchema = fs.readFileSync(REVIEW_RESULT_SCHEMA_FILE, "utf8");
   const packName = safeFileName(`${workOrder.title || workOrderId}.universal-ai-review-pack-${safeStamp()}.zip`);
   const packPath = path.join(storageRoot, "backups", packName);
@@ -4401,21 +4451,54 @@ async function createUniversalReviewPack({ storageRoot, dbPath, payload = {} }) 
     { name: "schema/review_result.schema.json", data: resultSchema }
   ]);
   await fsp.writeFile(packPath, zip);
-  return { ok: true, format: evidence.format, formatVersion: evidence.format_version, workOrderId, discoveryCaseId, sourceComplete: evidence.work_order.source_complete, path: packPath, fileName: packName, sha256: crypto.createHash("sha256").update(zip).digest("hex"), bytes: zip.length, chunkCount: chunks.length, sourceCount: sourceManifest.length };
+  const record = { id: packageId, packageId, workOrderId, discoveryCaseId, packRevision, createdAt, projectStateVersion: packageVersion, format: evidence.format, formatVersion: evidence.format_version, reviewProtocol: evidence.review_protocol, reviewProtocolVersion: evidence.review_protocol_version, evidenceSha256, sourceComplete, projectRegistry: cloneJson(projectRegistry), chunkIds: chunks.map((chunk) => chunk.chunk_id), sourceIds: sourceManifest.map((source) => source.source_id), exportFileName: packName, exportPath: relativeManagedPath(storageRoot, packPath), includePrivateProjects: payload.includePrivateProjects === true };
+  const packageDb = openDatabase(dbPath);
+  try { insertStrict(packageDb, "review_export_packages", { id: packageId, work_order_id: workOrderId, discovery_case_id: discoveryCaseId, pack_revision: packRevision, evidence_sha256: evidenceSha256, created_at: createdAt, record_json: JSON.stringify(record) }); }
+  catch (error) { await fsp.rm(packPath, { force: true }); throw error; }
+  finally { packageDb.close(); }
+  return { ok: true, packageId, packRevision, evidenceSha256, format: evidence.format, formatVersion: evidence.format_version, workOrderId, discoveryCaseId, sourceComplete, path: packPath, fileName: packName, sha256: crypto.createHash("sha256").update(zip).digest("hex"), bytes: zip.length, chunkCount: chunks.length, sourceCount: sourceManifest.length };
 }
 
 function externalReviewChunkReferences(value = {}) {
   return [...new Set([...(value.supporting_chunk_ids || []), ...(value.evidence_spans || []).map((span) => span?.chunk_id), ...(value.supportingChunkIds || [])].map(String).filter(Boolean))];
 }
 
-function validateExternalReviewResult({ result, workOrderId, chunkIds, projectIds }) {
+function externalReviewUnexpectedKeys(value, allowed, prefix, errors) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return;
+  for (const key of Object.keys(value)) if (!allowed.has(key)) errors.push(`${prefix}.${key} is not supported by this review protocol.`);
+}
+
+function externalReviewHasDirectCoreInstruction(value, trail = "result") {
+  if (!value || typeof value !== "object") return "";
+  for (const [key, child] of Object.entries(value)) {
+    if (/^(?:execute|command|script|write_core|create_core|approve_core|direct_core_instruction|automatic_project_creation)$/i.test(key)) return `${trail}.${key}`;
+    const found = externalReviewHasDirectCoreInstruction(child, `${trail}.${key}`);
+    if (found) return found;
+  }
+  return "";
+}
+
+function validateExternalProjectMatch(match, prefix, projectSnapshotById, currentProjectIds, errors) {
+  if (!match || typeof match !== "object" || Array.isArray(match)) { errors.push(`${prefix} must be a project match object or null.`); return; }
+  externalReviewUnexpectedKeys(match, new Set(["project_id", "canonical_name"]), prefix, errors);
+  const id = String(match.project_id || "");
+  if (!id || !currentProjectIds.has(id)) errors.push(`${prefix}.project_id is not a known existing project.`);
+  const snapshot = projectSnapshotById.get(id);
+  if (!snapshot) errors.push(`${prefix}.project_id was not present in the exported project registry.`);
+  else if (String(match.canonical_name || "") !== String(snapshot.canonical_name || "")) errors.push(`${prefix}.canonical_name does not match the exported project registry snapshot for ${id}.`);
+}
+
+function validateExternalReviewResult({ result, expectedPackage, chunkIds, chunkTextById, projectSnapshotById, currentProjectIds }) {
   const errors = [];
   if (!result || typeof result !== "object" || Array.isArray(result)) errors.push("Result must be one JSON object.");
+  externalReviewUnexpectedKeys(result, new Set(["format", "format_version", "package_id", "work_order_id", "discovery_case_id", "pack_revision", "evidence_sha256", "reviewer", "source_complete", "decisions", "relationships", "human_questions", "rejected_material"]), "result", errors);
   if (result?.format !== "project-state-review-result") errors.push("format must be project-state-review-result.");
   if (result?.format_version !== "1.0") errors.push("format_version must be 1.0.");
-  if (result?.work_order_id !== workOrderId) errors.push(`work_order_id must match ${workOrderId}.`);
+  for (const [field, expected] of [["package_id", expectedPackage.packageId], ["work_order_id", expectedPackage.workOrderId], ["discovery_case_id", expectedPackage.discoveryCaseId], ["pack_revision", expectedPackage.packRevision], ["evidence_sha256", expectedPackage.evidenceSha256]]) if (result?.[field] !== expected) errors.push(`${field} must match the source export (${expected}).`);
   if (!result?.reviewer || typeof result.reviewer !== "object" || !["ai", "human", "hybrid"].includes(result.reviewer.reviewer_type)) errors.push("reviewer.reviewer_type must be ai, human, or hybrid.");
+  externalReviewUnexpectedKeys(result?.reviewer, new Set(["reviewer_type", "provider", "model", "name", "reviewed_at"]), "reviewer", errors);
   if (typeof result?.source_complete !== "boolean") errors.push("source_complete must be true or false.");
+  else if (result.source_complete !== expectedPackage.sourceComplete) errors.push(`source_complete must match the source export (${expectedPackage.sourceComplete}).`);
   for (const field of ["decisions", "relationships", "human_questions", "rejected_material"]) if (!Array.isArray(result?.[field])) errors.push(`${field} must be an array.`);
   const decisionIds = new Set();
   for (const [index, decision] of (result?.decisions || []).entries()) {
@@ -4424,51 +4507,81 @@ function validateExternalReviewResult({ result, workOrderId, chunkIds, projectId
     if (!String(decision?.concept_title || "").trim()) errors.push(`${prefix}.concept_title is required.`);
     if (typeof decision?.summary !== "string") errors.push(`${prefix}.summary must be a string.`);
     if (typeof decision?.reasoning_summary !== "string") errors.push(`${prefix}.reasoning_summary must be a string.`);
+    externalReviewUnexpectedKeys(decision, new Set(["decision_id", "concept_title", "classification", "primary_project", "additional_projects", "proposed_new_project", "summary", "supporting_chunk_ids", "evidence_spans", "confidence", "reasoning_summary", "evidence_role", "personal_aether_support", "commercial_default_allowed", "requires_separate_design_review", "human_review_required"]), prefix, errors);
     if (!EXTERNAL_REVIEW_CLASSIFICATIONS.includes(decision?.classification)) errors.push(`${prefix}.classification is not allowed.`);
-    if (decision?.primary_project_id !== null && decision?.primary_project_id !== undefined && !projectIds.has(decision.primary_project_id)) errors.push(`${prefix}.primary_project_id is not a known project.`);
-    if (!Array.isArray(decision?.additional_project_ids)) errors.push(`${prefix}.additional_project_ids must be an array.`);
-    if (new Set(decision?.additional_project_ids || []).size !== (decision?.additional_project_ids || []).length) errors.push(`${prefix}.additional_project_ids must not contain duplicates.`);
-    for (const id of decision?.additional_project_ids || []) if (!projectIds.has(id)) errors.push(`${prefix}.additional_project_ids contains unknown project ID ${id}.`);
-    if (decision?.classification === "project_candidate" && !String(decision?.proposed_new_project?.name || "").trim()) errors.push(`${prefix} must explicitly include proposed_new_project.name.`);
-    if (decision?.classification === "project_candidate" && decision?.primary_project_id) errors.push(`${prefix} cannot use an existing project as primary_project_id; use existing_project_support instead.`);
-    if (decision?.classification === "existing_project_support" && !decision?.primary_project_id && !(decision?.additional_project_ids || []).length) errors.push(`${prefix} requires at least one known project ID.`);
+    if (decision?.primary_project !== null) validateExternalProjectMatch(decision?.primary_project, `${prefix}.primary_project`, projectSnapshotById, currentProjectIds, errors);
+    if (!Array.isArray(decision?.additional_projects)) errors.push(`${prefix}.additional_projects must be an array.`);
+    for (const [matchIndex, match] of (decision?.additional_projects || []).entries()) validateExternalProjectMatch(match, `${prefix}.additional_projects[${matchIndex}]`, projectSnapshotById, currentProjectIds, errors);
+    const matchedIds = [decision?.primary_project?.project_id, ...(decision?.additional_projects || []).map((match) => match?.project_id)].filter(Boolean);
+    if (new Set(matchedIds).size !== matchedIds.length) errors.push(`${prefix} contains duplicate existing-project matches.`);
+    if (decision?.classification === "project_candidate" && !decision?.proposed_new_project) errors.push(`${prefix} must explicitly include proposed_new_project.`);
+    if (decision?.classification === "project_candidate" && decision?.primary_project) errors.push(`${prefix} cannot use an existing project as primary_project; use existing_project_support instead.`);
+    if (decision?.classification === "existing_project_support" && !matchedIds.length) errors.push(`${prefix} requires at least one known project match.`);
+    if (decision?.proposed_new_project) {
+      const proposed = decision.proposed_new_project;
+      externalReviewUnexpectedKeys(proposed, new Set(["suggested_name", "suggested_aliases", "short_summary", "supporting_chunk_ids", "reason_distinct_from_existing_projects", "related_existing_project_ids", "proposed_parent_project_id", "project_family", "confidence"]), `${prefix}.proposed_new_project`, errors);
+      for (const field of ["suggested_name", "reason_distinct_from_existing_projects"]) if (!String(proposed[field] || "").trim()) errors.push(`${prefix}.proposed_new_project.${field} is required.`);
+      for (const field of ["suggested_aliases", "supporting_chunk_ids", "related_existing_project_ids"]) if (!Array.isArray(proposed[field])) errors.push(`${prefix}.proposed_new_project.${field} must be an array.`);
+      if (typeof proposed.short_summary !== "string") errors.push(`${prefix}.proposed_new_project.short_summary must be a string.`);
+      if (!("proposed_parent_project_id" in proposed)) errors.push(`${prefix}.proposed_new_project.proposed_parent_project_id must be present (null is allowed).`);
+      for (const id of proposed.supporting_chunk_ids || []) if (!chunkIds.has(id)) errors.push(`${prefix}.proposed_new_project references unknown chunk ID ${id}.`);
+      for (const id of proposed.related_existing_project_ids || []) if (!currentProjectIds.has(id) || !projectSnapshotById.has(id)) errors.push(`${prefix}.proposed_new_project references unknown or unexported related project ID ${id}.`);
+      if (proposed.proposed_parent_project_id && (!currentProjectIds.has(proposed.proposed_parent_project_id) || !projectSnapshotById.has(proposed.proposed_parent_project_id))) errors.push(`${prefix}.proposed_new_project.proposed_parent_project_id is unknown or was not exported.`);
+      if (typeof proposed.confidence !== "number" || proposed.confidence < 0 || proposed.confidence > 1) errors.push(`${prefix}.proposed_new_project.confidence must be between 0 and 1.`);
+    }
     if (!Array.isArray(decision?.supporting_chunk_ids) || !decision.supporting_chunk_ids.length) errors.push(`${prefix}.supporting_chunk_ids must contain evidence.`);
     if (new Set(decision?.supporting_chunk_ids || []).size !== (decision?.supporting_chunk_ids || []).length) errors.push(`${prefix}.supporting_chunk_ids must not contain duplicates.`);
     for (const id of externalReviewChunkReferences(decision)) if (!chunkIds.has(id)) errors.push(`${prefix} references unknown chunk ID ${id}.`);
     if (!Array.isArray(decision?.evidence_spans)) errors.push(`${prefix}.evidence_spans must be an array.`);
     for (const [spanIndex, span] of (decision?.evidence_spans || []).entries()) {
+      externalReviewUnexpectedKeys(span, new Set(["chunk_id", "start", "end", "excerpt"]), `${prefix}.evidence_spans[${spanIndex}]`, errors);
+      if (!String(span?.chunk_id || "")) errors.push(`${prefix}.evidence_spans[${spanIndex}].chunk_id is required.`);
+      if (typeof span?.excerpt !== "string") errors.push(`${prefix}.evidence_spans[${spanIndex}].excerpt must be a string.`);
       if (span?.start !== undefined && (!Number.isInteger(span.start) || span.start < 0)) errors.push(`${prefix}.evidence_spans[${spanIndex}].start is invalid.`);
       if (span?.end !== undefined && (!Number.isInteger(span.end) || span.end < 0 || (Number.isInteger(span.start) && span.end < span.start))) errors.push(`${prefix}.evidence_spans[${spanIndex}].end is invalid.`);
+      const sourceText = chunkTextById.get(span?.chunk_id) || "";
+      if (Number.isInteger(span?.start) && Number.isInteger(span?.end) && span.end > sourceText.length) errors.push(`${prefix}.evidence_spans[${spanIndex}].end exceeds the stored chunk text.`);
+      if (sourceText && Number.isInteger(span?.start) && Number.isInteger(span?.end) && typeof span?.excerpt === "string" && sourceText.slice(span.start, span.end) !== span.excerpt) errors.push(`${prefix}.evidence_spans[${spanIndex}].excerpt does not exactly match the stored chunk text range.`);
     }
     if (typeof decision?.confidence !== "number" || decision.confidence < 0 || decision.confidence > 1) errors.push(`${prefix}.confidence must be between 0 and 1.`);
     if (!EXTERNAL_REVIEW_EVIDENCE_ROLES.includes(decision?.evidence_role)) errors.push(`${prefix}.evidence_role is not allowed.`);
     for (const field of ["personal_aether_support", "commercial_default_allowed", "requires_separate_design_review", "human_review_required"]) if (typeof decision?.[field] !== "boolean") errors.push(`${prefix}.${field} must be boolean.`);
   }
   for (const [index, relationship] of (result?.relationships || []).entries()) {
-    for (const key of ["from_decision_id", "to_decision_id"]) if (relationship?.[key] && !decisionIds.has(relationship[key])) errors.push(`relationships[${index}].${key} references unknown decision ID ${relationship[key]}.`);
-    for (const key of ["from_project_id", "to_project_id"]) if (relationship?.[key] && !projectIds.has(relationship[key])) errors.push(`relationships[${index}].${key} references unknown project ID ${relationship[key]}.`);
+    externalReviewUnexpectedKeys(relationship, new Set(["relationship_id", "relationship_type", "source_decision_id", "target_decision_id", "source_project", "target_project", "supporting_chunk_ids", "summary"]), `relationships[${index}]`, errors);
+    for (const field of ["relationship_id", "relationship_type"]) if (!String(relationship?.[field] || "").trim()) errors.push(`relationships[${index}].${field} is required.`);
+    if (typeof relationship?.summary !== "string") errors.push(`relationships[${index}].summary must be a string.`);
+    if (!Array.isArray(relationship?.supporting_chunk_ids)) errors.push(`relationships[${index}].supporting_chunk_ids must be an array.`);
+    for (const field of ["source_decision_id", "target_decision_id", "source_project", "target_project"]) if (!(field in (relationship || {}))) errors.push(`relationships[${index}].${field} must be present (null is allowed).`);
+    for (const key of ["source_decision_id", "target_decision_id"]) if (relationship?.[key] && !decisionIds.has(relationship[key])) errors.push(`relationships[${index}].${key} references unknown decision ID ${relationship[key]}.`);
+    for (const key of ["source_project", "target_project"]) if (relationship?.[key] !== null) validateExternalProjectMatch(relationship?.[key], `relationships[${index}].${key}`, projectSnapshotById, currentProjectIds, errors);
     for (const id of externalReviewChunkReferences(relationship)) if (!chunkIds.has(id)) errors.push(`relationships[${index}] references unknown chunk ID ${id}.`);
   }
-  for (const [index, question] of (result?.human_questions || []).entries()) for (const id of externalReviewChunkReferences(question)) if (!chunkIds.has(id)) errors.push(`human_questions[${index}] references unknown chunk ID ${id}.`);
-  for (const [index, rejected] of (result?.rejected_material || []).entries()) for (const id of externalReviewChunkReferences(rejected)) if (!chunkIds.has(id)) errors.push(`rejected_material[${index}] references unknown chunk ID ${id}.`);
+  for (const [index, question] of (result?.human_questions || []).entries()) {
+    externalReviewUnexpectedKeys(question, new Set(["question_id", "text", "supporting_chunk_ids", "decision_ids"]), `human_questions[${index}]`, errors);
+    for (const field of ["question_id", "text"]) if (!String(question?.[field] || "").trim()) errors.push(`human_questions[${index}].${field} is required.`);
+    for (const field of ["supporting_chunk_ids", "decision_ids"]) if (!Array.isArray(question?.[field])) errors.push(`human_questions[${index}].${field} must be an array.`);
+    for (const id of externalReviewChunkReferences(question)) if (!chunkIds.has(id)) errors.push(`human_questions[${index}] references unknown chunk ID ${id}.`);
+    for (const id of question?.decision_ids || []) if (!decisionIds.has(id)) errors.push(`human_questions[${index}] references unknown decision ID ${id}.`);
+  }
+  for (const [index, rejected] of (result?.rejected_material || []).entries()) {
+    externalReviewUnexpectedKeys(rejected, new Set(["rejected_id", "title", "reason", "supporting_chunk_ids"]), `rejected_material[${index}]`, errors);
+    for (const field of ["rejected_id", "title", "reason"]) if (typeof rejected?.[field] !== "string") errors.push(`rejected_material[${index}].${field} must be a string.`);
+    if (!Array.isArray(rejected?.supporting_chunk_ids)) errors.push(`rejected_material[${index}].supporting_chunk_ids must be an array.`);
+    for (const id of externalReviewChunkReferences(rejected)) if (!chunkIds.has(id)) errors.push(`rejected_material[${index}] references unknown chunk ID ${id}.`);
+  }
+  const forbiddenInstruction = externalReviewHasDirectCoreInstruction(result);
+  if (forbiddenInstruction) errors.push(`${forbiddenInstruction} is forbidden; external reviews cannot contain executable or direct-Core instruction fields.`);
   return errors;
 }
 
 async function importExternalReviewPass({ storageRoot, dbPath, payload = {} }) {
   await ensureSpine(storageRoot);
-  const workOrder = cloneJson(payload.workOrder || {});
-  const workOrderId = requiredDiscoveryId(workOrder.id || payload.workOrderId, "Work Order ID");
-  const discoveryCaseId = requiredDiscoveryId(workOrder.source?.discoveryCaseId || payload.discoveryCaseId, "Discovery Case ID");
   const filePath = path.resolve(String(payload.filePath || payload.path || ""));
   if (!filePath || !fs.existsSync(filePath) || !fs.statSync(filePath).isFile()) throw new Error("Choose an external review JSON or ZIP file.");
   const originalBytes = await fsp.readFile(filePath);
   if (originalBytes.length > 150 * 1024 * 1024) throw new Error("External review file is above the 150 MB import limit.");
   const importHash = crypto.createHash("sha256").update(originalBytes).digest("hex");
-  const duplicateDb = openDatabase(dbPath);
-  try {
-    const row = duplicateDb.prepare("SELECT record_json FROM external_review_passes WHERE work_order_id = ? AND import_hash = ?").get(workOrderId, importHash);
-    if (row) return { ok: true, deduplicated: true, externalReviewPass: JSON.parse(row.record_json), coreChanged: false };
-  } finally { duplicateDb.close(); }
   let resultBytes = originalBytes;
   let companionMarkdown = "";
   if (path.extname(filePath).toLowerCase() === ".zip") {
@@ -4487,13 +4600,34 @@ async function importExternalReviewPass({ storageRoot, dbPath, payload = {} }) {
   let result;
   try { result = JSON.parse(resultBytes.toString("utf8")); }
   catch { throw new Error("External review result contains malformed JSON. Nothing was imported."); }
+  const packageDb = openDatabase(dbPath);
+  let expectedPackage;
+  try {
+    const packageRow = result?.package_id ? packageDb.prepare("SELECT record_json FROM review_export_packages WHERE id = ?").get(String(result.package_id)) : null;
+    if (packageRow) expectedPackage = JSON.parse(packageRow.record_json);
+  } finally { packageDb.close(); }
+  if (!expectedPackage) throw new Error("External review validation failed; nothing was imported:\n- package_id does not match a Review Pack exported by this Project State installation. Choose the matching source Work Order only if you need to locate or re-export the pack.");
+  const workOrderId = expectedPackage.workOrderId;
+  const discoveryCaseId = expectedPackage.discoveryCaseId;
+  const duplicateDb = openDatabase(dbPath);
+  try {
+    const row = duplicateDb.prepare("SELECT record_json FROM external_review_passes WHERE work_order_id = ? AND import_hash = ?").get(workOrderId, importHash);
+    if (row) return { ok: true, deduplicated: true, workOrderId, discoveryCaseId, externalReviewPass: JSON.parse(row.record_json), coreChanged: false };
+  } finally { duplicateDb.close(); }
   const caseView = await getDiscoveryCase({ storageRoot, dbPath, payload: { discoveryCaseId } });
   const chunkIds = new Set(caseView.chunks.map((chunk) => chunk.id));
+  const chunkTextById = new Map();
+  for (const chunkId of [...new Set((result.decisions || []).flatMap((decision) => (decision.evidence_spans || []).map((span) => span?.chunk_id)).filter(Boolean))]) {
+    if (!chunkIds.has(chunkId)) continue;
+    const read = await readDiscoveryChunkText({ storageRoot, dbPath, payload: { discoveryChunkId: chunkId } });
+    chunkTextById.set(chunkId, read.text || "");
+  }
   const projectsDb = openDatabase(dbPath);
-  let projectIds;
-  try { projectIds = new Set(readRecordJson(projectsDb, "projects").map((project) => project.id)); }
+  let currentProjectIds;
+  try { currentProjectIds = new Set(readRecordJson(projectsDb, "projects").map((project) => project.id)); }
   finally { projectsDb.close(); }
-  const validationErrors = validateExternalReviewResult({ result, workOrderId, chunkIds, projectIds });
+  const projectSnapshotById = new Map((expectedPackage.projectRegistry || []).map((project) => [project.project_id, project]));
+  const validationErrors = validateExternalReviewResult({ result, expectedPackage, chunkIds, chunkTextById, projectSnapshotById, currentProjectIds });
   if (validationErrors.length) throw new Error(`External review validation failed; nothing was imported:\n- ${validationErrors.join("\n- ")}`);
   const importedAt = payload.importedAt || nowIso();
   const id = payload.id || makeId("external_review_pass");
@@ -4510,6 +4644,7 @@ async function importExternalReviewPass({ storageRoot, dbPath, payload = {} }) {
   const record = {
     id, format: "project-state-external-review-pass", formatVersion: "1.0", versionNumber, workOrderId, discoveryCaseId,
     importedAt, importedBy: String(payload.actorId || ""), importReason: String(payload.reason || ""), originalFilename: path.basename(filePath), managedOriginalPath: relativeManagedPath(storageRoot, originalPath), importHash,
+    sourcePackageId: expectedPackage.packageId, sourcePackRevision: expectedPackage.packRevision, sourceEvidenceSha256: expectedPackage.evidenceSha256,
     reviewer: cloneJson(result.reviewer), externalTransmissionStatus: String(payload.externalTransmissionStatus || "unknown"), schemaValidation: { valid: true, schema: "project-state-review-result/1.0", errors: [] },
     sourceComplete: result.source_complete, result: cloneJson(result), companionMarkdownStored: Boolean(companionMarkdown), coreAuthority: false, coreChanged: false
   };
@@ -4519,7 +4654,7 @@ async function importExternalReviewPass({ storageRoot, dbPath, payload = {} }) {
   finally { writeDb.close(); }
   await appendDiscoveryInteraction({ storageRoot, dbPath, payload: { id: makeId("interaction"), discoveryCaseId, actorId: payload.actorId || "external_review_importer", actorType: "human", interactionType: "external_review_import", createdAt: importedAt, content: { externalReviewPassId: id, workOrderId, reviewer: result.reviewer, decisionCount: result.decisions.length, sourceComplete: result.source_complete, coreAuthority: false }, evidence: result.decisions.flatMap((decision) => decision.supporting_chunk_ids || []).map((chunkId) => ({ discoveryChunkId: chunkId })) } });
   await appendDiscoveryEvent({ storageRoot, dbPath, payload: { id: makeId("discovery_event"), discoveryCaseId, eventType: "external_review_imported", actorId: payload.actorId || "external_review_importer", actorType: "human", occurredAt: importedAt, externalReviewPassId: id, workOrderId, importHash, decisionCount: result.decisions.length, coreChanged: false } });
-  return { ok: true, deduplicated: false, externalReviewPass: record, coreChanged: false, localEvidenceChanged: false, candidateMapChanged: false };
+  return { ok: true, deduplicated: false, workOrderId, discoveryCaseId, externalReviewPass: record, coreChanged: false, localEvidenceChanged: false, candidateMapChanged: false };
 }
 
 async function listExternalReviewPasses({ storageRoot, dbPath, payload = {} }) {
@@ -4533,7 +4668,66 @@ async function listExternalReviewPasses({ storageRoot, dbPath, payload = {} }) {
       : discoveryCaseId
         ? db.prepare("SELECT record_json FROM external_review_passes WHERE discovery_case_id = ? ORDER BY rowid").all(discoveryCaseId)
         : db.prepare("SELECT record_json FROM external_review_passes ORDER BY rowid").all();
-    return { ok: true, externalReviewPasses: rows.map(parseRecordRow) };
+    const passes = rows.map(parseRecordRow);
+    const passIds = new Set(passes.map((pass) => pass.id));
+    const actions = db.prepare("SELECT record_json FROM external_review_actions ORDER BY rowid").all().map(parseRecordRow).filter((action) => passIds.has(action.externalReviewPassId));
+    return { ok: true, externalReviewPasses: passes.map((pass) => ({ ...pass, humanActions: actions.filter((action) => action.externalReviewPassId === pass.id) })) };
+  } finally { db.close(); }
+}
+
+async function recordExternalReviewAction({ storageRoot, dbPath, payload = {} }) {
+  await ensureSpine(storageRoot);
+  const externalReviewPassId = requiredDiscoveryId(payload.externalReviewPassId || payload.passId, "External Review Pass ID");
+  const decisionId = requiredDiscoveryId(payload.decisionId, "External review decision ID");
+  const actorId = requiredDiscoveryId(payload.actorId, "Human reviewer ID");
+  const reason = requiredDiscoveryText(payload.reason, "Human review reason");
+  const recordedAt = requiredDiscoveryTimestamp(payload.recordedAt || nowIso(), "Human review time");
+  const db = openDatabase(dbPath);
+  let pass;
+  let currentProjectIds;
+  try {
+    const row = db.prepare("SELECT record_json FROM external_review_passes WHERE id = ?").get(externalReviewPassId);
+    if (!row) throw new Error("External Review Pass was not found.");
+    pass = JSON.parse(row.record_json);
+    if (!(pass.result?.decisions || []).some((decision) => decision.decision_id === decisionId)) throw new Error("External review decision was not found in this immutable pass.");
+    currentProjectIds = new Set(db.prepare("SELECT id FROM projects").all().map((row) => row.id));
+  } finally { db.close(); }
+  const disposition = String(payload.disposition || "needs_revision");
+  if (!["approved", "rejected", "needs_revision"].includes(disposition)) throw new Error("Human review disposition is not supported.");
+  const classification = String(payload.classification || "");
+  if (!EXTERNAL_REVIEW_CLASSIFICATIONS.includes(classification)) throw new Error("Human review classification is not supported.");
+  const primaryProjectId = String(payload.primaryProjectId || "");
+  const additionalProjectIds = [...new Set((payload.additionalProjectIds || []).map(String).filter(Boolean))];
+  for (const id of [primaryProjectId, ...additionalProjectIds].filter(Boolean)) if (!currentProjectIds.has(id)) throw new Error(`Human review references an unknown existing project: ${id}`);
+  if (classification === "project_candidate" && (primaryProjectId || !String(payload.proposedNewProject?.suggestedName || "").trim())) throw new Error("A proposed-project decision requires a proposed name and no primary existing project.");
+  if (classification === "existing_project_support" && !primaryProjectId && !additionalProjectIds.length) throw new Error("Existing-project support requires at least one existing project.");
+  const id = payload.id || makeId("external_review_action");
+  const record = {
+    id, externalReviewPassId, workOrderId: pass.workOrderId, discoveryCaseId: pass.discoveryCaseId, decisionId,
+    disposition, classification, conceptTitle: String(payload.conceptTitle || ""), summary: String(payload.summary || ""),
+    primaryProjectId, additionalProjectIds,
+    operation: String(payload.operation || "standard"), mergedDecisionIds: [...new Set((payload.mergedDecisionIds || []).map(String).filter(Boolean))],
+    derivedFromActionId: String(payload.derivedFromActionId || ""), proposedNewProject: payload.proposedNewProject ? cloneJson(payload.proposedNewProject) : null,
+    routedIntakeId: String(payload.routedIntakeId || ""), recordedAt, recordedBy: actorId, reason, finalDisposition: disposition
+  };
+  const writeDb = openDatabase(dbPath);
+  try { insertStrict(writeDb, "external_review_actions", { id, external_review_pass_id: externalReviewPassId, work_order_id: pass.workOrderId, decision_id: decisionId, recorded_at: recordedAt, record_json: JSON.stringify(record) }); }
+  finally { writeDb.close(); }
+  return { ok: true, externalReviewAction: record, coreChanged: false };
+}
+
+async function listExternalReviewActions({ storageRoot, dbPath, payload = {} }) {
+  await ensureSpine(storageRoot);
+  const passId = String(payload.externalReviewPassId || payload.passId || "").trim();
+  const workOrderId = String(payload.workOrderId || "").trim();
+  const db = openDatabase(dbPath);
+  try {
+    const rows = passId
+      ? db.prepare("SELECT record_json FROM external_review_actions WHERE external_review_pass_id = ? ORDER BY rowid").all(passId)
+      : workOrderId
+        ? db.prepare("SELECT record_json FROM external_review_actions WHERE work_order_id = ? ORDER BY rowid").all(workOrderId)
+        : db.prepare("SELECT record_json FROM external_review_actions ORDER BY rowid").all();
+    return { ok: true, externalReviewActions: rows.map(parseRecordRow) };
   } finally { db.close(); }
 }
 

@@ -1193,3 +1193,34 @@ Verification and release result:
 - Installer SHA-256: `4da17ac97ddf0715340d403f5a22b708a64cedc7558d7e2607cfaccc69b09cbd`
 - Packaging verified Electron `42.4.1`, Node `24.16.0`, SQLite `3.53.0`, and the installed local Qwen provider link in the packaged runtime.
 - The installer is unsigned (`NotSigned`) and remains a local/offline test build, not a public-distribution release. The remaining release gate is extended real-time desktop testing.
+
+## 31. Focused Universal Review Identity and Registry Refinement
+
+Status: implemented and regression/live-Electron verified 2026-07-11; packaged as version `0.2.1` below.
+
+- `evidence.json` now contains the complete eligible `project_registry`. Each snapshot records stable `project_id`, `canonical_name`, aliases, former names, short summary, active/paused/archived status, nullable parent project, and optional project family.
+- Private, personal, confidential, restricted, and explicitly export-excluded projects are omitted by default. The bridge includes them only when a trusted export configuration deliberately supplies `includePrivateProjects: true`.
+- `evidence_readable.md` renders the same registry and package metadata from the exact evidence object used for JSON; the regression checks that IDs, names, hashes, counts, and content remain synchronized.
+- Review instructions now require known-project-first matching, exact project ID/canonical-name snapshots, alias/former-name recognition, multi-project evidence, multi-decision chunks, and provenance-only treatment of filenames/headings/thread/chunk boundaries.
+- Every pack now has immutable `package_id`, Work Order ID, Discovery Case ID, numbered revision, creation time, Project State version, format/protocol versions, and `evidence_sha256`.
+- New append-only `review_export_packages` records preserve the identity, revision, project-registry snapshot, chunk IDs, evidence hash, and export path needed for later automatic matching.
+- Complete-evidence fields now include per-source completion/truncation status, chunk counts, sequence, provenance, full text, provisional summaries/entities/project matches, and zero omission count.
+- The result schema is strict (`additionalProperties: false`) for the top result, reviewer, decision, project match, proposed project, evidence span, relationship, human question, and rejected-material objects.
+- Existing-project matches return exact ID/name objects. Canonical-name mismatches, unknown/currently missing IDs, unexported IDs, invented chunks, inexact evidence excerpts, unsupported fields, and direct-Core/executable instruction fields fail validation.
+- Proposed new projects now carry suggested name/aliases, summary, evidence chunks, distinctness reason, related projects, optional parent/family, and confidence. Import never creates the project.
+- The AI Work Orders header has one **Import Reviewed Evidence** action. It reads the returned `package_id`, automatically locates the exact source Work Order/Discovery Case, validates hash/revision/identity, and opens the matched review history.
+- Review display now separates Existing Project Support, Proposed New Projects, Cross-Project Evidence, Reference Material, Personal Context, Assistant Scaffolding/Noise, Rejected Material, relationships, and human questions. It shows canonical names/IDs, filenames, chunks, exact excerpts, reasoning, confidence, and local disagreement.
+- Owners may rename a proposed project, choose parent/family, reclassify, change existing-project matches, split/merge, and route an approved proposal to Intake. These decisions are stored in the new append-only `external_review_actions` table rather than relying on mutable Work Order UI state.
+- Regression coverage now proves registry JSON/Markdown inclusion, privacy exclusion, alias-to-canonical matching, package identity, complete chunks, metadata synchronization, automatic matching, mixed decisions, multi-project chunks, non-authoritative new-project proposals, hash/revision/ID/name/excerpt rejection, immutable packages/passes/actions, and zero Core mutation.
+- Isolated live Electron verification showed one automatic import control, zero legacy per-Work-Order import controls, the active exchange bridge, export/review controls, automatic-matching guidance, JSON/ZIP/transmission/actor/reason inputs, draggable modal behavior, and zero renderer exceptions.
+
+Release result:
+
+- Windows x64 installer: `release/Project-State-Setup-0.2.1-x64.exe`
+- Size: `101844704` bytes
+- SHA-256: `028f866466c8664165c51bfcff9e0a968235d8a0db9bf70b7626afbdf7782653`
+- Signature status: `NotSigned`
+- Distribution status: local/offline test build only; not public-distribution ready.
+- Remaining release gate: real-time desktop testing, including uninstall/reinstall, backup/restore to the selected external location, and representative universal review-pack export/import.
+- Packaged-content audit confirmed the universal exchange guide, strict review-pack/result schemas, valid/invalid result samples, and sample review ZIP are present in `app.asar`.
+- The packaged runtime check confirmed no bundled user data or secrets, Electron `42.4.1`, Node `24.16.0`, SQLite `3.53.0`, and the local Ollama/Qwen provider linked for AI Work Orders.

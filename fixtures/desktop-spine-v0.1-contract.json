@@ -202,6 +202,18 @@
     {
       "name": "confirmed_idea_units",
       "purpose": "Human-confirmed non-Core Discovery idea units eligible for later project matching and routing review."
+    },
+    {
+      "name": "external_review_passes",
+      "purpose": "Immutable imported model-neutral review results linked to their source package, Work Order, and Discovery Case."
+    },
+    {
+      "name": "review_export_packages",
+      "purpose": "Immutable Universal Review Pack identities, revisions, registry snapshots, and evidence hashes used for automatic matching."
+    },
+    {
+      "name": "external_review_actions",
+      "purpose": "Append-only owner edits, dispositions, split/merge operations, project proposal changes, and Intake routing provenance."
     }
   ],
   "largeContentRules": [
@@ -285,6 +297,13 @@
       "getReceipt",
       "recordReviewDecision",
       "readState"
+    ],
+    "reviewExchange": [
+      "exportUniversalPack",
+      "importExternalReview",
+      "listExternalReviews",
+      "recordHumanAction",
+      "listHumanActions"
     ],
     "securityArms": [
       "authorizeContentAccess"

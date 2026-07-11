@@ -3,15 +3,29 @@
   "$id": "project-state://schema/review-pack/1.0",
   "title": "Project State Universal Review Pack Evidence",
   "type": "object",
-  "required": ["format", "format_version", "work_order", "source_manifest", "chunks", "known_project_registry", "boundary_rules", "allowed_classifications"],
+  "additionalProperties": false,
+  "required": ["package_id", "work_order_id", "discovery_case_id", "pack_revision", "created_at", "project_state_version", "format", "format_version", "review_protocol", "review_protocol_version", "evidence_sha256", "source_complete", "source_counts", "source_manifest", "chunk_counts", "chunks", "project_registry", "boundary_rules", "allowed_classifications", "allowed_evidence_roles", "local_analysis"],
   "properties": {
+    "package_id": { "type": "string" },
+    "work_order_id": { "type": "string" },
+    "discovery_case_id": { "type": "string" },
+    "pack_revision": { "type": "integer", "minimum": 1 },
+    "created_at": { "type": "string" },
+    "project_state_version": { "type": "string" },
     "format": { "const": "project-state-review-pack" },
     "format_version": { "const": "1.0" },
-    "work_order": { "type": "object" },
+    "review_protocol": { "const": "project-state-model-neutral-review" },
+    "review_protocol_version": { "const": "1.0" },
+    "evidence_sha256": { "type": "string", "pattern": "^[a-fA-F0-9]{64}$" },
+    "source_complete": { "type": "boolean" },
+    "source_counts": { "type": "object" },
     "source_manifest": { "type": "array" },
+    "chunk_counts": { "type": "object" },
     "chunks": { "type": "array" },
-    "known_project_registry": { "type": "array" },
+    "project_registry": { "type": "array" },
     "boundary_rules": { "type": "array" },
-    "allowed_classifications": { "type": "array" }
+    "allowed_classifications": { "type": "array" },
+    "allowed_evidence_roles": { "type": "array" },
+    "local_analysis": { "type": "object" }
   }
 }

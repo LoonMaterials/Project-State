@@ -3560,7 +3560,9 @@ function createDesktopPlatformAdapter(bridge) {
       available: typeof reviewExchange.exportUniversalPack === "function" && typeof reviewExchange.importExternalReview === "function",
       exportUniversalPack: (payload) => reviewExchange.exportUniversalPack(payload),
       importExternalReview: (payload) => reviewExchange.importExternalReview(payload),
-      listExternalReviews: (payload) => reviewExchange.listExternalReviews(payload)
+      listExternalReviews: (payload) => reviewExchange.listExternalReviews(payload),
+      recordHumanAction: (payload) => reviewExchange.recordHumanAction(payload),
+      listHumanActions: (payload) => reviewExchange.listHumanActions(payload)
     }
   };
 }
@@ -5749,7 +5751,7 @@ function currentActorCan(permission, project = getProject()) {
 
 function actionPermission(action = "") {
   if (["create-project", "add-decision", "add-fact", "add-conflict", "add-source", "add-relationship", "add-question", "add-action", "add-extract", "read-file-extract", "suggest-extract", "create-draft-project", "import-files", "import-folder", "import-project-files", "import-project-folder"].includes(action)) return "create";
-  if (["edit-status", "edit-object", "rename-project", "assign-object", "mark-complete", "attach-source", "attach-image", "archive-object", "unarchive-project", "manage-project-roles", "review-source-freshness", "verify-source-file", "verify-all-source-files", "archive-ai-work-order", "start-local-ai-work-order", "import-external-ai-review", "review-external-ai-decision", "edit-file-source", "archive-file-source"].includes(action)) return "edit";
+  if (["edit-status", "edit-object", "rename-project", "assign-object", "mark-complete", "attach-source", "attach-image", "archive-object", "unarchive-project", "manage-project-roles", "review-source-freshness", "verify-source-file", "verify-all-source-files", "archive-ai-work-order", "start-local-ai-work-order", "import-reviewed-evidence", "review-external-ai-decision", "edit-file-source", "archive-file-source"].includes(action)) return "edit";
   if (["approve-intake", "approve-extract", "approve-draft-project"].includes(action)) return "approve";
   if (["export-project", "export-handoff", "context-pack", "view-object-history", "show-history", "view-history", "show-changes-since", "history-file-source", "view-ai-work-order-results", "export-universal-review-pack", "view-external-ai-reviews", "refresh-storage", "refresh-local-ai-setup"].includes(action)) return "audit";
   if (["show-settings", "backup-storage", "restore-storage", "reset-local-data", "export-current-raw-data", "enable-arm-transport", "disable-arm-transport", "rotate-arm-transport-token", "revoke-arm-transport"].includes(action)) return "admin";
@@ -6195,6 +6197,7 @@ function renderAiWorkOrders() {
       </div>
       <div class="button-row">
         <button class="btn" data-action="create-ai-work-order">${escapeHtml(t("createAiWorkOrder"))}</button>
+        <button class="btn secondary" data-action="import-reviewed-evidence">Import Reviewed Evidence</button>
         ${archivedOrders ? `<button class="btn danger" data-action="delete-all-archived-ai-work-orders">Delete archived AI Work Orders</button>` : ""}
       </div>
     </section>
@@ -6318,7 +6321,6 @@ function renderAiWorkOrderItem(order) {
         ${source.discoveryCaseId ? `<button class="btn secondary compact" data-action="view-ai-work-order-results" data-work-order-id="${escapeHtml(order.id)}">View AI results</button>` : ""}
         ${canExportUniversalReview ? `<button class="btn secondary compact" data-action="export-universal-review-pack" data-work-order-id="${escapeHtml(order.id)}">Export Universal Review Pack</button>` : ""}
         ${source.discoveryCaseId && !canExportUniversalReview ? `<span class="item-meta">Universal export becomes available after all source chunks are indexed.</span>` : ""}
-        ${source.discoveryCaseId ? `<button class="btn secondary compact" data-action="import-external-ai-review" data-work-order-id="${escapeHtml(order.id)}">Import External AI Review</button>` : ""}
         ${source.discoveryCaseId ? `<button class="btn secondary compact" data-action="view-external-ai-reviews" data-work-order-id="${escapeHtml(order.id)}">Review Imported Decisions</button>` : ""}
         ${order.projectId ? `<button class="btn secondary compact" data-action="open-project" data-project-id="${escapeHtml(order.projectId)}">${escapeHtml(t("goToProject"))}</button>` : ""}
         <button class="btn secondary compact" data-action="comment-ai-work-order" data-work-order-id="${escapeHtml(order.id)}">${escapeHtml(t("reviewThread"))}</button>
@@ -13844,7 +13846,14 @@ function universalReviewKnownProjects() {
     aliases: Array.isArray(project.aliases) ? project.aliases : [],
     currentSummary: project.summary || project.currentSummary || "",
     currentStatus: project.currentStatus || "",
-    archived: Boolean(project.archived)
+    archived: Boolean(project.archived),
+    status: project.status || project.healthFlag || "active",
+    formerNames: Array.isArray(project.formerNames) ? project.formerNames : [],
+    parentProjectId: project.parentProjectId || "",
+    projectFamily: project.projectFamily || "",
+    privacyClass: project.privacyClass || project.privacy || "",
+    private: project.private === true,
+    exportExcluded: project.exportExcluded === true || project.excludeFromAiReview === true || project.excludeFromReviewExport === true
   }));
 }
 
@@ -13857,22 +13866,21 @@ async function exportUniversalReviewPack(workOrderId) {
   }
   try {
     const result = await platformAdapter.reviewExchange.exportUniversalPack({ workOrder, knownProjects: universalReviewKnownProjects() });
-    window.alert(`Universal Review Pack created.\n\n${result.path}\n\n${Number(result.chunkCount || 0).toLocaleString()} complete stored evidence chunks are included.${result.sourceComplete ? " The Work Order reports full source coverage." : " Warning: the Work Order reports that more source remains, so this pack is a partial-source review pack."} The external model's response remains a proposal until you import and approve it.`);
+    window.alert(`Universal Review Pack created.\n\n${result.path}\n\nPackage ${result.packageId} · revision ${result.packRevision}\nEvidence SHA-256: ${result.evidenceSha256}\n\n${Number(result.chunkCount || 0).toLocaleString()} complete stored evidence chunks are included.${result.sourceComplete ? " The Work Order reports full source coverage." : " Warning: the Work Order reports that more source remains, so this pack is a partial-source review pack."} The external model's response remains a proposal until you import and approve it.`);
   } catch (error) {
     console.error("Universal Review Pack export failed.", error);
     window.alert(`Universal Review Pack could not be created.\n\n${error.message || error}`);
   }
 }
 
-function openExternalReviewImportModal(workOrderId) {
-  const workOrder = (store.aiWorkOrders || []).find((order) => order.id === workOrderId);
-  if (!workOrder?.source?.discoveryCaseId || !platformAdapter.reviewExchange?.available) return;
+function openExternalReviewImportModal() {
+  if (!platformAdapter.reviewExchange?.available) return;
   showModal({
-    title: "Import External AI Review",
+    title: "Import Reviewed Evidence",
     submitText: "Validate and import",
     flowStep: 4,
     body: `
-      <p class="notice"><strong>Pre-Airlock import:</strong> Imported decisions remain a separate External Review Pass. They cannot alter local evidence, Candidate Map results, Intake, or Core until a human reviews them.</p>
+      <p class="notice"><strong>Automatic matching:</strong> Project State reads the returned package identity and locates the exact exported Work Order and Discovery Case. Imported decisions remain a separate External Review Pass and cannot alter local evidence, Candidate Map results, Intake, or Core.</p>
       <div class="field">
         <label for="externalReviewPath">Review result JSON or ZIP</label>
         <div class="file-picker-row">
@@ -13894,7 +13902,6 @@ function openExternalReviewImportModal(workOrderId) {
       try {
         const actor = getOrCreateActor(data.actorName, "Human");
         const imported = await platformAdapter.reviewExchange.importExternalReview({
-          workOrder,
           filePath: data.externalReviewPath,
           actorId: actor.id,
           reason: data.reason,
@@ -13903,7 +13910,10 @@ function openExternalReviewImportModal(workOrderId) {
         window.alert(imported.deduplicated
           ? "This exact review file was already imported. The existing immutable pass was reused."
           : `External Review Pass ${imported.externalReviewPass.versionNumber} imported. No Core or local evidence records were changed.`);
-        postModalAction = () => openExternalReviewPassesModal(workOrderId);
+        const matchedWorkOrder = (store.aiWorkOrders || []).find((order) => order.id === imported.workOrderId);
+        postModalAction = matchedWorkOrder
+          ? () => openExternalReviewPassesModal(imported.workOrderId)
+          : () => window.alert(`The review was imported and matched to Work Order ${imported.workOrderId}, but that Work Order is not present in the current UI store. Restore/reload the matching Work Order to review its decisions.`);
         return true;
       } catch (error) {
         console.error("External review import failed.", error);
@@ -13916,23 +13926,25 @@ function openExternalReviewImportModal(workOrderId) {
 
 function externalReviewClassificationLabel(value = "") {
   return {
-    existing_project_support: "Existing project support",
-    project_candidate: "New project candidates",
-    reference_note: "Reference notes",
+    existing_project_support: "Existing Project Support",
+    project_candidate: "Proposed New Projects",
+    cross_project_evidence: "Cross-Project Evidence",
+    reference_note: "Reference Material",
     personal_context_note: "Personal context",
-    assistant_scaffolding_noise: "Assistant scaffolding / noise",
-    rejected_noise: "Rejected noise"
+    assistant_scaffolding_noise: "Assistant Scaffolding / Noise",
+    rejected_noise: "Rejected Material"
   }[value] || String(value || "Unclassified").replaceAll("_", " ");
 }
 
-function externalReviewActionFor(workOrder, passId, decisionId) {
-  return [...(workOrder.externalReviewActions || [])].reverse().find((action) => action.passId === passId && action.decisionId === decisionId) || null;
+function externalReviewActionFor(pass, decisionId) {
+  return [...(pass.humanActions || [])].reverse().find((action) => action.decisionId === decisionId) || null;
 }
 
-function renderExternalReviewDecision(workOrder, pass, decision, chunkTextById = new Map()) {
-  const action = externalReviewActionFor(workOrder, pass.id, decision.decision_id);
-  const primaryName = decision.primary_project_id ? projectNameById(decision.primary_project_id) || decision.primary_project_id : "None";
-  const additional = (decision.additional_project_ids || []).map((id) => projectNameById(id) || id).join(", ");
+function renderExternalReviewDecision(workOrder, pass, decision, chunkTextById = new Map(), chunkSourceById = new Map()) {
+  const action = externalReviewActionFor(pass, decision.decision_id);
+  const primaryName = decision.primary_project ? `${decision.primary_project.canonical_name} (${decision.primary_project.project_id})` : "None";
+  const additional = (decision.additional_projects || []).map((match) => `${match.canonical_name} (${match.project_id})`).join(", ");
+  const sourceFiles = [...new Set((decision.supporting_chunk_ids || []).map((id) => chunkSourceById.get(id)).filter(Boolean))];
   const externalChunks = new Set(decision.supporting_chunk_ids || []);
   const localMatch = (workOrder.candidateMap?.entries || []).find((entry) => nameKey(entry.title || entry.conceptTitle) === nameKey(decision.concept_title)
     || (entry.evidence || []).some((evidence) => externalChunks.has(evidence.discoveryChunkId)));
@@ -13942,8 +13954,10 @@ function renderExternalReviewDecision(workOrder, pass, decision, chunkTextById =
     <p class="item-title">${escapeDisplay(decision.concept_title || "Untitled decision", DISPLAY_META_LIMIT)}</p>
     <p class="item-meta">${escapeHtml(externalReviewClassificationLabel(decision.classification))} · confidence ${Math.round(Number(decision.confidence || 0) * 100)}% · evidence role: ${escapeHtml(String(decision.evidence_role || "").replaceAll("_", " "))}</p>
     <p class="item-meta">Primary project: ${escapeDisplay(primaryName, DISPLAY_META_LIMIT)}${additional ? ` · Additional projects: ${escapeDisplay(additional, DISPLAY_META_LIMIT)}` : ""}</p>
+    ${decision.proposed_new_project ? `<p class="notice"><strong>Proposed new project:</strong> ${escapeDisplay(decision.proposed_new_project.suggested_name, DISPLAY_META_LIMIT)} · confidence ${Math.round(Number(decision.proposed_new_project.confidence || 0) * 100)}%${decision.proposed_new_project.proposed_parent_project_id ? ` · proposed parent ${escapeDisplay(decision.proposed_new_project.proposed_parent_project_id, DISPLAY_META_LIMIT)}` : ""}<br>${escapeDisplay(decision.proposed_new_project.reason_distinct_from_existing_projects || "", DISPLAY_TEXT_LIMIT)}</p>` : ""}
+    ${sourceFiles.length ? `<p class="item-meta">Source files: ${escapeDisplay(sourceFiles.join(", "), DISPLAY_TEXT_LIMIT)}</p>` : ""}
     ${localMatch ? `<p class="${localDisagreement ? "notice" : "item-meta"}"><strong>Local Candidate Map:</strong> ${escapeDisplay(localMatch.title || localMatch.conceptTitle || "Untitled local entry", DISPLAY_META_LIMIT)} · ${escapeHtml(externalReviewClassificationLabel(localClassification || "unclassified"))}${localDisagreement ? " · differs from external review" : " · aligned"}</p>` : `<p class="notice"><strong>Local comparison:</strong> No matching Candidate Map entry was found; this is an external-only proposal.</p>`}
-    ${action ? `<p class="notice"><strong>Human decision:</strong> ${escapeHtml(String(action.disposition || "reviewed").replaceAll("_", " "))} · ${escapeHtml(String(action.operation || "standard").replaceAll("_", " "))} · ${escapeHtml(formatDate(action.reviewedAt))}${action.conceptTitle && action.conceptTitle !== decision.concept_title ? ` · retitled: ${escapeDisplay(action.conceptTitle, DISPLAY_META_LIMIT)}` : ""}${action.routedIntakeId ? " · routed to Intake" : ""}</p>` : ""}
+    ${action ? `<p class="notice"><strong>Human decision:</strong> ${escapeHtml(String(action.finalDisposition || action.disposition || "reviewed").replaceAll("_", " "))} · ${escapeHtml(String(action.operation || "standard").replaceAll("_", " "))} · ${escapeHtml(formatDate(action.recordedAt))}${action.conceptTitle && action.conceptTitle !== decision.concept_title ? ` · retitled: ${escapeDisplay(action.conceptTitle, DISPLAY_META_LIMIT)}` : ""}${action.routedIntakeId ? " · routed to Intake" : ""}</p>` : ""}
     <p class="item-body">${escapeDisplay(decision.summary || decision.reasoning_summary || "", DISPLAY_TEXT_LIMIT)}</p>
     <details class="technical-details"><summary>Evidence, reasoning, and boundaries</summary>
       <p class="item-meta">Decision ID: ${escapeDisplay(decision.decision_id, DISPLAY_META_LIMIT)} · chunks: ${escapeDisplay((decision.supporting_chunk_ids || []).join(", "), DISPLAY_TEXT_LIMIT)}</p>
@@ -13962,6 +13976,13 @@ async function openExternalReviewPassesModal(workOrderId) {
   try {
     const response = await platformAdapter.reviewExchange.listExternalReviews({ workOrderId });
     const passes = response.externalReviewPasses || [];
+    const caseView = await platformAdapter.discovery.getCase({ discoveryCaseId: workOrder.source.discoveryCaseId });
+    const extractionById = new Map((caseView.extractions || []).map((item) => [item.id, item]));
+    const versionById = new Map((caseView.fileVersions || []).map((item) => [item.id, item]));
+    const chunkSourceById = new Map((caseView.chunks || []).map((chunk) => {
+      const extraction = extractionById.get(chunk.discoveryExtractionId) || {};
+      return [chunk.id, versionById.get(extraction.fileVersionId)?.originalName || ""];
+    }));
     const chunkIds = [...new Set(passes.flatMap((pass) => (pass.result.decisions || []).flatMap((decision) => decision.supporting_chunk_ids || [])))].slice(0, 300);
     const chunkTextById = new Map();
     await Promise.all(chunkIds.map(async (chunkId) => {
@@ -13972,12 +13993,17 @@ async function openExternalReviewPassesModal(workOrderId) {
       submitText: t("close"),
       flowStep: 4,
       body: passes.length ? passes.slice().reverse().map((pass) => {
-        const groups = Object.groupBy ? Object.groupBy(pass.result.decisions || [], (decision) => decision.classification) : (pass.result.decisions || []).reduce((all, decision) => ((all[decision.classification] ||= []).push(decision), all), {});
+        const reviewGroup = (decision) => decision.classification === "project_candidate"
+          ? "project_candidate"
+          : decision.classification === "existing_project_support" && (decision.additional_projects || []).length
+            ? "cross_project_evidence"
+            : decision.classification;
+        const groups = Object.groupBy ? Object.groupBy(pass.result.decisions || [], reviewGroup) : (pass.result.decisions || []).reduce((all, decision) => ((all[reviewGroup(decision)] ||= []).push(decision), all), {});
         return `<section class="item">
           <p class="item-title">External Review Pass ${Number(pass.versionNumber).toLocaleString()}</p>
           <p class="item-meta">Imported ${escapeHtml(formatDate(pass.importedAt))} · ${escapeDisplay(pass.reviewer?.provider || pass.reviewer?.model || pass.reviewer?.reviewer_type || "Unspecified reviewer", DISPLAY_META_LIMIT)} · ${pass.sourceComplete ? "source complete" : "partial source review"} · immutable import hash ${escapeDisplay(String(pass.importHash || "").slice(0, 16), 20)}…</p>
           <p class="notice">This pass is non-authoritative. Every decision below requires a separate human action before anything can enter Intake.</p>
-          ${Object.entries(groups).map(([classification, decisions]) => `<h3 class="section-title">${escapeHtml(externalReviewClassificationLabel(classification))} (${decisions.length})</h3>${decisions.map((decision) => renderExternalReviewDecision(workOrder, pass, decision, chunkTextById)).join("")}`).join("")}
+          ${Object.entries(groups).map(([classification, decisions]) => `<h3 class="section-title">${escapeHtml(externalReviewClassificationLabel(classification))} (${decisions.length})</h3>${decisions.map((decision) => renderExternalReviewDecision(workOrder, pass, decision, chunkTextById, chunkSourceById)).join("")}`).join("")}
           ${(pass.result.relationships || []).length ? `<details class="technical-details"><summary>Relationships (${pass.result.relationships.length})</summary><pre class="code-block">${escapeHtml(JSON.stringify(pass.result.relationships, null, 2))}</pre></details>` : ""}
           ${(pass.result.human_questions || []).length ? `<details class="technical-details"><summary>Questions for human review (${pass.result.human_questions.length})</summary>${pass.result.human_questions.map((question) => `<p class="item-body">${escapeDisplay(question.question || question.text || JSON.stringify(question), DISPLAY_TEXT_LIMIT)}</p>`).join("")}</details>` : ""}
           ${(pass.result.rejected_material || []).length ? `<details class="technical-details"><summary>Rejected material (${pass.result.rejected_material.length})</summary>${pass.result.rejected_material.map((item) => `<p class="item-body">${escapeDisplay(item.summary || item.reason || item.title || JSON.stringify(item), DISPLAY_TEXT_LIMIT)}</p>`).join("")}</details>` : ""}
@@ -13998,6 +14024,9 @@ function openExternalDecisionReviewModal(workOrderId, passId, decisionId) {
     const pass = (response.externalReviewPasses || []).find((item) => item.id === passId);
     const decision = pass?.result?.decisions?.find((item) => item.decision_id === decisionId);
     if (!pass || !decision) return;
+    const initialPrimaryProjectId = decision.primary_project?.project_id || "";
+    const initialAdditionalProjectIds = (decision.additional_projects || []).map((match) => match.project_id);
+    const proposedNewProject = decision.proposed_new_project || {};
     const classificationOptions = ["project_candidate", "existing_project_support", "reference_note", "personal_context_note", "assistant_scaffolding_noise", "rejected_noise"]
       .map((value) => `<option value="${value}" ${decision.classification === value ? "selected" : ""}>${escapeHtml(externalReviewClassificationLabel(value))}</option>`).join("");
     showModal({
@@ -14012,8 +14041,11 @@ function openExternalDecisionReviewModal(workOrderId, passId, decisionId) {
         <div class="field"><label for="classification">Classification</label><select id="classification" name="classification" required>${classificationOptions}</select></div>
         <div class="field"><label for="conceptTitle">Concept title</label><input id="conceptTitle" name="conceptTitle" required value="${escapeHtml(decision.concept_title || "")}"></div>
         <div class="field"><label for="summary">Summary</label><textarea id="summary" name="summary">${escapeHtml(decision.summary || "")}</textarea></div>
-        <div class="field"><label for="primaryProjectId">Primary existing project</label><select id="primaryProjectId" name="primaryProjectId"><option value="">No existing project</option>${projectOptions(decision.primary_project_id || "")}</select></div>
-        <fieldset class="field"><legend>Additional existing projects</legend>${(store.projects || []).filter((project) => !project.archived).map((project) => `<label class="check-row"><input type="checkbox" name="additionalProjectIds" value="${escapeHtml(project.id)}" ${(decision.additional_project_ids || []).includes(project.id) ? "checked" : ""}> ${escapeDisplay(project.name, DISPLAY_META_LIMIT)}</label>`).join("") || "<p class=\"item-meta\">No other projects are available.</p>"}</fieldset>
+        <div class="field"><label for="primaryProjectId">Primary existing project</label><select id="primaryProjectId" name="primaryProjectId"><option value="">No existing project</option>${projectOptions(initialPrimaryProjectId)}</select></div>
+        <fieldset class="field"><legend>Additional existing projects</legend>${(store.projects || []).filter((project) => !project.archived).map((project) => `<label class="check-row"><input type="checkbox" name="additionalProjectIds" value="${escapeHtml(project.id)}" ${initialAdditionalProjectIds.includes(project.id) ? "checked" : ""}> ${escapeDisplay(project.name, DISPLAY_META_LIMIT)}</label>`).join("") || "<p class=\"item-meta\">No other projects are available.</p>"}</fieldset>
+        <div class="field"><label for="proposedProjectName">Proposed new project name (owner may rename)</label><input id="proposedProjectName" name="proposedProjectName" value="${escapeHtml(proposedNewProject.suggested_name || "")}" placeholder="Required when classification is Proposed New Projects"></div>
+        <div class="field"><label for="proposedParentProjectId">Proposed parent project</label><select id="proposedParentProjectId" name="proposedParentProjectId"><option value="">No parent project</option>${projectOptions(proposedNewProject.proposed_parent_project_id || "")}</select></div>
+        <div class="field"><label for="projectFamily">Project family</label><input id="projectFamily" name="projectFamily" value="${escapeHtml(proposedNewProject.project_family || "")}" placeholder="Optional family or portfolio label"></div>
         <div class="field"><label for="mergeDecisionId">Decision to merge (used only for merge)</label><select id="mergeDecisionId" name="mergeDecisionId"><option value="">Choose another decision</option>${(pass.result.decisions || []).filter((item) => item.decision_id !== decisionId).map((item) => `<option value="${escapeHtml(item.decision_id)}">${escapeDisplay(item.concept_title || item.decision_id, DISPLAY_META_LIMIT)}</option>`).join("")}</select></div>
         <div class="field"><label for="splitConceptTitle">Second concept title (used only for split)</label><input id="splitConceptTitle" name="splitConceptTitle" placeholder="Title for the second human-reviewed concept"></div>
         <div class="field"><label for="splitSummary">Second concept summary (used only for split)</label><textarea id="splitSummary" name="splitSummary" placeholder="What belongs in the second concept"></textarea></div>
@@ -14025,11 +14057,15 @@ function openExternalDecisionReviewModal(workOrderId, passId, decisionId) {
         const additionalProjectIds = [...form.querySelectorAll('input[name="additionalProjectIds"]:checked')].map((input) => input.value).filter((id) => id !== data.primaryProjectId);
         if (data.reviewOperation === "merge" && !data.mergeDecisionId) { window.alert("Choose the other decision to merge."); return false; }
         if (data.reviewOperation === "split" && !data.splitConceptTitle.trim()) { window.alert("Enter the second concept title for the split."); return false; }
+        if (data.classification === "project_candidate" && !data.proposedProjectName.trim()) { window.alert("Approve or enter a proposed new project name before recording this as a proposed project."); return false; }
+        if (data.classification === "project_candidate" && data.primaryProjectId) { window.alert("A proposed new project cannot also use an existing project as its primary project. Clear the primary project or classify this as existing-project support."); return false; }
+        if (data.classification === "existing_project_support" && !data.primaryProjectId && !additionalProjectIds.length) { window.alert("Existing-project support needs at least one existing project match."); return false; }
         const action = {
-          id: uid("external_review_action"), passId, decisionId, disposition: data.disposition,
+          id: uid("external_review_action"), externalReviewPassId: passId, decisionId, disposition: data.disposition,
           classification: data.classification, conceptTitle: data.conceptTitle.trim(), summary: data.summary.trim(),
-          primaryProjectId: data.primaryProjectId || "", additionalProjectIds, reviewedAt: nowIso(), reviewedBy: actor.id, reason: data.reason.trim(), routedIntakeId: "",
-          operation: data.reviewOperation || "standard", mergedDecisionIds: data.reviewOperation === "merge" ? [decisionId, data.mergeDecisionId] : []
+          primaryProjectId: data.primaryProjectId || "", additionalProjectIds, recordedAt: nowIso(), actorId: actor.id, reason: data.reason.trim(), routedIntakeId: "",
+          operation: data.reviewOperation || "standard", mergedDecisionIds: data.reviewOperation === "merge" ? [decisionId, data.mergeDecisionId] : [],
+          proposedNewProject: data.classification === "project_candidate" ? { suggestedName: data.proposedProjectName.trim(), proposedParentProjectId: data.proposedParentProjectId || "", projectFamily: data.projectFamily.trim() } : null
         };
         if (data.routeToIntake === "yes") {
           if (data.disposition !== "approved") { window.alert("Only an approved human decision can be routed to Intake."); return false; }
@@ -14037,24 +14073,23 @@ function openExternalDecisionReviewModal(workOrderId, passId, decisionId) {
           const intake = createIntakeItem({
             armType: "ai", title: data.conceptTitle.trim(), createdBy: actor.id, sourceLabel: `External Review Pass ${pass.versionNumber}`,
             projectId: data.primaryProjectId || "", destination: proposedNew ? "proposed_new_project" : data.primaryProjectId ? "existing_project" : "unassigned",
-            proposedProjectName: proposedNew ? data.conceptTitle.trim() : "", proposedObjectType: "Source",
+            proposedProjectName: proposedNew ? data.proposedProjectName.trim() : "", proposedObjectType: "Source",
             proposedChange: { text: data.conceptTitle.trim(), summary: data.summary.trim() || decision.reasoning_summary || "" },
-            evidence: { externalReviewPassId: passId, externalDecisionId: decisionId, supportingChunkIds: decision.supporting_chunk_ids || [], humanReviewActionId: action.id },
+            evidence: { externalReviewPassId: passId, externalDecisionId: decisionId, supportingChunkIds: decision.supporting_chunk_ids || [], humanReviewActionId: action.id, proposedParentProjectId: data.proposedParentProjectId || "", projectFamily: data.projectFamily.trim() },
             save: false
           });
           action.routedIntakeId = intake.id;
         }
-        workOrder.externalReviewActions = Array.isArray(workOrder.externalReviewActions) ? workOrder.externalReviewActions : [];
-        workOrder.externalReviewActions.push(action);
+        await platformAdapter.reviewExchange.recordHumanAction(action);
         if (data.reviewOperation === "split") {
-          workOrder.externalReviewActions.push({
-            id: uid("external_review_action"), passId, decisionId, derivedFromActionId: action.id, disposition: data.disposition,
+          await platformAdapter.reviewExchange.recordHumanAction({
+            id: uid("external_review_action"), externalReviewPassId: passId, decisionId, derivedFromActionId: action.id, disposition: data.disposition,
             classification: data.classification, conceptTitle: data.splitConceptTitle.trim(), summary: data.splitSummary.trim(),
-            primaryProjectId: data.primaryProjectId || "", additionalProjectIds, reviewedAt: action.reviewedAt, reviewedBy: actor.id,
-            reason: data.reason.trim(), routedIntakeId: "", operation: "split_secondary", mergedDecisionIds: []
+            primaryProjectId: data.primaryProjectId || "", additionalProjectIds, recordedAt: action.recordedAt, actorId: actor.id,
+            reason: data.reason.trim(), routedIntakeId: "", operation: "split_secondary", mergedDecisionIds: [], proposedNewProject: action.proposedNewProject
           });
         }
-        await saveStore({ allowWithoutCoreApproval: true, reason: "external-review-human-decision" });
+        if (action.routedIntakeId) await saveStore({ allowWithoutCoreApproval: true, reason: "external-review-human-decision" });
         postModalAction = () => openExternalReviewPassesModal(workOrderId);
         return true;
       }
@@ -14084,7 +14119,6 @@ async function openAiWorkOrderResultsModal(workOrderId) {
       ${noCandidatesFound ? `<p class="notice"><strong>No candidates found in the last pass.</strong> This is a completed AI attempt, not a completed source digestion.</p>` : ""}
       <div class="item-actions">
         ${canExportUniversalReview ? `<button class="btn secondary compact" type="button" data-action="export-universal-review-pack" data-work-order-id="${escapeHtml(workOrder.id)}">Export Universal Review Pack</button>` : `<span class="item-meta">Finish all source indexing before Universal export.</span>`}
-        <button class="btn secondary compact" type="button" data-action="import-external-ai-review" data-work-order-id="${escapeHtml(workOrder.id)}">Import External AI Review</button>
         <button class="btn secondary compact" type="button" data-action="view-external-ai-reviews" data-work-order-id="${escapeHtml(workOrder.id)}">Review Imported Decisions</button>
       </div>
       <h3 class="section-title">Candidate Map</h3>
@@ -17756,7 +17790,7 @@ app.addEventListener("click", (event) => {
   if (action === "start-local-ai-work-order") openStartLocalAiWorkOrderModal(button.dataset.workOrderId);
   if (action === "view-ai-work-order-results") openAiWorkOrderResultsModal(button.dataset.workOrderId);
   if (action === "export-universal-review-pack") exportUniversalReviewPack(button.dataset.workOrderId);
-  if (action === "import-external-ai-review") openExternalReviewImportModal(button.dataset.workOrderId);
+  if (action === "import-reviewed-evidence") openExternalReviewImportModal();
   if (action === "view-external-ai-reviews") openExternalReviewPassesModal(button.dataset.workOrderId);
   if (action === "review-external-ai-decision") openExternalDecisionReviewModal(button.dataset.workOrderId, button.dataset.reviewPassId, button.dataset.decisionId);
   if (action === "comment-ai-work-order") openAiWorkOrderCommentsModal(button.dataset.workOrderId);
@@ -18061,7 +18095,7 @@ document.addEventListener("click", (event) => {
   const action = button.dataset.action;
   if (!actionAllowedForCurrentActor(action)) { window.alert(t("permissionDenied")); return; }
   if (action === "export-universal-review-pack") exportUniversalReviewPack(button.dataset.workOrderId);
-  if (action === "import-external-ai-review") openExternalReviewImportModal(button.dataset.workOrderId);
+  if (action === "import-reviewed-evidence") openExternalReviewImportModal();
   if (action === "view-external-ai-reviews") openExternalReviewPassesModal(button.dataset.workOrderId);
   if (action === "review-external-ai-decision") openExternalDecisionReviewModal(button.dataset.workOrderId, button.dataset.reviewPassId, button.dataset.decisionId);
 });
