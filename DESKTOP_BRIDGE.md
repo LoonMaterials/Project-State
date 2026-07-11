@@ -97,6 +97,11 @@ window.ProjectStateDesktop = {
     async recordReviewDecision(payload) {},
     async readState(payload) {}
   },
+  reviewExchange: {
+    async exportUniversalPack(payload) {},
+    async importExternalReview(payload) {},
+    async listExternalReviews(payload) {}
+  },
   securityArms: {
     async authorizeContentAccess(reference) {}
   },

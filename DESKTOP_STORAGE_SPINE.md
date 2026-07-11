@@ -69,6 +69,7 @@ Use SQLite for structured records:
 - `ai_analysis_result_receipts`
 - `idea_review_decisions`
 - `confirmed_idea_units`
+- `external_review_passes` (immutable imported model-neutral review results; never Core authority)
 
 Managed Folders
 

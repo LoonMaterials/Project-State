@@ -300,6 +300,29 @@ CREATE TABLE IF NOT EXISTS discovery_chunks (
   FOREIGN KEY(discovery_extraction_id) REFERENCES discovery_extractions(id) ON UPDATE RESTRICT ON DELETE RESTRICT
 );
 
+CREATE TABLE IF NOT EXISTS external_review_passes (
+  id TEXT PRIMARY KEY,
+  discovery_case_id TEXT NOT NULL,
+  work_order_id TEXT NOT NULL,
+  import_hash TEXT NOT NULL CHECK(length(import_hash) = 64),
+  imported_at TEXT NOT NULL,
+  record_json TEXT NOT NULL,
+  UNIQUE(work_order_id, import_hash),
+  FOREIGN KEY(discovery_case_id) REFERENCES discovery_cases(id) ON UPDATE RESTRICT ON DELETE RESTRICT
+);
+
+CREATE TRIGGER IF NOT EXISTS external_review_passes_no_update
+BEFORE UPDATE ON external_review_passes
+BEGIN
+  SELECT RAISE(ABORT, 'external_review_passes are append-only');
+END;
+
+CREATE TRIGGER IF NOT EXISTS external_review_passes_no_delete
+BEFORE DELETE ON external_review_passes
+BEGIN
+  SELECT RAISE(ABORT, 'external_review_passes are append-only');
+END;
+
 CREATE TABLE IF NOT EXISTS idea_analysis_runs (
   id TEXT PRIMARY KEY,
   discovery_case_id TEXT NOT NULL,

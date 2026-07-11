@@ -1,0 +1,29 @@
+{
+  "format": "project-state-review-result",
+  "format_version": "1.0",
+  "work_order_id": "ai_work_order_sample_001",
+  "reviewer": { "reviewer_type": "ai", "provider": "optional-provider", "model": "optional-model", "reviewed_at": "2026-07-11T00:00:00.000Z" },
+  "source_complete": true,
+  "decisions": [
+    {
+      "decision_id": "decision_sample_001",
+      "concept_title": "Existing Project Validation Support",
+      "classification": "existing_project_support",
+      "primary_project_id": "project_sample_alpha",
+      "additional_project_ids": ["project_sample_beta"],
+      "summary": "The evidence supports validation work shared by two existing projects.",
+      "supporting_chunk_ids": ["chunk_sample_001"],
+      "evidence_spans": [{ "chunk_id": "chunk_sample_001", "start": 0, "end": 42, "excerpt": "Validation measurements support both devices." }],
+      "confidence": 0.86,
+      "reasoning_summary": "Named devices and the validation procedure recur in the evidence.",
+      "evidence_role": "validation_or_test_support",
+      "personal_aether_support": false,
+      "commercial_default_allowed": true,
+      "requires_separate_design_review": false,
+      "human_review_required": true
+    }
+  ],
+  "relationships": [],
+  "human_questions": [{ "question_id": "question_sample_001", "text": "Should the evidence be attached to both projects?", "supporting_chunk_ids": ["chunk_sample_001"] }],
+  "rejected_material": []
+}

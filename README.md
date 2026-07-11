@@ -86,6 +86,8 @@ A document can be treated as one item or reviewed as several editable ideas with
 
 The Idea Analysis foundation stores exact analysis scope, human provider authorization, transmission receipts, non-authoritative Idea Candidates, human review decisions, and Confirmed Idea Units separately. The installed analysis arm is a deterministic local contract-test fixture only. It contacts no provider, uses no credentials, cannot name projects or route material, and cannot create human review or Core authority.
 
+AI Work Orders also support a model-neutral **Universal Review Pack** exchange. Project State exports complete chunk evidence, stable IDs, the active known-project registry, human-readable evidence, instructions, and a versioned result schema in one ZIP. Any local model, cloud model, or human reviewer can return schema-valid JSON. Imported results become immutable External Review Passes only: they cannot change local evidence, Intake, Candidate Map results, or Core. A human must review each decision and deliberately route an approved proposal through Intake/Airlock. See `UNIVERSAL_AI_REVIEW_EXCHANGE.md`.
+
 Queue review is separate from approval:
 
 New

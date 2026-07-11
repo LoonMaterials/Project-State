@@ -126,8 +126,8 @@ async function main() {
     const appSource = fs.readFileSync(path.join(__dirname, "..", "app.js"), "utf8");
     assert(appSource.includes("data-corpus-index-required"), "Large corpus review UI should mark large files as AI-follow-up material.");
     assert(appSource.includes("Create Large-file/folder AI Work Order"), "Large corpus review UI should route slow digestion to AI Work Orders.");
-    assert(appSource.includes("Large-file digestion now belongs in AI Work Orders"), "Large corpus review UI should explain the AI Work Order bench.");
-    assert(appSource.includes("No AI is called from this Discovery screen."), "Discovery should not run AI inline for large-file review.");
+    assert(appSource.includes("Unknown material is queued to an AI Work Order before it can reach Intake."), "Large corpus review UI should explain the AI Work Order bench.");
+    assert(appSource.includes("Confirming creates the Work Order. Start local AI digestion from AI Work Orders"), "Discovery should not run AI inline for large-file review.");
     for (const removed of ["data-run-idea-analysis", "Queue indexed evidence in AI Work Orders", "Partial analysis window", "Build a large-file index before running local AI idea analysis.", "Analyzing exact chunks locally"]) {
       assert(!appSource.includes(removed), `Large corpus review UI still exposes removed inline AI behavior: ${removed}`);
     }

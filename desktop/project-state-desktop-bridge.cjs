@@ -19,6 +19,10 @@ const SCHEMA_FILE = path.join(__dirname, "spine-schema.sql");
 const API_ARM_CONTRACT_FILE = path.join(ROOT, "fixtures", "api-arm-v0.1-contract.json");
 const IDEA_CANDIDATE_CONTRACT_FILE = path.join(ROOT, "fixtures", "idea-candidate-v0.1-contract.json");
 const AI_ANALYSIS_ARM_CONTRACT_FILE = path.join(ROOT, "fixtures", "ai-analysis-arm-v0.1-contract.json");
+const REVIEW_RESULT_SCHEMA_FILE = path.join(ROOT, "fixtures", "review-result-v1.0.schema.json");
+const REVIEW_PACK_SCHEMA_FILE = path.join(ROOT, "fixtures", "review-pack-v1.0.schema.json");
+const EXTERNAL_REVIEW_CLASSIFICATIONS = ["project_candidate", "existing_project_support", "reference_note", "personal_context_note", "assistant_scaffolding_noise", "rejected_noise"];
+const EXTERNAL_REVIEW_EVIDENCE_ROLES = ["primary_evidence", "background_reference", "duplicate_or_confirming_reference", "validation_or_test_support", "risk_or_contradiction", "patent_licensing_or_outreach_support", "cross_project_reference", "additional_project_reference", "context_only", "noise"];
 const DEFAULT_STORAGE_ROOT = path.join(os.homedir(), "Project State Storage");
 const DATABASE_FILE = "project-state.db";
 const FOLDERS = ["sources", "extracts", "attachments", "quarantine", "discovery", "backups", "recovery", "manifests", "logs", "temp", "integrations"];
@@ -183,7 +187,8 @@ const REQUIRED_TABLES = [
   "idea_candidates",
   "ai_analysis_result_receipts",
   "idea_review_decisions",
-  "confirmed_idea_units"
+  "confirmed_idea_units",
+  "external_review_passes"
 ];
 
 function createProjectStateDesktopBridge(options = {}) {
@@ -323,6 +328,17 @@ function createProjectStateDesktopBridge(options = {}) {
       },
       async readState(payload = {}) {
         return readIdeaAnalysisState({ storageRoot, dbPath, payload });
+      }
+    },
+    reviewExchange: {
+      async exportUniversalPack(payload = {}) {
+        return createUniversalReviewPack({ storageRoot, dbPath, payload });
+      },
+      async importExternalReview(payload = {}) {
+        return importExternalReviewPass({ storageRoot, dbPath, payload });
+      },
+      async listExternalReviews(payload = {}) {
+        return listExternalReviewPasses({ storageRoot, dbPath, payload });
       }
     },
     securityArms: {
@@ -903,7 +919,7 @@ function migrateFileVersionsManagedPathConstraint(db) {
 const DISCOVERY_CASE_STATUSES = new Set(["created", "security_pending", "security_blocked", "extracting", "questioning", "routing", "ready_for_intake", "promoted", "archived"]);
 const DISCOVERY_STAGES = new Set(["add", "quarantine", "security", "extract", "discovery", "questions", "routing", "intake", "human_approval", "core"]);
 const DISCOVERY_PRIVACY_CLASSES = new Set(["local_only", "personal", "confidential", "restricted", "provider_allowed"]);
-const DISCOVERY_INTERACTION_TYPES = new Set(["system_question", "user_answer", "user_correction", "machine_suggestion", "routing_proposal", "routing_confirmation", "processing_event"]);
+const DISCOVERY_INTERACTION_TYPES = new Set(["system_question", "user_answer", "user_correction", "machine_suggestion", "routing_proposal", "routing_confirmation", "processing_event", "external_review_import"]);
 const SECURITY_VERDICTS = new Set(["clean", "threat_detected", "suspicious", "unknown", "error"]);
 
 async function initializeDiscoveryStorage({ storageRoot, dbPath }) {
@@ -4171,6 +4187,355 @@ function classifyDiscoveryFile(fileName = "") {
   };
 }
 
+
+function reviewPackEntities(text = "") {
+  const values = [];
+  const seen = new Set();
+  for (const match of String(text || "").matchAll(/\b[A-Z][A-Za-z0-9]*(?:[\s\/-]+[A-Z][A-Za-z0-9]*){0,5}\b/g)) {
+    const value = match[0].trim();
+    const key = value.toLowerCase();
+    if (value.length < 3 || seen.has(key)) continue;
+    seen.add(key);
+    values.push(value);
+    if (values.length >= 100) break;
+  }
+  return values;
+}
+
+function reviewPackHeadings(text = "") {
+  return String(text || "").split(/\r?\n/).map((line) => line.trim()).filter((line) => /^#{1,6}\s+\S/.test(line) || (/^[A-Z][A-Z0-9 '&/()_-]{3,100}$/.test(line) && line.length <= 120)).slice(0, 100);
+}
+
+function reviewPackProjectRegistry(projects = []) {
+  return (projects || []).filter((project) => project?.id && !project.archived).map((project) => ({
+    project_id: String(project.id),
+    name: String(project.name || "Untitled project"),
+    aliases: [...new Set([...(project.aliases || []), ...(project.tags || [])].map(String).filter(Boolean))].slice(0, 30),
+    concise_summary: String(project.currentSummary || project.currentStatus || "").slice(0, 1000)
+  }));
+}
+
+function reviewPackInstructions(evidence) {
+  return [
+    "# Project State Universal AI Review Pack",
+    "",
+    "Review the complete evidence package and return JSON that validates against `schema/review_result.schema.json`.",
+    "",
+    "## Boundary rules",
+    "",
+    ...evidence.boundary_rules.map((rule) => `- ${rule}`),
+    "",
+    "## Required reasoning behavior",
+    "",
+    "- One document may contain multiple ideas.",
+    "- One chunk may support multiple decisions.",
+    "- Evidence may support more than one existing project.",
+    "- Assistant headings and chat/thread boundaries are provenance only, not project boundaries.",
+    "- Use stable IDs from `evidence.json`; never invent chunk IDs or existing project IDs.",
+    "- External decisions are proposals, not Core truth.",
+    "- Preserve uncertainty and set `human_review_required` to true.",
+    "",
+    `Work Order: \`${evidence.work_order.work_order_id}\``,
+    `Discovery Case: \`${evidence.work_order.discovery_case_id}\``
+  ].join("\n");
+}
+
+function reviewPackReadableMarkdown(evidence) {
+  const lines = [
+    "# Project State Evidence",
+    "",
+    "> External review is non-authoritative. One document may contain multiple ideas; one chunk may support multiple decisions; evidence may support more than one project. Assistant headings and thread boundaries are provenance only. Every imported decision requires human review before Intake/Airlock and Core.",
+    "",
+    `- Work Order ID: \`${evidence.work_order.work_order_id}\``,
+    `- Discovery Case ID: \`${evidence.work_order.discovery_case_id}\``,
+    `- Source complete: ${evidence.work_order.source_complete ? "yes" : "no"}`,
+    "",
+    "## Known project registry",
+    "",
+    ...evidence.known_project_registry.map((project) => `- \`${project.project_id}\` — **${project.name}**${project.concise_summary ? `: ${project.concise_summary}` : ""}`),
+    "",
+    "## Complete evidence chunks",
+    ""
+  ];
+  for (const chunk of evidence.chunks) {
+    lines.push(`### Chunk \`${chunk.chunk_id}\``);
+    lines.push("");
+    lines.push(`Source: \`${chunk.source_id}\` · File version: \`${chunk.file_version_id}\` · Order: ${chunk.chunk_order}`);
+    if (chunk.source_filename) lines.push(`Filename provenance: ${chunk.source_filename}`);
+    if (chunk.source_headings?.length) lines.push(`Heading provenance: ${chunk.source_headings.join(" | ")}`);
+    lines.push("");
+    lines.push("```text");
+    lines.push(chunk.text);
+    lines.push("```");
+    lines.push("");
+  }
+  return lines.join("\n");
+}
+
+function crc32Buffer(buffer) {
+  let crc = 0xffffffff;
+  for (const byte of buffer) {
+    crc ^= byte;
+    for (let bit = 0; bit < 8; bit += 1) crc = (crc >>> 1) ^ ((crc & 1) ? 0xedb88320 : 0);
+  }
+  return (crc ^ 0xffffffff) >>> 0;
+}
+
+function createStoredZip(entries = []) {
+  const localParts = [];
+  const centralParts = [];
+  let offset = 0;
+  for (const entry of entries) {
+    const name = Buffer.from(String(entry.name || "entry.txt").replaceAll("\\", "/"), "utf8");
+    const data = Buffer.isBuffer(entry.data) ? entry.data : Buffer.from(String(entry.data || ""), "utf8");
+    const crc = crc32Buffer(data);
+    const local = Buffer.alloc(30);
+    local.writeUInt32LE(0x04034b50, 0); local.writeUInt16LE(20, 4); local.writeUInt16LE(0, 6); local.writeUInt16LE(0, 8);
+    local.writeUInt32LE(crc, 14); local.writeUInt32LE(data.length, 18); local.writeUInt32LE(data.length, 22); local.writeUInt16LE(name.length, 26);
+    localParts.push(local, name, data);
+    const central = Buffer.alloc(46);
+    central.writeUInt32LE(0x02014b50, 0); central.writeUInt16LE(20, 4); central.writeUInt16LE(20, 6); central.writeUInt16LE(0, 8); central.writeUInt16LE(0, 10);
+    central.writeUInt32LE(crc, 16); central.writeUInt32LE(data.length, 20); central.writeUInt32LE(data.length, 24); central.writeUInt16LE(name.length, 28); central.writeUInt32LE(offset, 42);
+    centralParts.push(central, name);
+    offset += local.length + name.length + data.length;
+  }
+  const centralOffset = offset;
+  const centralSize = centralParts.reduce((total, part) => total + part.length, 0);
+  const end = Buffer.alloc(22);
+  end.writeUInt32LE(0x06054b50, 0); end.writeUInt16LE(entries.length, 8); end.writeUInt16LE(entries.length, 10); end.writeUInt32LE(centralSize, 12); end.writeUInt32LE(centralOffset, 16);
+  return Buffer.concat([...localParts, ...centralParts, end]);
+}
+
+function listZipEntries(bytes) {
+  const buffer = Buffer.from(bytes);
+  for (let i = buffer.length - 22; i >= Math.max(0, buffer.length - 65557); i -= 1) {
+    if (readUint32(buffer, i) !== 0x06054b50) continue;
+    const entryCount = readUint16(buffer, i + 10);
+    if (entryCount > 200) throw new Error("External review ZIP contains too many entries.");
+    let offset = readUint32(buffer, i + 16);
+    const entries = [];
+    for (let index = 0; index < entryCount; index += 1) {
+      if (readUint32(buffer, offset) !== 0x02014b50) throw new Error("External review ZIP directory is invalid.");
+      const method = readUint16(buffer, offset + 10);
+      const compressedSize = readUint32(buffer, offset + 20);
+      const uncompressedSize = readUint32(buffer, offset + 24);
+      const nameLength = readUint16(buffer, offset + 28);
+      const extraLength = readUint16(buffer, offset + 30);
+      const commentLength = readUint16(buffer, offset + 32);
+      const localHeaderOffset = readUint32(buffer, offset + 42);
+      const name = buffer.slice(offset + 46, offset + 46 + nameLength).toString("utf8");
+      if (uncompressedSize > 100 * 1024 * 1024) throw new Error(`External review ZIP entry is too large: ${name}`);
+      entries.push({ name, method, compressedSize, uncompressedSize, localHeaderOffset });
+      offset += 46 + nameLength + extraLength + commentLength;
+    }
+    return entries;
+  }
+  throw new Error("External review ZIP has no readable directory.");
+}
+
+function readNamedZipEntry(bytes, entry) {
+  const data = inflateZipEntry(Buffer.from(bytes), entry);
+  if (entry.uncompressedSize && data.length !== entry.uncompressedSize) throw new Error(`External review ZIP entry size mismatch: ${entry.name}`);
+  return Buffer.from(data);
+}
+
+async function createUniversalReviewPack({ storageRoot, dbPath, payload = {} }) {
+  await ensureSpine(storageRoot);
+  const workOrder = cloneJson(payload.workOrder || {});
+  const workOrderId = requiredDiscoveryId(workOrder.id || payload.workOrderId, "Work Order ID");
+  const discoveryCaseId = requiredDiscoveryId(workOrder.source?.discoveryCaseId || payload.discoveryCaseId, "Discovery Case ID");
+  const caseView = await getDiscoveryCase({ storageRoot, dbPath, payload: { discoveryCaseId } });
+  const extractionById = new Map(caseView.extractions.map((item) => [item.id, item]));
+  const versionById = new Map(caseView.fileVersions.map((item) => [item.id, item]));
+  const chunks = [];
+  for (const chunk of [...caseView.chunks].sort((a, b) => String(a.discoveryExtractionId).localeCompare(String(b.discoveryExtractionId)) || Number(a.chunkIndex) - Number(b.chunkIndex))) {
+    const read = await readDiscoveryChunkText({ storageRoot, dbPath, payload: { discoveryChunkId: chunk.id } });
+    const extraction = extractionById.get(chunk.discoveryExtractionId) || {};
+    const version = versionById.get(extraction.fileVersionId) || {};
+    chunks.push({
+      chunk_id: chunk.id,
+      chunk_order: Number(chunk.chunkIndex || 0),
+      source_id: version.fileAssetId || extraction.fileAssetId || "",
+      file_version_id: extraction.fileVersionId || "",
+      extraction_id: extraction.id || "",
+      source_filename: version.originalName || "",
+      source_headings: reviewPackHeadings(read.text),
+      text_sha256: chunk.textSha256,
+      text: read.text,
+      extracted_entities: reviewPackEntities(read.text),
+      local_summaries: (workOrder.candidateMap?.entries || []).filter((entry) => (entry.evidence || []).some((item) => item.discoveryChunkId === chunk.id)).map((entry) => ({ candidate_map_id: entry.id, title: entry.title, summary: entry.neutralSummary || entry.summary || "", classification: entry.projectStateClassification || "" })).slice(0, 50),
+      provisional_local_matches: (workOrder.candidateMap?.entries || []).filter((entry) => (entry.evidence || []).some((item) => item.discoveryChunkId === chunk.id)).flatMap((entry) => entry.knownProjectMatches || []).map((match) => ({ project_id: match.projectId, name: match.name, confidence: match.confidence, provisional: true })).slice(0, 50)
+    });
+  }
+  if (!chunks.length) throw new Error("Universal review export requires extracted or indexed Discovery chunks.");
+  const sourceManifest = caseView.fileVersions.map((version) => ({
+    source_id: version.fileAssetId,
+    file_version_id: version.id,
+    original_filename: version.originalName,
+    sha256: version.sha256,
+    byte_size: version.byteSize,
+    extraction_ids: caseView.extractions.filter((item) => item.fileVersionId === version.id).map((item) => item.id),
+    chunk_ids: chunks.filter((item) => item.file_version_id === version.id).map((item) => item.chunk_id)
+  }));
+  const projectRegistry = reviewPackProjectRegistry(payload.knownProjects || []);
+  const evidence = {
+    format: "project-state-review-pack",
+    format_version: "1.0",
+    exported_at: payload.exportedAt || nowIso(),
+    work_order: { work_order_id: workOrderId, discovery_case_id: discoveryCaseId, title: workOrder.title || "", task: workOrder.task || "", source_complete: workOrder.lastAnalysis?.sourceFullyAnalyzed === true || !workOrder.source?.corpusIntake?.recommended },
+    source_manifest: sourceManifest,
+    chunks,
+    known_project_registry: projectRegistry,
+    boundary_rules: ["External review decisions are non-authoritative proposals.", "No imported result may write directly to Core.", "Human Intake/Airlock approval is required.", "Chat/thread starts and assistant headings are provenance only.", "Stable IDs, not filenames or headings, control evidence linkage.", "One chunk may support multiple decisions and projects."],
+    allowed_classifications: EXTERNAL_REVIEW_CLASSIFICATIONS,
+    allowed_evidence_roles: EXTERNAL_REVIEW_EVIDENCE_ROLES,
+    local_analysis: { candidate_map_preserved: true, candidate_map_entry_count: Number(workOrder.candidateMap?.entries?.length || 0), local_ai_runs_preserved: true }
+  };
+  const resultSchema = fs.readFileSync(REVIEW_RESULT_SCHEMA_FILE, "utf8");
+  const packName = safeFileName(`${workOrder.title || workOrderId}.universal-ai-review-pack-${safeStamp()}.zip`);
+  const packPath = path.join(storageRoot, "backups", packName);
+  const zip = createStoredZip([
+    { name: "review_instructions.md", data: reviewPackInstructions(evidence) },
+    { name: "evidence.json", data: JSON.stringify(evidence, null, 2) },
+    { name: "evidence_readable.md", data: reviewPackReadableMarkdown(evidence) },
+    { name: "schema/review_result.schema.json", data: resultSchema }
+  ]);
+  await fsp.writeFile(packPath, zip);
+  return { ok: true, format: evidence.format, formatVersion: evidence.format_version, workOrderId, discoveryCaseId, sourceComplete: evidence.work_order.source_complete, path: packPath, fileName: packName, sha256: crypto.createHash("sha256").update(zip).digest("hex"), bytes: zip.length, chunkCount: chunks.length, sourceCount: sourceManifest.length };
+}
+
+function externalReviewChunkReferences(value = {}) {
+  return [...new Set([...(value.supporting_chunk_ids || []), ...(value.evidence_spans || []).map((span) => span?.chunk_id), ...(value.supportingChunkIds || [])].map(String).filter(Boolean))];
+}
+
+function validateExternalReviewResult({ result, workOrderId, chunkIds, projectIds }) {
+  const errors = [];
+  if (!result || typeof result !== "object" || Array.isArray(result)) errors.push("Result must be one JSON object.");
+  if (result?.format !== "project-state-review-result") errors.push("format must be project-state-review-result.");
+  if (result?.format_version !== "1.0") errors.push("format_version must be 1.0.");
+  if (result?.work_order_id !== workOrderId) errors.push(`work_order_id must match ${workOrderId}.`);
+  if (!result?.reviewer || typeof result.reviewer !== "object" || !["ai", "human", "hybrid"].includes(result.reviewer.reviewer_type)) errors.push("reviewer.reviewer_type must be ai, human, or hybrid.");
+  if (typeof result?.source_complete !== "boolean") errors.push("source_complete must be true or false.");
+  for (const field of ["decisions", "relationships", "human_questions", "rejected_material"]) if (!Array.isArray(result?.[field])) errors.push(`${field} must be an array.`);
+  const decisionIds = new Set();
+  for (const [index, decision] of (result?.decisions || []).entries()) {
+    const prefix = `decisions[${index}]`;
+    if (!decision?.decision_id || decisionIds.has(decision.decision_id)) errors.push(`${prefix}.decision_id must be present and unique.`); else decisionIds.add(decision.decision_id);
+    if (!String(decision?.concept_title || "").trim()) errors.push(`${prefix}.concept_title is required.`);
+    if (typeof decision?.summary !== "string") errors.push(`${prefix}.summary must be a string.`);
+    if (typeof decision?.reasoning_summary !== "string") errors.push(`${prefix}.reasoning_summary must be a string.`);
+    if (!EXTERNAL_REVIEW_CLASSIFICATIONS.includes(decision?.classification)) errors.push(`${prefix}.classification is not allowed.`);
+    if (decision?.primary_project_id !== null && decision?.primary_project_id !== undefined && !projectIds.has(decision.primary_project_id)) errors.push(`${prefix}.primary_project_id is not a known project.`);
+    if (!Array.isArray(decision?.additional_project_ids)) errors.push(`${prefix}.additional_project_ids must be an array.`);
+    if (new Set(decision?.additional_project_ids || []).size !== (decision?.additional_project_ids || []).length) errors.push(`${prefix}.additional_project_ids must not contain duplicates.`);
+    for (const id of decision?.additional_project_ids || []) if (!projectIds.has(id)) errors.push(`${prefix}.additional_project_ids contains unknown project ID ${id}.`);
+    if (decision?.classification === "project_candidate" && !String(decision?.proposed_new_project?.name || "").trim()) errors.push(`${prefix} must explicitly include proposed_new_project.name.`);
+    if (decision?.classification === "project_candidate" && decision?.primary_project_id) errors.push(`${prefix} cannot use an existing project as primary_project_id; use existing_project_support instead.`);
+    if (decision?.classification === "existing_project_support" && !decision?.primary_project_id && !(decision?.additional_project_ids || []).length) errors.push(`${prefix} requires at least one known project ID.`);
+    if (!Array.isArray(decision?.supporting_chunk_ids) || !decision.supporting_chunk_ids.length) errors.push(`${prefix}.supporting_chunk_ids must contain evidence.`);
+    if (new Set(decision?.supporting_chunk_ids || []).size !== (decision?.supporting_chunk_ids || []).length) errors.push(`${prefix}.supporting_chunk_ids must not contain duplicates.`);
+    for (const id of externalReviewChunkReferences(decision)) if (!chunkIds.has(id)) errors.push(`${prefix} references unknown chunk ID ${id}.`);
+    if (!Array.isArray(decision?.evidence_spans)) errors.push(`${prefix}.evidence_spans must be an array.`);
+    for (const [spanIndex, span] of (decision?.evidence_spans || []).entries()) {
+      if (span?.start !== undefined && (!Number.isInteger(span.start) || span.start < 0)) errors.push(`${prefix}.evidence_spans[${spanIndex}].start is invalid.`);
+      if (span?.end !== undefined && (!Number.isInteger(span.end) || span.end < 0 || (Number.isInteger(span.start) && span.end < span.start))) errors.push(`${prefix}.evidence_spans[${spanIndex}].end is invalid.`);
+    }
+    if (typeof decision?.confidence !== "number" || decision.confidence < 0 || decision.confidence > 1) errors.push(`${prefix}.confidence must be between 0 and 1.`);
+    if (!EXTERNAL_REVIEW_EVIDENCE_ROLES.includes(decision?.evidence_role)) errors.push(`${prefix}.evidence_role is not allowed.`);
+    for (const field of ["personal_aether_support", "commercial_default_allowed", "requires_separate_design_review", "human_review_required"]) if (typeof decision?.[field] !== "boolean") errors.push(`${prefix}.${field} must be boolean.`);
+  }
+  for (const [index, relationship] of (result?.relationships || []).entries()) {
+    for (const key of ["from_decision_id", "to_decision_id"]) if (relationship?.[key] && !decisionIds.has(relationship[key])) errors.push(`relationships[${index}].${key} references unknown decision ID ${relationship[key]}.`);
+    for (const key of ["from_project_id", "to_project_id"]) if (relationship?.[key] && !projectIds.has(relationship[key])) errors.push(`relationships[${index}].${key} references unknown project ID ${relationship[key]}.`);
+    for (const id of externalReviewChunkReferences(relationship)) if (!chunkIds.has(id)) errors.push(`relationships[${index}] references unknown chunk ID ${id}.`);
+  }
+  for (const [index, question] of (result?.human_questions || []).entries()) for (const id of externalReviewChunkReferences(question)) if (!chunkIds.has(id)) errors.push(`human_questions[${index}] references unknown chunk ID ${id}.`);
+  for (const [index, rejected] of (result?.rejected_material || []).entries()) for (const id of externalReviewChunkReferences(rejected)) if (!chunkIds.has(id)) errors.push(`rejected_material[${index}] references unknown chunk ID ${id}.`);
+  return errors;
+}
+
+async function importExternalReviewPass({ storageRoot, dbPath, payload = {} }) {
+  await ensureSpine(storageRoot);
+  const workOrder = cloneJson(payload.workOrder || {});
+  const workOrderId = requiredDiscoveryId(workOrder.id || payload.workOrderId, "Work Order ID");
+  const discoveryCaseId = requiredDiscoveryId(workOrder.source?.discoveryCaseId || payload.discoveryCaseId, "Discovery Case ID");
+  const filePath = path.resolve(String(payload.filePath || payload.path || ""));
+  if (!filePath || !fs.existsSync(filePath) || !fs.statSync(filePath).isFile()) throw new Error("Choose an external review JSON or ZIP file.");
+  const originalBytes = await fsp.readFile(filePath);
+  if (originalBytes.length > 150 * 1024 * 1024) throw new Error("External review file is above the 150 MB import limit.");
+  const importHash = crypto.createHash("sha256").update(originalBytes).digest("hex");
+  const duplicateDb = openDatabase(dbPath);
+  try {
+    const row = duplicateDb.prepare("SELECT record_json FROM external_review_passes WHERE work_order_id = ? AND import_hash = ?").get(workOrderId, importHash);
+    if (row) return { ok: true, deduplicated: true, externalReviewPass: JSON.parse(row.record_json), coreChanged: false };
+  } finally { duplicateDb.close(); }
+  let resultBytes = originalBytes;
+  let companionMarkdown = "";
+  if (path.extname(filePath).toLowerCase() === ".zip") {
+    const entries = listZipEntries(originalBytes);
+    let resultEntry = null;
+    for (const entry of entries.filter((item) => item.name.toLowerCase().endsWith(".json"))) {
+      try {
+        const parsed = JSON.parse(readNamedZipEntry(originalBytes, entry).toString("utf8"));
+        if (parsed?.format === "project-state-review-result") { resultEntry = entry; resultBytes = readNamedZipEntry(originalBytes, entry); break; }
+      } catch {}
+    }
+    if (!resultEntry) throw new Error("External review ZIP does not contain a project-state-review-result JSON file.");
+    const markdownEntry = entries.find((entry) => entry.name.toLowerCase().endsWith(".md"));
+    if (markdownEntry) companionMarkdown = readNamedZipEntry(originalBytes, markdownEntry).toString("utf8");
+  }
+  let result;
+  try { result = JSON.parse(resultBytes.toString("utf8")); }
+  catch { throw new Error("External review result contains malformed JSON. Nothing was imported."); }
+  const caseView = await getDiscoveryCase({ storageRoot, dbPath, payload: { discoveryCaseId } });
+  const chunkIds = new Set(caseView.chunks.map((chunk) => chunk.id));
+  const projectsDb = openDatabase(dbPath);
+  let projectIds;
+  try { projectIds = new Set(readRecordJson(projectsDb, "projects").map((project) => project.id)); }
+  finally { projectsDb.close(); }
+  const validationErrors = validateExternalReviewResult({ result, workOrderId, chunkIds, projectIds });
+  if (validationErrors.length) throw new Error(`External review validation failed; nothing was imported:\n- ${validationErrors.join("\n- ")}`);
+  const importedAt = payload.importedAt || nowIso();
+  const id = payload.id || makeId("external_review_pass");
+  const priorDb = openDatabase(dbPath);
+  let versionNumber;
+  try { versionNumber = Number(priorDb.prepare("SELECT COUNT(*) AS count FROM external_review_passes WHERE work_order_id = ?").get(workOrderId).count || 0) + 1; }
+  finally { priorDb.close(); }
+  const extension = path.extname(filePath).toLowerCase() === ".zip" ? ".zip" : ".json";
+  const reviewRoot = path.join(storageRoot, "discovery", discoveryCaseId, "external-reviews", id);
+  await fsp.mkdir(reviewRoot, { recursive: true });
+  const originalPath = path.join(reviewRoot, `original${extension}`);
+  await fsp.writeFile(originalPath, originalBytes);
+  if (companionMarkdown) await fsp.writeFile(path.join(reviewRoot, "companion-report.md"), companionMarkdown, "utf8");
+  const record = {
+    id, format: "project-state-external-review-pass", formatVersion: "1.0", versionNumber, workOrderId, discoveryCaseId,
+    importedAt, importedBy: String(payload.actorId || ""), importReason: String(payload.reason || ""), originalFilename: path.basename(filePath), managedOriginalPath: relativeManagedPath(storageRoot, originalPath), importHash,
+    reviewer: cloneJson(result.reviewer), externalTransmissionStatus: String(payload.externalTransmissionStatus || "unknown"), schemaValidation: { valid: true, schema: "project-state-review-result/1.0", errors: [] },
+    sourceComplete: result.source_complete, result: cloneJson(result), companionMarkdownStored: Boolean(companionMarkdown), coreAuthority: false, coreChanged: false
+  };
+  const writeDb = openDatabase(dbPath);
+  try { insertStrict(writeDb, "external_review_passes", { id, discovery_case_id: discoveryCaseId, work_order_id: workOrderId, import_hash: importHash, imported_at: importedAt, record_json: JSON.stringify(record) }); }
+  catch (error) { await fsp.rm(reviewRoot, { recursive: true, force: true }); throw error; }
+  finally { writeDb.close(); }
+  await appendDiscoveryInteraction({ storageRoot, dbPath, payload: { id: makeId("interaction"), discoveryCaseId, actorId: payload.actorId || "external_review_importer", actorType: "human", interactionType: "external_review_import", createdAt: importedAt, content: { externalReviewPassId: id, workOrderId, reviewer: result.reviewer, decisionCount: result.decisions.length, sourceComplete: result.source_complete, coreAuthority: false }, evidence: result.decisions.flatMap((decision) => decision.supporting_chunk_ids || []).map((chunkId) => ({ discoveryChunkId: chunkId })) } });
+  await appendDiscoveryEvent({ storageRoot, dbPath, payload: { id: makeId("discovery_event"), discoveryCaseId, eventType: "external_review_imported", actorId: payload.actorId || "external_review_importer", actorType: "human", occurredAt: importedAt, externalReviewPassId: id, workOrderId, importHash, decisionCount: result.decisions.length, coreChanged: false } });
+  return { ok: true, deduplicated: false, externalReviewPass: record, coreChanged: false, localEvidenceChanged: false, candidateMapChanged: false };
+}
+
+async function listExternalReviewPasses({ storageRoot, dbPath, payload = {} }) {
+  await ensureSpine(storageRoot);
+  const workOrderId = String(payload.workOrderId || "").trim();
+  const discoveryCaseId = String(payload.discoveryCaseId || "").trim();
+  const db = openDatabase(dbPath);
+  try {
+    const rows = workOrderId
+      ? db.prepare("SELECT record_json FROM external_review_passes WHERE work_order_id = ? ORDER BY rowid").all(workOrderId)
+      : discoveryCaseId
+        ? db.prepare("SELECT record_json FROM external_review_passes WHERE discovery_case_id = ? ORDER BY rowid").all(discoveryCaseId)
+        : db.prepare("SELECT record_json FROM external_review_passes ORDER BY rowid").all();
+    return { ok: true, externalReviewPasses: rows.map(parseRecordRow) };
+  } finally { db.close(); }
+}
 
 async function saveTextFile({ storageRoot, fileName = "project-state-export.txt", text = "", type = "text/plain" }) {
   await ensureSpine(storageRoot);

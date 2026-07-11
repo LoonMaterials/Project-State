@@ -1165,3 +1165,31 @@ Verification completed for this correction:
 - `pnpm run check:ai-analysis-foundation`
 - `pnpm run check:local-ai-qwen` against the real installed Ollama/Qwen runtime
 - a new multi-file regression proving two plain selected files are not converted into two automatic project ideas
+
+## 30. Universal Model-Neutral AI Review Exchange
+
+Status: implemented, fully regression-checked, live-Electron checked, and packaged as the local test build `0.2.0` on 2026-07-11.
+
+- The provider-specific manual review buttons were replaced in active AI Work Order screens by **Export Universal Review Pack**, **Import External AI Review**, and **Review Imported Decisions**.
+- A Universal Review Pack ZIP contains `review_instructions.md`, `evidence.json`, `evidence_readable.md`, and `schema/review_result.schema.json`.
+- Export includes complete stored Discovery chunk text and stable Work Order, Discovery Case, source, File Version, extraction, and chunk IDs. It also includes the active known-project registry, aliases/summaries, provisional local summaries/matches, extracted entities/headings as provenance, source completeness, and explicit pre-Airlock boundary rules.
+- The v1.0 return contract is provider/model neutral. Its classifications are `project_candidate`, `existing_project_support`, `reference_note`, `personal_context_note`, `assistant_scaffolding_noise`, and `rejected_noise`.
+- One chunk may support multiple decisions and one decision may support a primary plus additional existing projects. Existing project IDs and evidence chunk IDs are validated against local records.
+- Standalone JSON and ZIP results are accepted. Malformed JSON, wrong schema version/Work Order, unknown IDs, invalid classifications/evidence roles, incomplete decision fields, and implicit new-project creation are rejected before any write.
+- Accepted results are stored in the new append-only `external_review_passes` table. Exact original bytes, SHA-256, import actor/reason/time, reviewer metadata, transmission status, schema status, and numbered pass history are retained. Exact repeats deduplicate; corrected bytes become a new pass.
+- External review import cannot mutate Core, Intake, source files, extractions/chunks, local AI runs, or Candidate Map results. An audit interaction/event records the import without converting it into authority.
+- The human review screen groups imported decisions by classification and exposes matches, additional projects, evidence spans, confidence, reasoning, relationships/questions, and personal-Aether/commercial-default boundaries.
+- Human review supports approve/reject/revision, edit, reclassification, retitle, primary/additional project changes, split, merge, and optional routing of an approved decision to normal Intake/Airlock. The imported pass itself remains immutable.
+- `fixtures/review-result-v1.0.schema.json`, valid/invalid result samples, `fixtures/review-pack-v1.0.schema.json`, `UNIVERSAL_AI_REVIEW_EXCHANGE.md`, and `scripts/universal-review-exchange-check.js` document and guard the workflow.
+- The universal exchange regression verifies complete evidence export, multi-project evidence, mixed personal/commercial material, strict rejection cases, duplicate safety, corrected-result versioning, append-only storage, and zero Core/local-evidence mutation on import.
+
+Verification and release result:
+
+- Passed the combined syntax, desktop/storage, API/local-arm, file/discovery, internal flow, flow hardening, multi-idea, folder, large-corpus, Idea Candidate, AI analysis foundation, human review UI, backup/restore, and release-safety suites.
+- An isolated live Electron pass created an AI Work Order, confirmed the exchange bridge was available, showed exactly one Universal export/import/review control set, showed zero legacy provider-specific export buttons, opened the JSON/ZIP import form with actor/reason/transmission fields, retained draggable modal behavior, and recorded zero renderer exceptions.
+- The packaged `app.asar` contains `UNIVERSAL_AI_REVIEW_EXCHANGE.md`, both review schemas, valid/invalid return samples, and `fixtures/universal-review-pack-v1.0-sample.zip`.
+- Installer: `release/Project-State-Setup-0.2.0-x64.exe`
+- Installer bytes: `101839460`
+- Installer SHA-256: `4da17ac97ddf0715340d403f5a22b708a64cedc7558d7e2607cfaccc69b09cbd`
+- Packaging verified Electron `42.4.1`, Node `24.16.0`, SQLite `3.53.0`, and the installed local Qwen provider link in the packaged runtime.
+- The installer is unsigned (`NotSigned`) and remains a local/offline test build, not a public-distribution release. The remaining release gate is extended real-time desktop testing.

@@ -3382,6 +3382,7 @@ function createDesktopPlatformAdapter(bridge) {
   const armTransport = bridge.armTransport || {};
   const discoveryStorage = bridge.discoveryStorage || {};
   const analysisArms = bridge.analysisArms || {};
+  const reviewExchange = bridge.reviewExchange || {};
   const dialogs = bridge.dialogs || {};
   return {
     id: "desktop",
@@ -3554,6 +3555,12 @@ function createDesktopPlatformAdapter(bridge) {
       getReceipt: (requestId) => analysisArms.getReceipt(requestId),
       recordReviewDecision: (payload) => analysisArms.recordReviewDecision(payload),
       readState: (payload) => analysisArms.readState(payload)
+    },
+    reviewExchange: {
+      available: typeof reviewExchange.exportUniversalPack === "function" && typeof reviewExchange.importExternalReview === "function",
+      exportUniversalPack: (payload) => reviewExchange.exportUniversalPack(payload),
+      importExternalReview: (payload) => reviewExchange.importExternalReview(payload),
+      listExternalReviews: (payload) => reviewExchange.listExternalReviews(payload)
     }
   };
 }
@@ -3613,7 +3620,8 @@ function createBrowserPlatformAdapter() {
       }
     },
     discovery: { available: false },
-    analysis: { available: false }
+    analysis: { available: false },
+    reviewExchange: { available: false }
   };
 }
 
@@ -4949,6 +4957,7 @@ function normalizeAiWorkOrder(workOrder, context) {
     lastAnalysis: workOrder.lastAnalysis && typeof workOrder.lastAnalysis === "object" ? cloneRecord(workOrder.lastAnalysis) : null,
     digestContext: workOrder.digestContext && typeof workOrder.digestContext === "object" ? cloneRecord(workOrder.digestContext) : null,
     candidateMap: workOrder.candidateMap && typeof workOrder.candidateMap === "object" ? cloneRecord(workOrder.candidateMap) : null,
+    externalReviewActions: Array.isArray(workOrder.externalReviewActions) ? workOrder.externalReviewActions.map((action) => cloneRecord(action)) : [],
     comments: normalizeComments(workOrder.comments, context)
   };
 }
@@ -5740,9 +5749,9 @@ function currentActorCan(permission, project = getProject()) {
 
 function actionPermission(action = "") {
   if (["create-project", "add-decision", "add-fact", "add-conflict", "add-source", "add-relationship", "add-question", "add-action", "add-extract", "read-file-extract", "suggest-extract", "create-draft-project", "import-files", "import-folder", "import-project-files", "import-project-folder"].includes(action)) return "create";
-  if (["edit-status", "edit-object", "rename-project", "assign-object", "mark-complete", "attach-source", "attach-image", "archive-object", "unarchive-project", "manage-project-roles", "review-source-freshness", "verify-source-file", "verify-all-source-files", "archive-ai-work-order", "start-local-ai-work-order", "edit-file-source", "archive-file-source"].includes(action)) return "edit";
+  if (["edit-status", "edit-object", "rename-project", "assign-object", "mark-complete", "attach-source", "attach-image", "archive-object", "unarchive-project", "manage-project-roles", "review-source-freshness", "verify-source-file", "verify-all-source-files", "archive-ai-work-order", "start-local-ai-work-order", "import-external-ai-review", "review-external-ai-decision", "edit-file-source", "archive-file-source"].includes(action)) return "edit";
   if (["approve-intake", "approve-extract", "approve-draft-project"].includes(action)) return "approve";
-  if (["export-project", "export-handoff", "context-pack", "view-object-history", "show-history", "view-history", "show-changes-since", "history-file-source", "view-ai-work-order-results", "export-chatgpt-review-pack", "refresh-storage", "refresh-local-ai-setup"].includes(action)) return "audit";
+  if (["export-project", "export-handoff", "context-pack", "view-object-history", "show-history", "view-history", "show-changes-since", "history-file-source", "view-ai-work-order-results", "export-universal-review-pack", "view-external-ai-reviews", "refresh-storage", "refresh-local-ai-setup"].includes(action)) return "audit";
   if (["show-settings", "backup-storage", "restore-storage", "reset-local-data", "export-current-raw-data", "enable-arm-transport", "disable-arm-transport", "rotate-arm-transport-token", "revoke-arm-transport"].includes(action)) return "admin";
   return "";
 }
@@ -6285,6 +6294,7 @@ function renderAiWorkOrderItem(order) {
     : "";
   const canRunLocalAi = Boolean(source.discoveryCaseId) && !["completed", "archived"].includes(order.status);
   const lastAnalysis = order.lastAnalysis || null;
+  const canExportUniversalReview = Boolean(source.discoveryCaseId) && (!corpus?.recommended || lastAnalysis?.sourceFullyAnalyzed === true);
   const noCandidatesFound = lastAnalysis && Number(lastAnalysis.candidateCount || 0) === 0;
   const moreSourceRemaining = lastAnalysis && lastAnalysis.sourceFullyAnalyzed !== true;
   return `
@@ -6306,9 +6316,10 @@ function renderAiWorkOrderItem(order) {
       <div class="item-actions">
         ${canRunLocalAi ? `<button class="btn compact" data-action="start-local-ai-work-order" data-work-order-id="${escapeHtml(order.id)}">Start local AI digestion</button>` : ""}
         ${source.discoveryCaseId ? `<button class="btn secondary compact" data-action="view-ai-work-order-results" data-work-order-id="${escapeHtml(order.id)}">View AI results</button>` : ""}
-        ${source.discoveryCaseId ? `<button class="btn secondary compact" data-action="export-chatgpt-review-pack" data-review-pack-mode="summary" data-work-order-id="${escapeHtml(order.id)}">Export Summary Pack</button>` : ""}
-        ${source.discoveryCaseId ? `<button class="btn secondary compact" data-action="export-chatgpt-review-pack" data-review-pack-mode="evidence_heavy" data-work-order-id="${escapeHtml(order.id)}">Export Evidence-Heavy Pack</button>` : ""}
-        ${source.discoveryCaseId ? `<button class="btn secondary compact" data-action="export-chatgpt-review-pack" data-review-pack-mode="split_cluster" data-work-order-id="${escapeHtml(order.id)}">Export Split Packs</button>` : ""}
+        ${canExportUniversalReview ? `<button class="btn secondary compact" data-action="export-universal-review-pack" data-work-order-id="${escapeHtml(order.id)}">Export Universal Review Pack</button>` : ""}
+        ${source.discoveryCaseId && !canExportUniversalReview ? `<span class="item-meta">Universal export becomes available after all source chunks are indexed.</span>` : ""}
+        ${source.discoveryCaseId ? `<button class="btn secondary compact" data-action="import-external-ai-review" data-work-order-id="${escapeHtml(order.id)}">Import External AI Review</button>` : ""}
+        ${source.discoveryCaseId ? `<button class="btn secondary compact" data-action="view-external-ai-reviews" data-work-order-id="${escapeHtml(order.id)}">Review Imported Decisions</button>` : ""}
         ${order.projectId ? `<button class="btn secondary compact" data-action="open-project" data-project-id="${escapeHtml(order.projectId)}">${escapeHtml(t("goToProject"))}</button>` : ""}
         <button class="btn secondary compact" data-action="comment-ai-work-order" data-work-order-id="${escapeHtml(order.id)}">${escapeHtml(t("reviewThread"))}</button>
         <button class="btn secondary compact" data-action="archive-ai-work-order" data-work-order-id="${escapeHtml(order.id)}" ${order.status === "archived" ? "disabled" : ""}>${escapeHtml(t("archive"))}</button>
@@ -11752,7 +11763,9 @@ function wireLocalFilePickers(form) {
     button.addEventListener("click", async () => {
       const filters = button.dataset.fileFilter === "json"
         ? [{ name: "Project State backup", extensions: ["json"] }]
-        : [];
+        : button.dataset.fileFilter === "review"
+          ? [{ name: "External AI review", extensions: ["json", "zip"] }]
+          : [];
       const file = await platformAdapter.dialogs.pickFile({ title: t("findLocalFile"), filters });
       if (!file?.localPath) return;
       form._projectStateSelectedFiles = form._projectStateSelectedFiles || {};
@@ -13824,6 +13837,231 @@ async function openStartLocalAiWorkOrderModal(workOrderId) {
   });
 }
 
+function universalReviewKnownProjects() {
+  return (store.projects || []).map((project) => ({
+    id: project.id,
+    name: project.name,
+    aliases: Array.isArray(project.aliases) ? project.aliases : [],
+    currentSummary: project.summary || project.currentSummary || "",
+    currentStatus: project.currentStatus || "",
+    archived: Boolean(project.archived)
+  }));
+}
+
+async function exportUniversalReviewPack(workOrderId) {
+  const workOrder = (store.aiWorkOrders || []).find((order) => order.id === workOrderId);
+  if (!workOrder?.source?.discoveryCaseId || !platformAdapter.reviewExchange?.available) return;
+  if (workOrder.source?.corpusIntake?.recommended && workOrder.lastAnalysis?.sourceFullyAnalyzed !== true) {
+    window.alert("Finish indexing/digesting the remaining source before exporting a Universal Review Pack. Partial-source packs are not offered as complete reviews.");
+    return;
+  }
+  try {
+    const result = await platformAdapter.reviewExchange.exportUniversalPack({ workOrder, knownProjects: universalReviewKnownProjects() });
+    window.alert(`Universal Review Pack created.\n\n${result.path}\n\n${Number(result.chunkCount || 0).toLocaleString()} complete stored evidence chunks are included.${result.sourceComplete ? " The Work Order reports full source coverage." : " Warning: the Work Order reports that more source remains, so this pack is a partial-source review pack."} The external model's response remains a proposal until you import and approve it.`);
+  } catch (error) {
+    console.error("Universal Review Pack export failed.", error);
+    window.alert(`Universal Review Pack could not be created.\n\n${error.message || error}`);
+  }
+}
+
+function openExternalReviewImportModal(workOrderId) {
+  const workOrder = (store.aiWorkOrders || []).find((order) => order.id === workOrderId);
+  if (!workOrder?.source?.discoveryCaseId || !platformAdapter.reviewExchange?.available) return;
+  showModal({
+    title: "Import External AI Review",
+    submitText: "Validate and import",
+    flowStep: 4,
+    body: `
+      <p class="notice"><strong>Pre-Airlock import:</strong> Imported decisions remain a separate External Review Pass. They cannot alter local evidence, Candidate Map results, Intake, or Core until a human reviews them.</p>
+      <div class="field">
+        <label for="externalReviewPath">Review result JSON or ZIP</label>
+        <div class="file-picker-row">
+          <input id="externalReviewPath" name="externalReviewPath" readonly required placeholder="Choose a returned review file">
+          <button class="btn secondary" type="button" data-native-file-picker data-file-key="externalReview" data-location-target="externalReviewPath" data-file-filter="review">Browse</button>
+        </div>
+      </div>
+      <div class="field">
+        <label for="externalTransmissionStatus">Was evidence sent outside this computer?</label>
+        <select id="externalTransmissionStatus" name="externalTransmissionStatus" required>
+          <option value="unknown">Not recorded / unknown</option>
+          <option value="external">Yes — reviewed by an external service or person</option>
+          <option value="local_only">No — reviewed locally only</option>
+        </select>
+      </div>
+      ${auditFields({ reasonOptions: ["Import external AI review", "Import corrected review result", "Import human review result"] })}
+    `,
+    async onSubmit(data) {
+      try {
+        const actor = getOrCreateActor(data.actorName, "Human");
+        const imported = await platformAdapter.reviewExchange.importExternalReview({
+          workOrder,
+          filePath: data.externalReviewPath,
+          actorId: actor.id,
+          reason: data.reason,
+          externalTransmissionStatus: data.externalTransmissionStatus
+        });
+        window.alert(imported.deduplicated
+          ? "This exact review file was already imported. The existing immutable pass was reused."
+          : `External Review Pass ${imported.externalReviewPass.versionNumber} imported. No Core or local evidence records were changed.`);
+        postModalAction = () => openExternalReviewPassesModal(workOrderId);
+        return true;
+      } catch (error) {
+        console.error("External review import failed.", error);
+        window.alert(error.message || String(error));
+        return false;
+      }
+    }
+  });
+}
+
+function externalReviewClassificationLabel(value = "") {
+  return {
+    existing_project_support: "Existing project support",
+    project_candidate: "New project candidates",
+    reference_note: "Reference notes",
+    personal_context_note: "Personal context",
+    assistant_scaffolding_noise: "Assistant scaffolding / noise",
+    rejected_noise: "Rejected noise"
+  }[value] || String(value || "Unclassified").replaceAll("_", " ");
+}
+
+function externalReviewActionFor(workOrder, passId, decisionId) {
+  return [...(workOrder.externalReviewActions || [])].reverse().find((action) => action.passId === passId && action.decisionId === decisionId) || null;
+}
+
+function renderExternalReviewDecision(workOrder, pass, decision, chunkTextById = new Map()) {
+  const action = externalReviewActionFor(workOrder, pass.id, decision.decision_id);
+  const primaryName = decision.primary_project_id ? projectNameById(decision.primary_project_id) || decision.primary_project_id : "None";
+  const additional = (decision.additional_project_ids || []).map((id) => projectNameById(id) || id).join(", ");
+  const externalChunks = new Set(decision.supporting_chunk_ids || []);
+  const localMatch = (workOrder.candidateMap?.entries || []).find((entry) => nameKey(entry.title || entry.conceptTitle) === nameKey(decision.concept_title)
+    || (entry.evidence || []).some((evidence) => externalChunks.has(evidence.discoveryChunkId)));
+  const localClassification = localMatch?.projectStateClassification || localMatch?.classification || "";
+  const localDisagreement = localMatch && (nameKey(localMatch.title || localMatch.conceptTitle) !== nameKey(decision.concept_title) || (localClassification && localClassification !== decision.classification));
+  return `<article class="item">
+    <p class="item-title">${escapeDisplay(decision.concept_title || "Untitled decision", DISPLAY_META_LIMIT)}</p>
+    <p class="item-meta">${escapeHtml(externalReviewClassificationLabel(decision.classification))} · confidence ${Math.round(Number(decision.confidence || 0) * 100)}% · evidence role: ${escapeHtml(String(decision.evidence_role || "").replaceAll("_", " "))}</p>
+    <p class="item-meta">Primary project: ${escapeDisplay(primaryName, DISPLAY_META_LIMIT)}${additional ? ` · Additional projects: ${escapeDisplay(additional, DISPLAY_META_LIMIT)}` : ""}</p>
+    ${localMatch ? `<p class="${localDisagreement ? "notice" : "item-meta"}"><strong>Local Candidate Map:</strong> ${escapeDisplay(localMatch.title || localMatch.conceptTitle || "Untitled local entry", DISPLAY_META_LIMIT)} · ${escapeHtml(externalReviewClassificationLabel(localClassification || "unclassified"))}${localDisagreement ? " · differs from external review" : " · aligned"}</p>` : `<p class="notice"><strong>Local comparison:</strong> No matching Candidate Map entry was found; this is an external-only proposal.</p>`}
+    ${action ? `<p class="notice"><strong>Human decision:</strong> ${escapeHtml(String(action.disposition || "reviewed").replaceAll("_", " "))} · ${escapeHtml(String(action.operation || "standard").replaceAll("_", " "))} · ${escapeHtml(formatDate(action.reviewedAt))}${action.conceptTitle && action.conceptTitle !== decision.concept_title ? ` · retitled: ${escapeDisplay(action.conceptTitle, DISPLAY_META_LIMIT)}` : ""}${action.routedIntakeId ? " · routed to Intake" : ""}</p>` : ""}
+    <p class="item-body">${escapeDisplay(decision.summary || decision.reasoning_summary || "", DISPLAY_TEXT_LIMIT)}</p>
+    <details class="technical-details"><summary>Evidence, reasoning, and boundaries</summary>
+      <p class="item-meta">Decision ID: ${escapeDisplay(decision.decision_id, DISPLAY_META_LIMIT)} · chunks: ${escapeDisplay((decision.supporting_chunk_ids || []).join(", "), DISPLAY_TEXT_LIMIT)}</p>
+      ${(decision.evidence_spans || []).map((span) => { const sourceText = chunkTextById.get(span.chunk_id) || ""; const excerpt = span.excerpt || (sourceText ? sourceText.slice(Number.isInteger(span.start) ? span.start : 0, Number.isInteger(span.end) ? Math.min(span.end, (Number.isInteger(span.start) ? span.start : 0) + 700) : 700) : ""); return `<p class="item-meta">${escapeDisplay(span.chunk_id || "", DISPLAY_META_LIMIT)}${Number.isInteger(span.start) ? ` · characters ${span.start}-${span.end}` : ""}${excerpt ? `<br>${escapeDisplay(excerpt, 700)}` : ""}</p>`; }).join("")}
+      ${!(decision.evidence_spans || []).length ? (decision.supporting_chunk_ids || []).slice(0, 3).map((chunkId) => `<p class="item-meta">${escapeDisplay(chunkId, DISPLAY_META_LIMIT)}${chunkTextById.get(chunkId) ? `<br>${escapeDisplay(chunkTextById.get(chunkId).slice(0, 700), 700)}` : ""}</p>`).join("") : ""}
+      ${decision.reasoning_summary ? `<p class="item-body"><strong>Reviewer reasoning:</strong> ${escapeDisplay(decision.reasoning_summary, DISPLAY_TEXT_LIMIT)}</p>` : ""}
+      <p class="item-meta">Personal Aether support: ${decision.personal_aether_support ? "Yes" : "No"} · Commercial default allowed: ${decision.commercial_default_allowed ? "Yes" : "No"} · Separate design review: ${decision.requires_separate_design_review ? "Required" : "No"}</p>
+    </details>
+    <div class="item-actions"><button class="btn compact" type="button" data-action="review-external-ai-decision" data-work-order-id="${escapeHtml(workOrder.id)}" data-review-pass-id="${escapeHtml(pass.id)}" data-decision-id="${escapeHtml(decision.decision_id)}">Human review</button></div>
+  </article>`;
+}
+
+async function openExternalReviewPassesModal(workOrderId) {
+  const workOrder = (store.aiWorkOrders || []).find((order) => order.id === workOrderId);
+  if (!workOrder?.source?.discoveryCaseId || !platformAdapter.reviewExchange?.available) return;
+  try {
+    const response = await platformAdapter.reviewExchange.listExternalReviews({ workOrderId });
+    const passes = response.externalReviewPasses || [];
+    const chunkIds = [...new Set(passes.flatMap((pass) => (pass.result.decisions || []).flatMap((decision) => decision.supporting_chunk_ids || [])))].slice(0, 300);
+    const chunkTextById = new Map();
+    await Promise.all(chunkIds.map(async (chunkId) => {
+      try { const read = await platformAdapter.discovery.readChunkText({ discoveryChunkId: chunkId }); chunkTextById.set(chunkId, read.text || ""); } catch {}
+    }));
+    showModal({
+      title: "Imported External AI Reviews",
+      submitText: t("close"),
+      flowStep: 4,
+      body: passes.length ? passes.slice().reverse().map((pass) => {
+        const groups = Object.groupBy ? Object.groupBy(pass.result.decisions || [], (decision) => decision.classification) : (pass.result.decisions || []).reduce((all, decision) => ((all[decision.classification] ||= []).push(decision), all), {});
+        return `<section class="item">
+          <p class="item-title">External Review Pass ${Number(pass.versionNumber).toLocaleString()}</p>
+          <p class="item-meta">Imported ${escapeHtml(formatDate(pass.importedAt))} · ${escapeDisplay(pass.reviewer?.provider || pass.reviewer?.model || pass.reviewer?.reviewer_type || "Unspecified reviewer", DISPLAY_META_LIMIT)} · ${pass.sourceComplete ? "source complete" : "partial source review"} · immutable import hash ${escapeDisplay(String(pass.importHash || "").slice(0, 16), 20)}…</p>
+          <p class="notice">This pass is non-authoritative. Every decision below requires a separate human action before anything can enter Intake.</p>
+          ${Object.entries(groups).map(([classification, decisions]) => `<h3 class="section-title">${escapeHtml(externalReviewClassificationLabel(classification))} (${decisions.length})</h3>${decisions.map((decision) => renderExternalReviewDecision(workOrder, pass, decision, chunkTextById)).join("")}`).join("")}
+          ${(pass.result.relationships || []).length ? `<details class="technical-details"><summary>Relationships (${pass.result.relationships.length})</summary><pre class="code-block">${escapeHtml(JSON.stringify(pass.result.relationships, null, 2))}</pre></details>` : ""}
+          ${(pass.result.human_questions || []).length ? `<details class="technical-details"><summary>Questions for human review (${pass.result.human_questions.length})</summary>${pass.result.human_questions.map((question) => `<p class="item-body">${escapeDisplay(question.question || question.text || JSON.stringify(question), DISPLAY_TEXT_LIMIT)}</p>`).join("")}</details>` : ""}
+          ${(pass.result.rejected_material || []).length ? `<details class="technical-details"><summary>Rejected material (${pass.result.rejected_material.length})</summary>${pass.result.rejected_material.map((item) => `<p class="item-body">${escapeDisplay(item.summary || item.reason || item.title || JSON.stringify(item), DISPLAY_TEXT_LIMIT)}</p>`).join("")}</details>` : ""}
+        </section>`;
+      }).join("") : `<p class="empty">No external review result has been imported for this Work Order.</p>`,
+      onSubmit() {}
+    });
+  } catch (error) {
+    console.error("External review list failed.", error);
+    window.alert(error.message || String(error));
+  }
+}
+
+function openExternalDecisionReviewModal(workOrderId, passId, decisionId) {
+  const workOrder = (store.aiWorkOrders || []).find((order) => order.id === workOrderId);
+  if (!workOrder) return;
+  platformAdapter.reviewExchange.listExternalReviews({ workOrderId }).then((response) => {
+    const pass = (response.externalReviewPasses || []).find((item) => item.id === passId);
+    const decision = pass?.result?.decisions?.find((item) => item.decision_id === decisionId);
+    if (!pass || !decision) return;
+    const classificationOptions = ["project_candidate", "existing_project_support", "reference_note", "personal_context_note", "assistant_scaffolding_noise", "rejected_noise"]
+      .map((value) => `<option value="${value}" ${decision.classification === value ? "selected" : ""}>${escapeHtml(externalReviewClassificationLabel(value))}</option>`).join("");
+    showModal({
+      title: "Human Review of External Decision",
+      submitText: "Record human decision",
+      flowStep: 4,
+      forceReplace: true,
+      body: `
+        <p class="notice">You are reviewing a proposal from External Review Pass ${Number(pass.versionNumber).toLocaleString()}. Editing it records a new human action; the imported pass remains unchanged.</p>
+        <div class="field"><label for="reviewOperation">Review operation</label><select id="reviewOperation" name="reviewOperation"><option value="standard">Review this decision</option><option value="split">Split into two human-reviewed concepts</option><option value="merge">Merge with another decision in this pass</option></select></div>
+        <div class="field"><label for="disposition">Human decision</label><select id="disposition" name="disposition" required><option value="approved">Approve for use</option><option value="needs_revision">Keep for revision</option><option value="rejected">Reject</option></select></div>
+        <div class="field"><label for="classification">Classification</label><select id="classification" name="classification" required>${classificationOptions}</select></div>
+        <div class="field"><label for="conceptTitle">Concept title</label><input id="conceptTitle" name="conceptTitle" required value="${escapeHtml(decision.concept_title || "")}"></div>
+        <div class="field"><label for="summary">Summary</label><textarea id="summary" name="summary">${escapeHtml(decision.summary || "")}</textarea></div>
+        <div class="field"><label for="primaryProjectId">Primary existing project</label><select id="primaryProjectId" name="primaryProjectId"><option value="">No existing project</option>${projectOptions(decision.primary_project_id || "")}</select></div>
+        <fieldset class="field"><legend>Additional existing projects</legend>${(store.projects || []).filter((project) => !project.archived).map((project) => `<label class="check-row"><input type="checkbox" name="additionalProjectIds" value="${escapeHtml(project.id)}" ${(decision.additional_project_ids || []).includes(project.id) ? "checked" : ""}> ${escapeDisplay(project.name, DISPLAY_META_LIMIT)}</label>`).join("") || "<p class=\"item-meta\">No other projects are available.</p>"}</fieldset>
+        <div class="field"><label for="mergeDecisionId">Decision to merge (used only for merge)</label><select id="mergeDecisionId" name="mergeDecisionId"><option value="">Choose another decision</option>${(pass.result.decisions || []).filter((item) => item.decision_id !== decisionId).map((item) => `<option value="${escapeHtml(item.decision_id)}">${escapeDisplay(item.concept_title || item.decision_id, DISPLAY_META_LIMIT)}</option>`).join("")}</select></div>
+        <div class="field"><label for="splitConceptTitle">Second concept title (used only for split)</label><input id="splitConceptTitle" name="splitConceptTitle" placeholder="Title for the second human-reviewed concept"></div>
+        <div class="field"><label for="splitSummary">Second concept summary (used only for split)</label><textarea id="splitSummary" name="splitSummary" placeholder="What belongs in the second concept"></textarea></div>
+        <label class="check-row"><input type="checkbox" name="routeToIntake" value="yes"> Route this approved decision to Intake for the normal Airlock review</label>
+        ${auditFields({ reasonOptions: ["Approve external review decision", "Correct external review decision", "Reject external review decision", "Route reviewed decision to Intake"] })}
+      `,
+      async onSubmit(data, form) {
+        const actor = getOrCreateActor(data.actorName, "Human");
+        const additionalProjectIds = [...form.querySelectorAll('input[name="additionalProjectIds"]:checked')].map((input) => input.value).filter((id) => id !== data.primaryProjectId);
+        if (data.reviewOperation === "merge" && !data.mergeDecisionId) { window.alert("Choose the other decision to merge."); return false; }
+        if (data.reviewOperation === "split" && !data.splitConceptTitle.trim()) { window.alert("Enter the second concept title for the split."); return false; }
+        const action = {
+          id: uid("external_review_action"), passId, decisionId, disposition: data.disposition,
+          classification: data.classification, conceptTitle: data.conceptTitle.trim(), summary: data.summary.trim(),
+          primaryProjectId: data.primaryProjectId || "", additionalProjectIds, reviewedAt: nowIso(), reviewedBy: actor.id, reason: data.reason.trim(), routedIntakeId: "",
+          operation: data.reviewOperation || "standard", mergedDecisionIds: data.reviewOperation === "merge" ? [decisionId, data.mergeDecisionId] : []
+        };
+        if (data.routeToIntake === "yes") {
+          if (data.disposition !== "approved") { window.alert("Only an approved human decision can be routed to Intake."); return false; }
+          const proposedNew = data.classification === "project_candidate" && !data.primaryProjectId;
+          const intake = createIntakeItem({
+            armType: "ai", title: data.conceptTitle.trim(), createdBy: actor.id, sourceLabel: `External Review Pass ${pass.versionNumber}`,
+            projectId: data.primaryProjectId || "", destination: proposedNew ? "proposed_new_project" : data.primaryProjectId ? "existing_project" : "unassigned",
+            proposedProjectName: proposedNew ? data.conceptTitle.trim() : "", proposedObjectType: "Source",
+            proposedChange: { text: data.conceptTitle.trim(), summary: data.summary.trim() || decision.reasoning_summary || "" },
+            evidence: { externalReviewPassId: passId, externalDecisionId: decisionId, supportingChunkIds: decision.supporting_chunk_ids || [], humanReviewActionId: action.id },
+            save: false
+          });
+          action.routedIntakeId = intake.id;
+        }
+        workOrder.externalReviewActions = Array.isArray(workOrder.externalReviewActions) ? workOrder.externalReviewActions : [];
+        workOrder.externalReviewActions.push(action);
+        if (data.reviewOperation === "split") {
+          workOrder.externalReviewActions.push({
+            id: uid("external_review_action"), passId, decisionId, derivedFromActionId: action.id, disposition: data.disposition,
+            classification: data.classification, conceptTitle: data.splitConceptTitle.trim(), summary: data.splitSummary.trim(),
+            primaryProjectId: data.primaryProjectId || "", additionalProjectIds, reviewedAt: action.reviewedAt, reviewedBy: actor.id,
+            reason: data.reason.trim(), routedIntakeId: "", operation: "split_secondary", mergedDecisionIds: []
+          });
+        }
+        await saveStore({ allowWithoutCoreApproval: true, reason: "external-review-human-decision" });
+        postModalAction = () => openExternalReviewPassesModal(workOrderId);
+        return true;
+      }
+    });
+  }).catch((error) => window.alert(error.message || String(error)));
+}
+
 async function openAiWorkOrderResultsModal(workOrderId) {
   const workOrder = (store.aiWorkOrders || []).find((order) => order.id === workOrderId);
   if (!workOrder?.source?.discoveryCaseId) return;
@@ -13832,6 +14070,7 @@ async function openAiWorkOrderResultsModal(workOrderId) {
   const displayRawCandidates = rawCandidatesNotRepresentedByMap(candidates, normalizeCandidateMap(workOrder));
   const noCandidatesFound = workOrder.lastAnalysis && Number(workOrder.lastAnalysis.candidateCount || 0) === 0;
   const moreSourceRemaining = workOrder.lastAnalysis && workOrder.lastAnalysis.sourceFullyAnalyzed !== true;
+  const canExportUniversalReview = !workOrder.source?.corpusIntake?.recommended || workOrder.lastAnalysis?.sourceFullyAnalyzed === true;
   showModal({
     title: "AI Work Order results",
     submitText: t("close"),
@@ -13844,9 +14083,9 @@ async function openAiWorkOrderResultsModal(workOrderId) {
       ${moreSourceRemaining ? `<p class="notice"><strong>More source remains.</strong> These results are partial. Run local AI digestion again to continue through the next chunk window.</p>` : ""}
       ${noCandidatesFound ? `<p class="notice"><strong>No candidates found in the last pass.</strong> This is a completed AI attempt, not a completed source digestion.</p>` : ""}
       <div class="item-actions">
-        <button class="btn secondary compact" type="button" data-action="export-chatgpt-review-pack" data-review-pack-mode="summary" data-work-order-id="${escapeHtml(workOrder.id)}">Export Summary Pack</button>
-        <button class="btn secondary compact" type="button" data-action="export-chatgpt-review-pack" data-review-pack-mode="evidence_heavy" data-work-order-id="${escapeHtml(workOrder.id)}">Export Evidence-Heavy Pack</button>
-        <button class="btn secondary compact" type="button" data-action="export-chatgpt-review-pack" data-review-pack-mode="split_cluster" data-work-order-id="${escapeHtml(workOrder.id)}">Export Split Packs</button>
+        ${canExportUniversalReview ? `<button class="btn secondary compact" type="button" data-action="export-universal-review-pack" data-work-order-id="${escapeHtml(workOrder.id)}">Export Universal Review Pack</button>` : `<span class="item-meta">Finish all source indexing before Universal export.</span>`}
+        <button class="btn secondary compact" type="button" data-action="import-external-ai-review" data-work-order-id="${escapeHtml(workOrder.id)}">Import External AI Review</button>
+        <button class="btn secondary compact" type="button" data-action="view-external-ai-reviews" data-work-order-id="${escapeHtml(workOrder.id)}">Review Imported Decisions</button>
       </div>
       <h3 class="section-title">Candidate Map</h3>
       ${renderCandidateMapEntries(workOrder.candidateMap)}
@@ -17516,7 +17755,10 @@ app.addEventListener("click", (event) => {
   if (action === "create-ai-work-order") openCreateAiWorkOrderModal();
   if (action === "start-local-ai-work-order") openStartLocalAiWorkOrderModal(button.dataset.workOrderId);
   if (action === "view-ai-work-order-results") openAiWorkOrderResultsModal(button.dataset.workOrderId);
-  if (action === "export-chatgpt-review-pack") exportChatGptReviewPack(button.dataset.workOrderId, button.dataset.reviewPackMode || "summary");
+  if (action === "export-universal-review-pack") exportUniversalReviewPack(button.dataset.workOrderId);
+  if (action === "import-external-ai-review") openExternalReviewImportModal(button.dataset.workOrderId);
+  if (action === "view-external-ai-reviews") openExternalReviewPassesModal(button.dataset.workOrderId);
+  if (action === "review-external-ai-decision") openExternalDecisionReviewModal(button.dataset.workOrderId, button.dataset.reviewPassId, button.dataset.decisionId);
   if (action === "comment-ai-work-order") openAiWorkOrderCommentsModal(button.dataset.workOrderId);
   if (action === "archive-ai-work-order") archiveAiWorkOrder(button.dataset.workOrderId);
   if (action === "delete-archived-ai-work-order") openDeleteArchivedAiWorkOrderModal(button.dataset.workOrderId);
@@ -17811,6 +18053,17 @@ document.addEventListener("change", (event) => {
   if (!presetField) return;
   if (presetField.value === "custom") return;
   applyContextPresetToForm(presetField.closest("form"), presetField.value);
+});
+
+document.addEventListener("click", (event) => {
+  const button = event.target.closest?.(".modal [data-action]");
+  if (!button) return;
+  const action = button.dataset.action;
+  if (!actionAllowedForCurrentActor(action)) { window.alert(t("permissionDenied")); return; }
+  if (action === "export-universal-review-pack") exportUniversalReviewPack(button.dataset.workOrderId);
+  if (action === "import-external-ai-review") openExternalReviewImportModal(button.dataset.workOrderId);
+  if (action === "view-external-ai-reviews") openExternalReviewPassesModal(button.dataset.workOrderId);
+  if (action === "review-external-ai-decision") openExternalDecisionReviewModal(button.dataset.workOrderId, button.dataset.reviewPassId, button.dataset.decisionId);
 });
 
 app.addEventListener("input", (event) => {

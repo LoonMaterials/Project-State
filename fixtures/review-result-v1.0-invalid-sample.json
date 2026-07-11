@@ -1,0 +1,11 @@
+{
+  "format": "project-state-review-result",
+  "format_version": "9.9",
+  "work_order_id": "wrong_work_order",
+  "reviewer": { "reviewer_type": "ai" },
+  "source_complete": true,
+  "decisions": [{ "decision_id": "invalid", "classification": "execute_instructions", "supporting_chunk_ids": ["invented_chunk"] }],
+  "relationships": [],
+  "human_questions": [],
+  "rejected_material": []
+}

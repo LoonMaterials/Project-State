@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "project-state://schema/review-pack/1.0",
+  "title": "Project State Universal Review Pack Evidence",
+  "type": "object",
+  "required": ["format", "format_version", "work_order", "source_manifest", "chunks", "known_project_registry", "boundary_rules", "allowed_classifications"],
+  "properties": {
+    "format": { "const": "project-state-review-pack" },
+    "format_version": { "const": "1.0" },
+    "work_order": { "type": "object" },
+    "source_manifest": { "type": "array" },
+    "chunks": { "type": "array" },
+    "known_project_registry": { "type": "array" },
+    "boundary_rules": { "type": "array" },
+    "allowed_classifications": { "type": "array" }
+  }
+}
