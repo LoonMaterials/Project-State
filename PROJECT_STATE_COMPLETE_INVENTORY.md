@@ -1224,3 +1224,26 @@ Release result:
 - Remaining release gate: real-time desktop testing, including uninstall/reinstall, backup/restore to the selected external location, and representative universal review-pack export/import.
 - Packaged-content audit confirmed the universal exchange guide, strict review-pack/result schemas, valid/invalid result samples, and sample review ZIP are present in `app.asar`.
 - The packaged runtime check confirmed no bundled user data or secrets, Electron `42.4.1`, Node `24.16.0`, SQLite `3.53.0`, and the local Ollama/Qwen provider linked for AI Work Orders.
+
+## 32. Review Exchange Folder Automation and Recoverable JSON Notebook
+
+Status: implemented, fully regression-checked, and packaged as local test build `0.2.2` on 2026-07-12.
+
+- First-run setup and Settings now retain separate **Outgoing Review Packs** and **Incoming Reviewed Results** folders, with automatic, ask-each-time, and configure-later modes.
+- Completed unknown-material AI Work Orders automatically create one Universal Review Pack in the configured outgoing folder when Candidate Map results are not fully accounted for by known-project matches. The Work Order retains the package ID/path to prevent restart duplication.
+- **Import Reviewed Evidence** retains the JSON notebook-style paste window and automatically uses the configured incoming folder.
+- The paste notebook now provides **Continue editing**, mouse-accessible **Copy** and **Paste**, **Add exact evidence**, and **Save anyway** controls.
+- Validation failures appear inside the notebook and leave the JSON editable. Cancel/close continues to use the existing session-draft save/discard guard.
+- **Add exact evidence** adds a strict `chunk_id`/`start`/`end`/`excerpt` template to the first decision's `evidence_spans` array when the JSON is parseable, or inserts a recoverable template at the cursor otherwise.
+- **Save anyway** preserves the exact current text in the selected incoming folder without importing it or creating an External Review Pass. Unmatched/malformed drafts receive an explicit `unvalidated-external-review` filename.
+- Valid pasted results continue to recover the original export base name, validate package/revision/hash/schema/project/chunk/excerpt identity, and preserve an immutable internal copy.
+- The canonical project registry is now read directly from current desktop database project records so an empty/stale renderer handoff cannot erase known projects. GIBM and JSON/Markdown identity synchronization are regression-guarded.
+
+Release result:
+
+- Windows x64 installer: `release/Project-State-Setup-0.2.2-x64.exe`
+- Size: `101848327` bytes
+- SHA-256: `3467e6d7404a58d9c11fcf80d8acca8c14180bd5be8b79fc57427a98164f575b`
+- Signature status: `NotSigned`
+- Distribution status: local/offline test build only; not public-distribution ready.
+- Remaining gate: real-time desktop testing of setup folder selection, automatic export, notebook correction/save-anyway, pasted import, and uninstall/reinstall data preservation.

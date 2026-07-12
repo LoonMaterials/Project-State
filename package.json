@@ -1,6 +1,6 @@
 {
   "name": "project-state",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "private": true,
   "packageManager": "pnpm@11.0.7",
   "description": "Local-first Project State Windows desktop app.",

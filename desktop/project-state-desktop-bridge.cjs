@@ -339,6 +339,12 @@ function createProjectStateDesktopBridge(options = {}) {
       async importExternalReview(payload = {}) {
         return importExternalReviewPass({ storageRoot, dbPath, payload });
       },
+      async importPastedExternalReview(payload = {}) {
+        return importPastedExternalReviewPass({ storageRoot, dbPath, payload });
+      },
+      async savePastedExternalReview(payload = {}) {
+        return savePastedExternalReviewDraft({ storageRoot, dbPath, payload });
+      },
       async listExternalReviews(payload = {}) {
         return listExternalReviewPasses({ storageRoot, dbPath, payload });
       },
@@ -4219,8 +4225,24 @@ function reviewProjectIsPrivate(project = {}) {
   return project.private === true || project.exportExcluded === true || project.excludeFromAiReview === true || project.excludeFromReviewExport === true || ["personal", "confidential", "restricted", "private"].includes(privacy);
 }
 
+function reviewProjectIsDeleted(project = {}) {
+  return project.deleted === true || project.isDeleted === true || ["deleted", "removed"].includes(String(project.status || "").toLowerCase());
+}
+
+function currentReviewRegistryProjects(dbPath, providedProjects = []) {
+  const providedById = new Map((providedProjects || []).filter((project) => project?.id).map((project) => [String(project.id), project]));
+  const db = openDatabase(dbPath);
+  try {
+    return readRecordJson(db, "projects")
+      .filter((project) => project?.id && !reviewProjectIsDeleted(project))
+      .map((project) => ({ ...project, ...(providedById.get(String(project.id)) || {}), id: String(project.id), name: String(project.name || providedById.get(String(project.id))?.name || "Untitled project") }));
+  } finally {
+    db.close();
+  }
+}
+
 function reviewPackProjectRegistry(projects = [], { includePrivateProjects = false } = {}) {
-  return (projects || []).filter((project) => project?.id && (includePrivateProjects || !reviewProjectIsPrivate(project))).map((project) => {
+  return (projects || []).filter((project) => project?.id && !reviewProjectIsDeleted(project) && (includePrivateProjects || !reviewProjectIsPrivate(project))).map((project) => {
     const rawStatus = String(project.status || project.healthFlag || "").toLowerCase();
     const status = project.archived ? "archived" : rawStatus === "paused" || rawStatus === "on_hold" ? "paused" : "active";
     return {
@@ -4267,6 +4289,9 @@ function reviewPackInstructions(evidence) {
 }
 
 function reviewPackReadableMarkdown(evidence) {
+  const registryLines = evidence.project_registry.length
+    ? evidence.project_registry.map((project) => `- \`${project.project_id}\` — **${project.canonical_name}** · ${project.status}${project.aliases.length ? ` · aliases: ${project.aliases.join(", ")}` : ""}${project.former_names.length ? ` · former names: ${project.former_names.join(", ")}` : ""}${project.parent_project_id ? ` · parent: ${project.parent_project_id}` : ""}${project.project_family ? ` · family: ${project.project_family}` : ""}${project.short_summary ? `\n  ${project.short_summary}` : ""}`)
+    : ["_The current Project State project registry is empty; no known projects were available for matching at export time._"];
   const lines = [
     "# Project State Evidence",
     "",
@@ -4283,7 +4308,7 @@ function reviewPackReadableMarkdown(evidence) {
     "",
     "## Current Project Registry",
     "",
-    ...evidence.project_registry.map((project) => `- \`${project.project_id}\` — **${project.canonical_name}** · ${project.status}${project.aliases.length ? ` · aliases: ${project.aliases.join(", ")}` : ""}${project.former_names.length ? ` · former names: ${project.former_names.join(", ")}` : ""}${project.parent_project_id ? ` · parent: ${project.parent_project_id}` : ""}${project.project_family ? ` · family: ${project.project_family}` : ""}${project.short_summary ? `\n  ${project.short_summary}` : ""}`),
+    ...registryLines,
     "",
     "## Complete evidence chunks",
     ""
@@ -4414,7 +4439,8 @@ async function createUniversalReviewPack({ storageRoot, dbPath, payload = {} }) 
       complete: !truncated, truncated
     };
   });
-  const projectRegistry = reviewPackProjectRegistry(payload.knownProjects || [], { includePrivateProjects: payload.includePrivateProjects === true });
+  const registryProjects = currentReviewRegistryProjects(dbPath, payload.knownProjects || []);
+  const projectRegistry = reviewPackProjectRegistry(registryProjects, { includePrivateProjects: payload.includePrivateProjects === true });
   const sourceComplete = sourceManifest.every((source) => source.complete);
   const packageVersion = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8")).version || "unknown";
   const evidenceWithoutHash = {
@@ -4443,7 +4469,11 @@ async function createUniversalReviewPack({ storageRoot, dbPath, payload = {} }) 
   const evidence = { ...evidenceWithoutHash, evidence_sha256: evidenceSha256 };
   const resultSchema = fs.readFileSync(REVIEW_RESULT_SCHEMA_FILE, "utf8");
   const packName = safeFileName(`${workOrder.title || workOrderId}.universal-ai-review-pack-${safeStamp()}.zip`);
-  const packPath = path.join(storageRoot, "backups", packName);
+  const requestedOutputDirectory = String(payload.outputDirectory || "").trim();
+  const outputDirectory = requestedOutputDirectory ? path.resolve(requestedOutputDirectory) : path.join(storageRoot, "backups");
+  const outputDirectoryStat = await fsp.stat(outputDirectory).catch(() => null);
+  if (!outputDirectoryStat?.isDirectory()) throw new Error("The selected Review Exchange output folder is unavailable.");
+  const packPath = path.join(outputDirectory, packName);
   const zip = createStoredZip([
     { name: "review_instructions.md", data: reviewPackInstructions(evidence) },
     { name: "evidence.json", data: JSON.stringify(evidence, null, 2) },
@@ -4451,7 +4481,9 @@ async function createUniversalReviewPack({ storageRoot, dbPath, payload = {} }) 
     { name: "schema/review_result.schema.json", data: resultSchema }
   ]);
   await fsp.writeFile(packPath, zip);
-  const record = { id: packageId, packageId, workOrderId, discoveryCaseId, packRevision, createdAt, projectStateVersion: packageVersion, format: evidence.format, formatVersion: evidence.format_version, reviewProtocol: evidence.review_protocol, reviewProtocolVersion: evidence.review_protocol_version, evidenceSha256, sourceComplete, projectRegistry: cloneJson(projectRegistry), chunkIds: chunks.map((chunk) => chunk.chunk_id), sourceIds: sourceManifest.map((source) => source.source_id), exportFileName: packName, exportPath: relativeManagedPath(storageRoot, packPath), includePrivateProjects: payload.includePrivateProjects === true };
+  const managedRelativePath = relativeManagedPath(storageRoot, packPath);
+  const insideManagedStorage = managedRelativePath !== ".." && !managedRelativePath.startsWith(`..${path.sep}`) && !managedRelativePath.startsWith("../");
+  const record = { id: packageId, packageId, workOrderId, discoveryCaseId, packRevision, createdAt, projectStateVersion: packageVersion, format: evidence.format, formatVersion: evidence.format_version, reviewProtocol: evidence.review_protocol, reviewProtocolVersion: evidence.review_protocol_version, evidenceSha256, sourceComplete, projectRegistry: cloneJson(projectRegistry), chunkIds: chunks.map((chunk) => chunk.chunk_id), sourceIds: sourceManifest.map((source) => source.source_id), exportFileName: packName, exportPath: insideManagedStorage ? managedRelativePath : "", externalExportPath: insideManagedStorage ? "" : packPath, includePrivateProjects: payload.includePrivateProjects === true };
   const packageDb = openDatabase(dbPath);
   try { insertStrict(packageDb, "review_export_packages", { id: packageId, work_order_id: workOrderId, discovery_case_id: discoveryCaseId, pack_revision: packRevision, evidence_sha256: evidenceSha256, created_at: createdAt, record_json: JSON.stringify(record) }); }
   catch (error) { await fsp.rm(packPath, { force: true }); throw error; }
@@ -4655,6 +4687,79 @@ async function importExternalReviewPass({ storageRoot, dbPath, payload = {} }) {
   await appendDiscoveryInteraction({ storageRoot, dbPath, payload: { id: makeId("interaction"), discoveryCaseId, actorId: payload.actorId || "external_review_importer", actorType: "human", interactionType: "external_review_import", createdAt: importedAt, content: { externalReviewPassId: id, workOrderId, reviewer: result.reviewer, decisionCount: result.decisions.length, sourceComplete: result.source_complete, coreAuthority: false }, evidence: result.decisions.flatMap((decision) => decision.supporting_chunk_ids || []).map((chunkId) => ({ discoveryChunkId: chunkId })) } });
   await appendDiscoveryEvent({ storageRoot, dbPath, payload: { id: makeId("discovery_event"), discoveryCaseId, eventType: "external_review_imported", actorId: payload.actorId || "external_review_importer", actorType: "human", occurredAt: importedAt, externalReviewPassId: id, workOrderId, importHash, decisionCount: result.decisions.length, coreChanged: false } });
   return { ok: true, deduplicated: false, workOrderId, discoveryCaseId, externalReviewPass: record, coreChanged: false, localEvidenceChanged: false, candidateMapChanged: false };
+}
+
+async function importPastedExternalReviewPass({ storageRoot, dbPath, payload = {} }) {
+  await ensureSpine(storageRoot);
+  const jsonText = String(payload.jsonText || payload.text || "").trim();
+  if (!jsonText) throw new Error("Paste the reviewed JSON before importing.");
+  let parsed;
+  try { parsed = JSON.parse(jsonText); }
+  catch (error) { throw new Error(`The pasted review is malformed JSON: ${error.message}`); }
+  const packageId = String(parsed.package_id || "").trim();
+  if (!packageId) throw new Error("The pasted review must include package_id so Project State can recover the original export name.");
+  const requestedOutputDirectory = String(payload.outputDirectory || "").trim();
+  if (!requestedOutputDirectory) throw new Error("Choose where the pasted review JSON should be saved.");
+  const outputDirectory = path.resolve(requestedOutputDirectory);
+  const outputDirectoryStat = await fsp.stat(outputDirectory).catch(() => null);
+  if (!outputDirectoryStat?.isDirectory()) throw new Error("The selected Review Exchange folder is unavailable.");
+  const db = openDatabase(dbPath);
+  let packageRecord;
+  try {
+    const row = db.prepare("SELECT record_json FROM review_export_packages WHERE id = ?").get(packageId);
+    packageRecord = row ? JSON.parse(row.record_json) : null;
+  } finally {
+    db.close();
+  }
+  if (!packageRecord) throw new Error("No matching exported package was found for the pasted package_id.");
+  const exportBaseName = String(packageRecord.exportFileName || `${packageId}.zip`).replace(/\.zip$/i, "");
+  const preferredName = safeFileName(`${exportBaseName}.review-result.json`);
+  let savedPath = path.join(outputDirectory, preferredName);
+  const bytes = Buffer.from(jsonText, "utf8");
+  for (let copy = 2; fs.existsSync(savedPath); copy += 1) {
+    const existing = await fsp.readFile(savedPath);
+    if (existing.equals(bytes)) break;
+    savedPath = path.join(outputDirectory, safeFileName(`${exportBaseName}.review-result-${copy}.json`));
+  }
+  if (!fs.existsSync(savedPath)) await fsp.writeFile(savedPath, bytes, { flag: "wx" });
+  const imported = await importExternalReviewPass({ storageRoot, dbPath, payload: { ...payload, filePath: savedPath } });
+  return { ...imported, savedPath, savedFileName: path.basename(savedPath), sourceExportFileName: packageRecord.exportFileName || "" };
+}
+
+async function savePastedExternalReviewDraft({ storageRoot, dbPath, payload = {} }) {
+  await ensureSpine(storageRoot);
+  const jsonText = String(payload.jsonText || payload.text || "");
+  if (!jsonText.trim()) throw new Error("Paste review content before saving.");
+  const requestedOutputDirectory = String(payload.outputDirectory || "").trim();
+  if (!requestedOutputDirectory) throw new Error("Choose where the pasted review should be saved.");
+  const outputDirectory = path.resolve(requestedOutputDirectory);
+  const outputDirectoryStat = await fsp.stat(outputDirectory).catch(() => null);
+  if (!outputDirectoryStat?.isDirectory()) throw new Error("The selected Review Exchange folder is unavailable.");
+  let packageRecord = null;
+  try {
+    const parsed = JSON.parse(jsonText);
+    const packageId = String(parsed.package_id || "").trim();
+    if (packageId) {
+      const db = openDatabase(dbPath);
+      try {
+        const row = db.prepare("SELECT record_json FROM review_export_packages WHERE id = ?").get(packageId);
+        packageRecord = row ? JSON.parse(row.record_json) : null;
+      } finally { db.close(); }
+    }
+  } catch {}
+  const exportBaseName = packageRecord
+    ? String(packageRecord.exportFileName || packageRecord.packageId || "review").replace(/\.zip$/i, "")
+    : `unvalidated-external-review-${safeStamp()}`;
+  const preferredName = safeFileName(`${exportBaseName}.review-result.json`);
+  let savedPath = path.join(outputDirectory, preferredName);
+  const bytes = Buffer.from(jsonText, "utf8");
+  for (let copy = 2; fs.existsSync(savedPath); copy += 1) {
+    const existing = await fsp.readFile(savedPath);
+    if (existing.equals(bytes)) break;
+    savedPath = path.join(outputDirectory, safeFileName(`${exportBaseName}.review-result-${copy}.json`));
+  }
+  if (!fs.existsSync(savedPath)) await fsp.writeFile(savedPath, bytes, { flag: "wx" });
+  return { ok: true, savedPath, savedFileName: path.basename(savedPath), matchedExport: Boolean(packageRecord), imported: false, validationBypassed: true };
 }
 
 async function listExternalReviewPasses({ storageRoot, dbPath, payload = {} }) {

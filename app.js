@@ -3288,6 +3288,9 @@ const defaultSettings = () => ({
   localAiSetupCheckedAt: "",
   localAiSetupInstallHint: "",
   localAiSetupError: "",
+  reviewExchangeMode: "automatic",
+  reviewExchangeOutgoingFolder: "",
+  reviewExchangeIncomingFolder: "",
   uiState: {
     recentProjectIds: [],
     lastProjectId: "",
@@ -3557,9 +3560,11 @@ function createDesktopPlatformAdapter(bridge) {
       readState: (payload) => analysisArms.readState(payload)
     },
     reviewExchange: {
-      available: typeof reviewExchange.exportUniversalPack === "function" && typeof reviewExchange.importExternalReview === "function",
+      available: typeof reviewExchange.exportUniversalPack === "function" && typeof reviewExchange.importExternalReview === "function" && typeof reviewExchange.importPastedExternalReview === "function" && typeof reviewExchange.savePastedExternalReview === "function",
       exportUniversalPack: (payload) => reviewExchange.exportUniversalPack(payload),
       importExternalReview: (payload) => reviewExchange.importExternalReview(payload),
+      importPastedExternalReview: (payload) => reviewExchange.importPastedExternalReview(payload),
+      savePastedExternalReview: (payload) => reviewExchange.savePastedExternalReview(payload),
       listExternalReviews: (payload) => reviewExchange.listExternalReviews(payload),
       recordHumanAction: (payload) => reviewExchange.recordHumanAction(payload),
       listHumanActions: (payload) => reviewExchange.listHumanActions(payload)
@@ -4562,6 +4567,9 @@ function normalizeSettings(settings = {}) {
     localAiSetupCheckedAt: String(settings.localAiSetupCheckedAt || ""),
     localAiSetupInstallHint: String(settings.localAiSetupInstallHint || ""),
     localAiSetupError: String(settings.localAiSetupError || ""),
+    reviewExchangeMode: ["automatic", "ask_each_time", "configure_later"].includes(settings.reviewExchangeMode) ? settings.reviewExchangeMode : defaults.reviewExchangeMode,
+    reviewExchangeOutgoingFolder: String(settings.reviewExchangeOutgoingFolder || ""),
+    reviewExchangeIncomingFolder: String(settings.reviewExchangeIncomingFolder || ""),
     uiState: normalizeUiState(settings.uiState),
     historyPolicyVersion: settings.historyPolicyVersion || defaults.historyPolicyVersion,
     mandatoryHistory: settings.mandatoryHistory !== false,
@@ -4603,7 +4611,7 @@ function normalizeUiState(uiState = {}) {
 }
 
 function normalizeLastImportFolders(lastImportFolders = {}) {
-  const allowed = new Set(["discovery_files", "discovery_folder", "project_files", "project_folder", "backup"]);
+  const allowed = new Set(["discovery_files", "discovery_folder", "project_files", "project_folder", "backup", "review_exchange", "review_exchange_outgoing", "review_exchange_incoming"]);
   if (!lastImportFolders || typeof lastImportFolders !== "object") return {};
   return Object.fromEntries(Object.entries(lastImportFolders)
     .filter(([key, value]) => allowed.has(key) && String(value || "").trim())
@@ -4959,6 +4967,8 @@ function normalizeAiWorkOrder(workOrder, context) {
     lastAnalysis: workOrder.lastAnalysis && typeof workOrder.lastAnalysis === "object" ? cloneRecord(workOrder.lastAnalysis) : null,
     digestContext: workOrder.digestContext && typeof workOrder.digestContext === "object" ? cloneRecord(workOrder.digestContext) : null,
     candidateMap: workOrder.candidateMap && typeof workOrder.candidateMap === "object" ? cloneRecord(workOrder.candidateMap) : null,
+    lastAutomaticReviewPackageId: String(workOrder.lastAutomaticReviewPackageId || ""),
+    lastAutomaticReviewPackPath: String(workOrder.lastAutomaticReviewPackPath || ""),
     externalReviewActions: Array.isArray(workOrder.externalReviewActions) ? workOrder.externalReviewActions.map((action) => cloneRecord(action)) : [],
     comments: normalizeComments(workOrder.comments, context)
   };
@@ -5717,6 +5727,17 @@ function getActor(actorId) {
 
 function currentActor() {
   return getActor(store.settings?.primaryActorId) || store.actors.find((actor) => normalizeActorStatus(actor.status) === "active") || null;
+}
+
+function reviewExchangeFolderPickerMarkup(fieldName, memoryKind, title) {
+  if (!platformAdapter.dialogs?.available) return "";
+  return `<button class="btn secondary" type="button" data-native-folder-picker data-location-target="${escapeHtml(fieldName)}" data-folder-memory="${escapeHtml(memoryKind)}" data-folder-title="${escapeHtml(title)}">${escapeHtml(t("browseFolder"))}</button>`;
+}
+
+function configuredReviewExchangeFolder(direction) {
+  const setting = direction === "outgoing" ? store.settings?.reviewExchangeOutgoingFolder : store.settings?.reviewExchangeIncomingFolder;
+  const memoryKind = direction === "outgoing" ? "review_exchange_outgoing" : "review_exchange_incoming";
+  return String(setting || rememberedImportFolder(memoryKind) || rememberedImportFolder("review_exchange") || "").trim();
 }
 
 function defaultUiActor() {
@@ -6868,6 +6889,13 @@ function renderFirstRunSetup() {
             <input name="recoveryWarnings" type="checkbox" ${store.settings?.recoveryWarnings !== false ? "checked" : ""}>
             <span>${escapeHtml(t("recoveryWarnings"))}</span>
           </label>
+          <section class="panel">
+            <h2 class="panel-title">Review Exchange folders</h2>
+            <p class="notice">Outgoing Universal Review Packs and incoming pasted review results use separate remembered folders. Automatic mode uses them without asking each time.</p>
+            <div class="field"><label for="setupReviewExchangeMode">Folder behavior</label><select id="setupReviewExchangeMode" name="reviewExchangeMode"><option value="automatic">Use configured folders automatically</option><option value="ask_each_time">Ask each time</option><option value="configure_later">Configure later</option></select></div>
+            <div class="field"><label for="reviewExchangeOutgoingFolder">Outgoing Review Packs</label><input id="reviewExchangeOutgoingFolder" name="reviewExchangeOutgoingFolder" readonly value="${escapeHtml(store.settings?.reviewExchangeOutgoingFolder || "")}" placeholder="Choose where exported review ZIP files are saved">${reviewExchangeFolderPickerMarkup("reviewExchangeOutgoingFolder", "review_exchange_outgoing", "Choose Outgoing Review Packs Folder")}</div>
+            <div class="field"><label for="reviewExchangeIncomingFolder">Incoming Reviewed Results</label><input id="reviewExchangeIncomingFolder" name="reviewExchangeIncomingFolder" readonly value="${escapeHtml(store.settings?.reviewExchangeIncomingFolder || "")}" placeholder="Choose where pasted review JSON files are saved">${reviewExchangeFolderPickerMarkup("reviewExchangeIncomingFolder", "review_exchange_incoming", "Choose Incoming Reviewed Results Folder")}</div>
+          </section>
           ${renderLocalAiSetupPanel({ firstRun: true })}
           <div class="form-footer">
             <button class="btn" type="submit">${escapeHtml(t("saveSetup"))}</button>
@@ -7097,6 +7125,18 @@ function renderSettings() {
           <div class="form-footer">
             <button class="btn" type="submit">Save local AI setup</button>
           </div>
+        </form>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head"><h2 class="panel-title">Review Exchange folders</h2></div>
+        <form class="form" data-settings-review-exchange>
+          <p class="notice">Automatic mode saves outgoing review ZIPs and incoming pasted JSON results to their configured folders without asking again. The JSON notebook paste window remains part of every import.</p>
+          <div class="field"><label for="settingsReviewExchangeMode">Folder behavior</label><select id="settingsReviewExchangeMode" name="reviewExchangeMode"><option value="automatic" ${store.settings?.reviewExchangeMode === "automatic" ? "selected" : ""}>Use configured folders automatically</option><option value="ask_each_time" ${store.settings?.reviewExchangeMode === "ask_each_time" ? "selected" : ""}>Ask each time</option><option value="configure_later" ${store.settings?.reviewExchangeMode === "configure_later" ? "selected" : ""}>Configure later</option></select></div>
+          <div class="field"><label for="settingsReviewExchangeOutgoingFolder">Outgoing Review Packs</label><input id="settingsReviewExchangeOutgoingFolder" name="reviewExchangeOutgoingFolder" readonly value="${escapeHtml(store.settings?.reviewExchangeOutgoingFolder || "")}" placeholder="Choose outgoing ZIP folder">${reviewExchangeFolderPickerMarkup("reviewExchangeOutgoingFolder", "review_exchange_outgoing", "Choose Outgoing Review Packs Folder")}</div>
+          <div class="field"><label for="settingsReviewExchangeIncomingFolder">Incoming Reviewed Results</label><input id="settingsReviewExchangeIncomingFolder" name="reviewExchangeIncomingFolder" readonly value="${escapeHtml(store.settings?.reviewExchangeIncomingFolder || "")}" placeholder="Choose incoming JSON folder">${reviewExchangeFolderPickerMarkup("reviewExchangeIncomingFolder", "review_exchange_incoming", "Choose Incoming Reviewed Results Folder")}</div>
+          <div class="field"><label for="reviewExchangeSettingsReason">${escapeHtml(t("reason"))}</label><textarea id="reviewExchangeSettingsReason" name="reason" required placeholder="Record why Review Exchange folder setup changed."></textarea></div>
+          <div class="form-footer"><button class="btn" type="submit">Save Review Exchange folders</button></div>
         </form>
       </section>
 
@@ -8300,6 +8340,9 @@ function pathFolderName(localPath = "") {
 
 function importFolderMemoryKey(kind = "files") {
   if (kind === "backup") return "backup";
+  if (kind === "review_exchange") return "review_exchange";
+  if (kind === "review_exchange_outgoing") return "review_exchange_outgoing";
+  if (kind === "review_exchange_incoming") return "review_exchange_incoming";
   if (kind === "folder") return "discovery_folder";
   if (kind === "project_files") return "project_files";
   if (kind === "project_folder") return "project_folder";
@@ -8314,7 +8357,7 @@ function rememberedImportFolder(kind = "files") {
 function rememberImportFolder(kind = "files", paths = []) {
   const selectedPaths = Array.isArray(paths) ? paths.filter(Boolean) : [];
   if (!selectedPaths.length) return "";
-  const isFolderPicker = kind === "folder" || kind === "project_folder";
+  const isFolderPicker = kind === "folder" || kind === "project_folder" || kind.startsWith("review_exchange");
   const folder = isFolderPicker ? selectedPaths[0] : pathParentFolder(selectedPaths[0]);
   if (!folder) return "";
   store.settings = normalizeSettings(store.settings || {});
@@ -8376,7 +8419,7 @@ function openProjectFileImportModal(selection) {
   const defaultProjectName = isFolderImport ? folderName : titleFromFileName(selection.candidates?.[0]?.name || "");
   const selectedSummary = projectFileImportCategorySummary(selection.candidates);
   const activeProjects = store.projects.filter((project) => !project.archived);
-  showModal({
+  const reviewModal = showModal({
     title: isFolderImport ? "Add project folder" : "Add files to project",
     submitText: "Finish import",
     forceReplace: true,
@@ -11567,6 +11610,7 @@ function showModal({ title, body, submitText, onSubmit, draftKey = "", flowStep 
   document.body.appendChild(modal);
   wireDraggableModal(modal.querySelector(".modal"));
   modal.querySelector("input, textarea, select")?.focus();
+  return modal;
 }
 
 function wireDraggableModal(dialog) {
@@ -11768,8 +11812,10 @@ function wireLocalFilePickers(form) {
         : button.dataset.fileFilter === "review"
           ? [{ name: "External AI review", extensions: ["json", "zip"] }]
           : [];
-      const file = await platformAdapter.dialogs.pickFile({ title: t("findLocalFile"), filters });
+      const memoryKind = button.dataset.folderMemory || "";
+      const file = await platformAdapter.dialogs.pickFile({ title: t("findLocalFile"), filters, defaultPath: memoryKind ? rememberedImportFolder(memoryKind) : "" });
       if (!file?.localPath) return;
+      if (memoryKind && rememberImportFolder(memoryKind, [pathParentFolder(file.localPath)])) await saveStore({ allowWithoutCoreApproval: true, reason: "remember-review-exchange-folder" });
       form._projectStateSelectedFiles = form._projectStateSelectedFiles || {};
       form._projectStateSelectedFiles[button.dataset.fileKey || "source"] = file;
       const locationField = form.querySelector(`[name="${button.dataset.locationTarget}"]`);
@@ -11782,9 +11828,10 @@ function wireLocalFilePickers(form) {
   }
   for (const button of form.querySelectorAll("[data-native-folder-picker]")) {
     button.addEventListener("click", async () => {
-      const folder = await platformAdapter.dialogs.pickFolder({ title: t("backupLocation"), defaultPath: rememberedImportFolder("backup") });
+      const memoryKind = button.dataset.folderMemory || "backup";
+      const folder = await platformAdapter.dialogs.pickFolder({ title: button.dataset.folderTitle || t("backupLocation"), defaultPath: rememberedImportFolder(memoryKind) });
       if (!folder?.localPath) return;
-      rememberImportFolder("backup", [folder.localPath]);
+      rememberImportFolder(memoryKind, [folder.localPath]);
       const locationField = form.querySelector(`[name="${button.dataset.locationTarget}"]`);
       if (locationField) locationField.value = folder.localPath;
     });
@@ -13775,6 +13822,19 @@ async function openStartLocalAiWorkOrderModal(workOrderId) {
           });
           if (continuousMode && !sourceFullyAnalyzed && !stopRequested) await new Promise((resolve) => setTimeout(resolve, 350));
         } while (continuousMode && !sourceFullyAnalyzed && !stopRequested);
+        if (sourceFullyAnalyzed && store.settings?.reviewExchangeMode === "automatic" && configuredReviewExchangeFolder("outgoing") && !workOrder.lastAutomaticReviewPackageId && workOrderNeedsAutomaticReviewPack(workOrder)) {
+          const automaticPack = await exportUniversalReviewPack(workOrder.id, { silent: true });
+          if (automaticPack) {
+            workOrder.lastAutomaticReviewPackageId = automaticPack.packageId;
+            workOrder.lastAutomaticReviewPackPath = automaticPack.path;
+            workOrder.comments.unshift({
+              id: uid("comment"), actorId: "project_state", actorName: "Project State", createdAt: nowIso(),
+              text: `Automatic Universal Review Pack saved to the configured outgoing folder: ${automaticPack.path}`,
+              reviewState: "needs_review", visibilityNotice: "Project State comments are part of the project record and are not private."
+            });
+            await saveStore({ allowWithoutCoreApproval: true, reason: "automatic-universal-review-export" });
+          }
+        }
         if (continuousMode && stopRequested && !sourceFullyAnalyzed) {
           workOrder.status = "submitted";
           workOrder.comments.unshift({
@@ -13857,7 +13917,17 @@ function universalReviewKnownProjects() {
   }));
 }
 
-async function exportUniversalReviewPack(workOrderId) {
+function workOrderNeedsAutomaticReviewPack(workOrder = {}) {
+  const entries = workOrder.candidateMap?.entries || [];
+  if (!entries.length) return true;
+  return entries.some((entry) => {
+    const classification = entry.projectStateClassification || entry.classification || "";
+    const knownTargets = entry.enrichmentTargetProjectIds || entry.knownProjectMatches?.map((match) => match.projectId).filter(Boolean) || [];
+    return classification !== "existing_project_support" || !knownTargets.length;
+  });
+}
+
+async function exportUniversalReviewPack(workOrderId, { silent = false } = {}) {
   const workOrder = (store.aiWorkOrders || []).find((order) => order.id === workOrderId);
   if (!workOrder?.source?.discoveryCaseId || !platformAdapter.reviewExchange?.available) return;
   if (workOrder.source?.corpusIntake?.recommended && workOrder.lastAnalysis?.sourceFullyAnalyzed !== true) {
@@ -13865,29 +13935,57 @@ async function exportUniversalReviewPack(workOrderId) {
     return;
   }
   try {
-    const result = await platformAdapter.reviewExchange.exportUniversalPack({ workOrder, knownProjects: universalReviewKnownProjects() });
-    window.alert(`Universal Review Pack created.\n\n${result.path}\n\nPackage ${result.packageId} · revision ${result.packRevision}\nEvidence SHA-256: ${result.evidenceSha256}\n\n${Number(result.chunkCount || 0).toLocaleString()} complete stored evidence chunks are included.${result.sourceComplete ? " The Work Order reports full source coverage." : " Warning: the Work Order reports that more source remains, so this pack is a partial-source review pack."} The external model's response remains a proposal until you import and approve it.`);
+    const automatic = store.settings?.reviewExchangeMode === "automatic";
+    let outputDirectory = automatic ? configuredReviewExchangeFolder("outgoing") : "";
+    if (!outputDirectory) {
+      const folder = await platformAdapter.dialogs.pickFolder({ title: "Choose Outgoing Review Packs Folder", defaultPath: configuredReviewExchangeFolder("outgoing") });
+      if (!folder?.localPath) return;
+      outputDirectory = folder.localPath;
+      rememberImportFolder("review_exchange_outgoing", [outputDirectory]);
+      if (automatic) store.settings.reviewExchangeOutgoingFolder = outputDirectory;
+      await saveStore({ allowWithoutCoreApproval: true, reason: "remember-review-exchange-outgoing-folder" });
+    }
+    const result = await platformAdapter.reviewExchange.exportUniversalPack({ workOrder, knownProjects: universalReviewKnownProjects(), outputDirectory });
+    if (!silent) window.alert(`Universal Review Pack created.\n\n${result.path}\n\nPackage ${result.packageId} · revision ${result.packRevision}\nEvidence SHA-256: ${result.evidenceSha256}\n\n${Number(result.chunkCount || 0).toLocaleString()} complete stored evidence chunks are included.${result.sourceComplete ? " The Work Order reports full source coverage." : " Warning: the Work Order reports that more source remains, so this pack is a partial-source review pack."} The external model's response remains a proposal until you import and approve it.`);
+    return result;
   } catch (error) {
     console.error("Universal Review Pack export failed.", error);
-    window.alert(`Universal Review Pack could not be created.\n\n${error.message || error}`);
+    if (!silent) window.alert(`Universal Review Pack could not be created.\n\n${error.message || error}`);
+    return null;
   }
 }
 
-function openExternalReviewImportModal() {
+async function openExternalReviewImportModal() {
   if (!platformAdapter.reviewExchange?.available) return;
+  const automatic = store.settings?.reviewExchangeMode === "automatic";
+  let incomingDirectory = automatic ? configuredReviewExchangeFolder("incoming") : "";
+  if (!incomingDirectory) {
+    const folder = await platformAdapter.dialogs.pickFolder({ title: "Choose Incoming Reviewed Results Folder", defaultPath: configuredReviewExchangeFolder("incoming") });
+    if (!folder?.localPath) return;
+    incomingDirectory = folder.localPath;
+    rememberImportFolder("review_exchange_incoming", [incomingDirectory]);
+    if (automatic) store.settings.reviewExchangeIncomingFolder = incomingDirectory;
+    await saveStore({ allowWithoutCoreApproval: true, reason: "remember-review-exchange-incoming-folder" });
+  }
   showModal({
-    title: "Import Reviewed Evidence",
-    submitText: "Validate and import",
+    title: "Paste Reviewed Evidence JSON",
+    submitText: "Save, validate, and import",
     flowStep: 4,
     body: `
-      <p class="notice"><strong>Automatic matching:</strong> Project State reads the returned package identity and locates the exact exported Work Order and Discovery Case. Imported decisions remain a separate External Review Pass and cannot alter local evidence, Candidate Map results, Intake, or Core.</p>
+      <p class="notice"><strong>Save folder:</strong> ${escapeDisplay(incomingDirectory, DISPLAY_TEXT_LIMIT)}<br><strong>Automatic name:</strong> Project State reads <code>package_id</code>, recovers the matching export name, and saves this as that export's <code>.review-result.json</code> file.</p>
       <div class="field">
-        <label for="externalReviewPath">Review result JSON or ZIP</label>
-        <div class="file-picker-row">
-          <input id="externalReviewPath" name="externalReviewPath" readonly required placeholder="Choose a returned review file">
-          <button class="btn secondary" type="button" data-native-file-picker data-file-key="externalReview" data-location-target="externalReviewPath" data-file-filter="review">Browse</button>
-        </div>
+        <label for="reviewJson">Paste returned review JSON</label>
+        <textarea id="reviewJson" name="reviewJson" rows="20" required spellcheck="false" placeholder="Paste the complete JSON object returned by the reviewer here."></textarea>
+        <p class="field-help">The pasted JSON is saved in your selected folder. Project State also preserves an immutable internal copy after validation.</p>
       </div>
+      <div class="button-row" aria-label="Pasted JSON editing tools">
+        <button class="btn secondary" type="button" data-review-json-tool="continue">Continue editing</button>
+        <button class="btn secondary" type="button" data-review-json-tool="copy">Copy</button>
+        <button class="btn secondary" type="button" data-review-json-tool="paste">Paste</button>
+        <button class="btn secondary" type="button" data-review-json-tool="exact-evidence">Add exact evidence</button>
+        <button class="btn secondary" type="button" data-review-json-tool="save-anyway">Save anyway</button>
+      </div>
+      <p class="notice" data-review-json-status hidden aria-live="polite"></p>
       <div class="field">
         <label for="externalTransmissionStatus">Was evidence sent outside this computer?</label>
         <select id="externalTransmissionStatus" name="externalTransmissionStatus" required>
@@ -13901,15 +13999,16 @@ function openExternalReviewImportModal() {
     async onSubmit(data) {
       try {
         const actor = getOrCreateActor(data.actorName, "Human");
-        const imported = await platformAdapter.reviewExchange.importExternalReview({
-          filePath: data.externalReviewPath,
+        const imported = await platformAdapter.reviewExchange.importPastedExternalReview({
+          jsonText: data.reviewJson,
+          outputDirectory: incomingDirectory,
           actorId: actor.id,
           reason: data.reason,
           externalTransmissionStatus: data.externalTransmissionStatus
         });
         window.alert(imported.deduplicated
-          ? "This exact review file was already imported. The existing immutable pass was reused."
-          : `External Review Pass ${imported.externalReviewPass.versionNumber} imported. No Core or local evidence records were changed.`);
+          ? `This exact review was already imported. The existing immutable pass was reused.\n\nSaved as:\n${imported.savedPath}`
+          : `External Review Pass ${imported.externalReviewPass.versionNumber} imported.\n\nSaved as:\n${imported.savedPath}\n\nNo Core or local evidence records were changed.`);
         const matchedWorkOrder = (store.aiWorkOrders || []).find((order) => order.id === imported.workOrderId);
         postModalAction = matchedWorkOrder
           ? () => openExternalReviewPassesModal(imported.workOrderId)
@@ -13917,9 +14016,71 @@ function openExternalReviewImportModal() {
         return true;
       } catch (error) {
         console.error("External review import failed.", error);
-        window.alert(error.message || String(error));
+        const status = reviewModal?.querySelector("[data-review-json-status]");
+        if (status) {
+          status.hidden = false;
+          status.innerHTML = `<strong>Validation needs attention.</strong><br>${escapeDisplay(error.message || String(error), DISPLAY_TEXT_LIMIT)}<br>Continue editing, save the current text anyway, or cancel and keep/discard the session draft.`;
+        }
+        reviewModal?.querySelector("[name=\"reviewJson\"]")?.focus();
         return false;
       }
+    }
+  });
+  const reviewText = reviewModal?.querySelector('[name="reviewJson"]');
+  const reviewStatus = reviewModal?.querySelector("[data-review-json-status]");
+  const setReviewStatus = (message) => {
+    if (!reviewStatus) return;
+    reviewStatus.hidden = false;
+    reviewStatus.textContent = message;
+  };
+  const insertReviewText = (text) => {
+    if (!reviewText) return;
+    const start = reviewText.selectionStart ?? reviewText.value.length;
+    const end = reviewText.selectionEnd ?? start;
+    reviewText.setRangeText(text, start, end, "end");
+    reviewText.dispatchEvent(new Event("input", { bubbles: true }));
+    reviewText.focus();
+  };
+  reviewModal?.addEventListener("click", async (event) => {
+    const tool = event.target.closest("[data-review-json-tool]")?.dataset.reviewJsonTool;
+    if (!tool || !reviewText) return;
+    if (tool === "continue") {
+      setReviewStatus("Editing remains open. Correct the JSON and select Save, validate, and import when ready.");
+      reviewText.focus();
+      return;
+    }
+    if (tool === "copy") {
+      try { await navigator.clipboard.writeText(reviewText.value); setReviewStatus("Pasted JSON copied to the clipboard."); }
+      catch { reviewText.select(); document.execCommand("copy"); setReviewStatus("Pasted JSON copied to the clipboard."); }
+      return;
+    }
+    if (tool === "paste") {
+      try { insertReviewText(await navigator.clipboard.readText()); setReviewStatus("Clipboard text pasted at the cursor."); }
+      catch { setReviewStatus("Windows did not allow clipboard reading. Right-click or use Ctrl+V inside the note field."); reviewText.focus(); }
+      return;
+    }
+    if (tool === "exact-evidence") {
+      const evidenceTemplate = { chunk_id: "PASTE_EXACT_CHUNK_ID", start: 0, end: 0, excerpt: "PASTE_EXACT_SOURCE_WORDS" };
+      try {
+        const parsed = JSON.parse(reviewText.value);
+        if (!Array.isArray(parsed.decisions) || !parsed.decisions.length) throw new Error("No decision array");
+        parsed.decisions[0].evidence_spans = Array.isArray(parsed.decisions[0].evidence_spans) ? parsed.decisions[0].evidence_spans : [];
+        parsed.decisions[0].evidence_spans.push(evidenceTemplate);
+        reviewText.value = JSON.stringify(parsed, null, 2);
+        reviewText.dispatchEvent(new Event("input", { bubbles: true }));
+        reviewText.focus();
+        setReviewStatus("Exact-evidence template added to the first decision's evidence_spans array. Replace every placeholder with the exact chunk ID, character range, and source words.");
+      } catch {
+        insertReviewText(`${reviewText.value.trim() ? "\n" : ""}${JSON.stringify(evidenceTemplate, null, 2)}`);
+        setReviewStatus("The JSON is not currently parseable, so the exact-evidence template was added at the cursor. Move it into a decision's evidence_spans array after correcting the JSON.");
+      }
+      return;
+    }
+    if (tool === "save-anyway") {
+      try {
+        const saved = await platformAdapter.reviewExchange.savePastedExternalReview({ jsonText: reviewText.value, outputDirectory: incomingDirectory });
+        setReviewStatus(`Saved without importing: ${saved.savedPath}. You can continue editing or close this window.`);
+      } catch (error) { setReviewStatus(error.message || String(error)); }
     }
   });
 }
@@ -14020,12 +14181,19 @@ async function openExternalReviewPassesModal(workOrderId) {
 function openExternalDecisionReviewModal(workOrderId, passId, decisionId) {
   const workOrder = (store.aiWorkOrders || []).find((order) => order.id === workOrderId);
   if (!workOrder) return;
+  showModal({
+    title: "Loading human review",
+    submitText: t("cancel"),
+    flowStep: 4,
+    forceReplace: true,
+    body: `<p class="notice" aria-live="polite">Loading the imported decision, current projects, and immutable review history…</p>`,
+    onSubmit() { return true; }
+  });
   platformAdapter.reviewExchange.listExternalReviews({ workOrderId }).then((response) => {
     const pass = (response.externalReviewPasses || []).find((item) => item.id === passId);
     const decision = pass?.result?.decisions?.find((item) => item.decision_id === decisionId);
     if (!pass || !decision) return;
-    const initialPrimaryProjectId = decision.primary_project?.project_id || "";
-    const initialAdditionalProjectIds = (decision.additional_projects || []).map((match) => match.project_id);
+    const initialTargetProjectId = decision.primary_project?.project_id || decision.additional_projects?.[0]?.project_id || "";
     const proposedNewProject = decision.proposed_new_project || {};
     const classificationOptions = ["project_candidate", "existing_project_support", "reference_note", "personal_context_note", "assistant_scaffolding_noise", "rejected_noise"]
       .map((value) => `<option value="${value}" ${decision.classification === value ? "selected" : ""}>${escapeHtml(externalReviewClassificationLabel(value))}</option>`).join("");
@@ -14036,43 +14204,39 @@ function openExternalDecisionReviewModal(workOrderId, passId, decisionId) {
       forceReplace: true,
       body: `
         <p class="notice">You are reviewing a proposal from External Review Pass ${Number(pass.versionNumber).toLocaleString()}. Editing it records a new human action; the imported pass remains unchanged.</p>
-        <div class="field"><label for="reviewOperation">Review operation</label><select id="reviewOperation" name="reviewOperation"><option value="standard">Review this decision</option><option value="split">Split into two human-reviewed concepts</option><option value="merge">Merge with another decision in this pass</option></select></div>
+        <div class="field"><label for="reviewOperation">Review operation</label><select id="reviewOperation" name="reviewOperation"><option value="standard">Review this decision</option><option value="split">Split into two human-reviewed concepts</option></select></div>
         <div class="field"><label for="disposition">Human decision</label><select id="disposition" name="disposition" required><option value="approved">Approve for use</option><option value="needs_revision">Keep for revision</option><option value="rejected">Reject</option></select></div>
         <div class="field"><label for="classification">Classification</label><select id="classification" name="classification" required>${classificationOptions}</select></div>
         <div class="field"><label for="conceptTitle">Concept title</label><input id="conceptTitle" name="conceptTitle" required value="${escapeHtml(decision.concept_title || "")}"></div>
         <div class="field"><label for="summary">Summary</label><textarea id="summary" name="summary">${escapeHtml(decision.summary || "")}</textarea></div>
-        <div class="field"><label for="primaryProjectId">Primary existing project</label><select id="primaryProjectId" name="primaryProjectId"><option value="">No existing project</option>${projectOptions(initialPrimaryProjectId)}</select></div>
-        <fieldset class="field"><legend>Additional existing projects</legend>${(store.projects || []).filter((project) => !project.archived).map((project) => `<label class="check-row"><input type="checkbox" name="additionalProjectIds" value="${escapeHtml(project.id)}" ${initialAdditionalProjectIds.includes(project.id) ? "checked" : ""}> ${escapeDisplay(project.name, DISPLAY_META_LIMIT)}</label>`).join("") || "<p class=\"item-meta\">No other projects are available.</p>"}</fieldset>
+        <div class="field"><label for="targetProjectId">Known project destination</label><select id="targetProjectId" name="targetProjectId"><option value="">No known project — keep the selected classification</option>${projectOptions(initialTargetProjectId)}</select><p class="field-help">Choosing one project is the complete routing choice. An approved decision is placed in that project's pending Intake review automatically; there is no second routing checkbox.</p></div>
         <div class="field"><label for="proposedProjectName">Proposed new project name (owner may rename)</label><input id="proposedProjectName" name="proposedProjectName" value="${escapeHtml(proposedNewProject.suggested_name || "")}" placeholder="Required when classification is Proposed New Projects"></div>
         <div class="field"><label for="proposedParentProjectId">Proposed parent project</label><select id="proposedParentProjectId" name="proposedParentProjectId"><option value="">No parent project</option>${projectOptions(proposedNewProject.proposed_parent_project_id || "")}</select></div>
         <div class="field"><label for="projectFamily">Project family</label><input id="projectFamily" name="projectFamily" value="${escapeHtml(proposedNewProject.project_family || "")}" placeholder="Optional family or portfolio label"></div>
-        <div class="field"><label for="mergeDecisionId">Decision to merge (used only for merge)</label><select id="mergeDecisionId" name="mergeDecisionId"><option value="">Choose another decision</option>${(pass.result.decisions || []).filter((item) => item.decision_id !== decisionId).map((item) => `<option value="${escapeHtml(item.decision_id)}">${escapeDisplay(item.concept_title || item.decision_id, DISPLAY_META_LIMIT)}</option>`).join("")}</select></div>
         <div class="field"><label for="splitConceptTitle">Second concept title (used only for split)</label><input id="splitConceptTitle" name="splitConceptTitle" placeholder="Title for the second human-reviewed concept"></div>
         <div class="field"><label for="splitSummary">Second concept summary (used only for split)</label><textarea id="splitSummary" name="splitSummary" placeholder="What belongs in the second concept"></textarea></div>
-        <label class="check-row"><input type="checkbox" name="routeToIntake" value="yes"> Route this approved decision to Intake for the normal Airlock review</label>
-        ${auditFields({ reasonOptions: ["Approve external review decision", "Correct external review decision", "Reject external review decision", "Route reviewed decision to Intake"] })}
+        ${auditFields({ reasonOptions: ["Approve external review decision", "Correct external review decision", "Reject external review decision"] })}
       `,
       async onSubmit(data, form) {
         const actor = getOrCreateActor(data.actorName, "Human");
-        const additionalProjectIds = [...form.querySelectorAll('input[name="additionalProjectIds"]:checked')].map((input) => input.value).filter((id) => id !== data.primaryProjectId);
-        if (data.reviewOperation === "merge" && !data.mergeDecisionId) { window.alert("Choose the other decision to merge."); return false; }
+        const targetProjectId = String(data.targetProjectId || "").trim();
+        const effectiveClassification = targetProjectId ? "existing_project_support" : data.classification;
         if (data.reviewOperation === "split" && !data.splitConceptTitle.trim()) { window.alert("Enter the second concept title for the split."); return false; }
-        if (data.classification === "project_candidate" && !data.proposedProjectName.trim()) { window.alert("Approve or enter a proposed new project name before recording this as a proposed project."); return false; }
-        if (data.classification === "project_candidate" && data.primaryProjectId) { window.alert("A proposed new project cannot also use an existing project as its primary project. Clear the primary project or classify this as existing-project support."); return false; }
-        if (data.classification === "existing_project_support" && !data.primaryProjectId && !additionalProjectIds.length) { window.alert("Existing-project support needs at least one existing project match."); return false; }
+        if (effectiveClassification === "project_candidate" && !data.proposedProjectName.trim()) { window.alert("Approve or enter a proposed new project name before recording this as a proposed project."); return false; }
+        if (effectiveClassification === "existing_project_support" && !targetProjectId) { window.alert("Choose the known project for existing-project support."); return false; }
         const action = {
           id: uid("external_review_action"), externalReviewPassId: passId, decisionId, disposition: data.disposition,
-          classification: data.classification, conceptTitle: data.conceptTitle.trim(), summary: data.summary.trim(),
-          primaryProjectId: data.primaryProjectId || "", additionalProjectIds, recordedAt: nowIso(), actorId: actor.id, reason: data.reason.trim(), routedIntakeId: "",
-          operation: data.reviewOperation || "standard", mergedDecisionIds: data.reviewOperation === "merge" ? [decisionId, data.mergeDecisionId] : [],
-          proposedNewProject: data.classification === "project_candidate" ? { suggestedName: data.proposedProjectName.trim(), proposedParentProjectId: data.proposedParentProjectId || "", projectFamily: data.projectFamily.trim() } : null
+          classification: effectiveClassification, conceptTitle: data.conceptTitle.trim(), summary: data.summary.trim(),
+          primaryProjectId: targetProjectId, additionalProjectIds: [], recordedAt: nowIso(), actorId: actor.id, reason: data.reason.trim(), routedIntakeId: "",
+          operation: data.reviewOperation || "standard", mergedDecisionIds: [],
+          proposedNewProject: effectiveClassification === "project_candidate" ? { suggestedName: data.proposedProjectName.trim(), proposedParentProjectId: data.proposedParentProjectId || "", projectFamily: data.projectFamily.trim() } : null
         };
-        if (data.routeToIntake === "yes") {
-          if (data.disposition !== "approved") { window.alert("Only an approved human decision can be routed to Intake."); return false; }
-          const proposedNew = data.classification === "project_candidate" && !data.primaryProjectId;
+        const shouldRouteToIntake = data.disposition === "approved" && (targetProjectId || effectiveClassification === "project_candidate");
+        if (shouldRouteToIntake) {
+          const proposedNew = effectiveClassification === "project_candidate" && !targetProjectId;
           const intake = createIntakeItem({
             armType: "ai", title: data.conceptTitle.trim(), createdBy: actor.id, sourceLabel: `External Review Pass ${pass.versionNumber}`,
-            projectId: data.primaryProjectId || "", destination: proposedNew ? "proposed_new_project" : data.primaryProjectId ? "existing_project" : "unassigned",
+            projectId: targetProjectId, destination: proposedNew ? "proposed_new_project" : "existing_project",
             proposedProjectName: proposedNew ? data.proposedProjectName.trim() : "", proposedObjectType: "Source",
             proposedChange: { text: data.conceptTitle.trim(), summary: data.summary.trim() || decision.reasoning_summary || "" },
             evidence: { externalReviewPassId: passId, externalDecisionId: decisionId, supportingChunkIds: decision.supporting_chunk_ids || [], humanReviewActionId: action.id, proposedParentProjectId: data.proposedParentProjectId || "", projectFamily: data.projectFamily.trim() },
@@ -14084,8 +14248,8 @@ function openExternalDecisionReviewModal(workOrderId, passId, decisionId) {
         if (data.reviewOperation === "split") {
           await platformAdapter.reviewExchange.recordHumanAction({
             id: uid("external_review_action"), externalReviewPassId: passId, decisionId, derivedFromActionId: action.id, disposition: data.disposition,
-            classification: data.classification, conceptTitle: data.splitConceptTitle.trim(), summary: data.splitSummary.trim(),
-            primaryProjectId: data.primaryProjectId || "", additionalProjectIds, recordedAt: action.recordedAt, actorId: actor.id,
+            classification: effectiveClassification, conceptTitle: data.splitConceptTitle.trim(), summary: data.splitSummary.trim(),
+            primaryProjectId: targetProjectId, additionalProjectIds: [], recordedAt: action.recordedAt, actorId: actor.id,
             reason: data.reason.trim(), routedIntakeId: "", operation: "split_secondary", mergedDecisionIds: [], proposedNewProject: action.proposedNewProject
           });
         }
@@ -14094,7 +14258,7 @@ function openExternalDecisionReviewModal(workOrderId, passId, decisionId) {
         return true;
       }
     });
-  }).catch((error) => window.alert(error.message || String(error)));
+  }).catch((error) => showModal({ title: "Human review could not load", submitText: t("close"), flowStep: 4, forceReplace: true, body: `<p class="notice">${escapeDisplay(error.message || String(error), DISPLAY_TEXT_LIMIT)}</p>`, onSubmit() { return true; } }));
 }
 
 async function openAiWorkOrderResultsModal(workOrderId) {
@@ -17422,6 +17586,29 @@ function saveSettingsAi(data, form) {
   render();
 }
 
+function saveSettingsReviewExchange(data, form) {
+  if (!validateSettingsReason(form, data)) return;
+  const mode = ["automatic", "ask_each_time", "configure_later"].includes(data.reviewExchangeMode) ? data.reviewExchangeMode : "automatic";
+  const outgoing = String(data.reviewExchangeOutgoingFolder || "").trim();
+  const incoming = String(data.reviewExchangeIncomingFolder || "").trim();
+  if (mode === "automatic" && (!outgoing || !incoming)) {
+    const field = form.querySelector(`[name="${!outgoing ? "reviewExchangeOutgoingFolder" : "reviewExchangeIncomingFolder"}"]`);
+    field?.setCustomValidity("Choose both Review Exchange folders before enabling automatic mode.");
+    field?.reportValidity();
+    field?.setCustomValidity("");
+    return;
+  }
+  store.settings = normalizeSettings(store.settings || {});
+  store.settings.reviewExchangeMode = mode;
+  store.settings.reviewExchangeOutgoingFolder = outgoing;
+  store.settings.reviewExchangeIncomingFolder = incoming;
+  if (outgoing) rememberImportFolder("review_exchange_outgoing", [outgoing]);
+  if (incoming) rememberImportFolder("review_exchange_incoming", [incoming]);
+  stampSettingsUpdate(store.settings.primaryActorId, data.reason);
+  saveStore({ allowWithoutCoreApproval: true, reason: "settings-review-exchange-update" });
+  render();
+}
+
 function saveSettingsStorage(data, form) {
   if (!validateSettingsReason(form, data)) return;
   if (data.storageOverrideAcknowledged === "on" && !String(data.storageOverrideReason || "").trim()) {
@@ -17996,6 +18183,14 @@ app.addEventListener("submit", (event) => {
     confirmField?.setCustomValidity("");
     return;
   }
+  const reviewExchangeMode = ["automatic", "ask_each_time", "configure_later"].includes(data.reviewExchangeMode) ? data.reviewExchangeMode : "automatic";
+  if (reviewExchangeMode === "automatic" && (!String(data.reviewExchangeOutgoingFolder || "").trim() || !String(data.reviewExchangeIncomingFolder || "").trim())) {
+    const field = form.querySelector(`[name="${!String(data.reviewExchangeOutgoingFolder || "").trim() ? "reviewExchangeOutgoingFolder" : "reviewExchangeIncomingFolder"}"]`);
+    field?.setCustomValidity("Choose both Review Exchange folders, select Ask each time, or configure them later.");
+    field?.reportValidity();
+    field?.setCustomValidity("");
+    return;
+  }
   const actor = getOrCreateActor(actorNameValue, "Human");
   actor.role = "owner";
   actor.status = "active";
@@ -18014,8 +18209,13 @@ app.addEventListener("submit", (event) => {
     localAiSetupStatus: data.localAiSetupPreference === "skip" ? "skipped" : localAiSetupStatus.error ? "error" : localAiSetupStatus.available ? "available" : "missing",
     localAiSetupCheckedAt: localAiSetupStatus.checkedAt || store.settings?.localAiSetupCheckedAt || "",
     localAiSetupInstallHint: localAiSetupStatus.installHint || store.settings?.localAiSetupInstallHint || "",
-    localAiSetupError: localAiSetupStatus.error || ""
+    localAiSetupError: localAiSetupStatus.error || "",
+    reviewExchangeMode,
+    reviewExchangeOutgoingFolder: String(data.reviewExchangeOutgoingFolder || "").trim(),
+    reviewExchangeIncomingFolder: String(data.reviewExchangeIncomingFolder || "").trim()
   };
+  if (store.settings.reviewExchangeOutgoingFolder) rememberImportFolder("review_exchange_outgoing", [store.settings.reviewExchangeOutgoingFolder]);
+  if (store.settings.reviewExchangeIncomingFolder) rememberImportFolder("review_exchange_incoming", [store.settings.reviewExchangeIncomingFolder]);
   saveStore({ allowWithoutCoreApproval: true, reason: "first-run-setup" });
   render();
     return;
@@ -18039,6 +18239,13 @@ app.addEventListener("submit", (event) => {
   if (settingsAiForm) {
     event.preventDefault();
     saveSettingsAi(enforceInputLimitsOnData(Object.fromEntries(new FormData(settingsAiForm).entries())), settingsAiForm);
+    return;
+  }
+
+  const settingsReviewExchangeForm = event.target.closest("[data-settings-review-exchange]");
+  if (settingsReviewExchangeForm) {
+    event.preventDefault();
+    saveSettingsReviewExchange(enforceInputLimitsOnData(Object.fromEntries(new FormData(settingsReviewExchangeForm).entries())), settingsReviewExchangeForm);
     return;
   }
 

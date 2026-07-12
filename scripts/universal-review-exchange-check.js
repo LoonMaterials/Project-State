@@ -24,7 +24,11 @@ async function main() {
   const ROOT = path.join(__dirname, "..");
   const appSource = fs.readFileSync(path.join(ROOT, "app.js"), "utf8");
   const resultSchemaSource = fs.readFileSync(path.join(ROOT, "fixtures", "review-result-v1.0.schema.json"), "utf8");
-  for (const marker of ["Export Universal Review Pack", "Import Reviewed Evidence", "Review Imported Decisions", "reviewOperation", "split_secondary", "mergedDecisionIds", "Route this approved decision to Intake"]) assert(appSource.includes(marker), `Human review UI missing marker: ${marker}`);
+  for (const marker of ["Export Universal Review Pack", "Import Reviewed Evidence", "Review Imported Decisions", "Loading human review", "targetProjectId", "split_secondary", "Choose Outgoing Review Packs Folder", "shouldRouteToIntake"]) assert(appSource.includes(marker), `Human review UI missing marker: ${marker}`);
+  for (const marker of ["Choose Incoming Reviewed Results Folder", "Paste Reviewed Evidence JSON", "reviewJson", "importPastedExternalReview", ".review-result.json"]) assert(appSource.includes(marker), `Pasted-review import UI missing marker: ${marker}`);
+  for (const marker of ["Continue editing", "Save anyway", "data-review-json-tool=\"copy\"", "data-review-json-tool=\"paste\"", "Add exact evidence", "PASTE_EXACT_CHUNK_ID", "Validation needs attention"]) assert(appSource.includes(marker), `Recoverable review notebook missing marker: ${marker}`);
+  for (const marker of ["reviewExchangeOutgoingFolder", "reviewExchangeIncomingFolder", "data-settings-review-exchange", "workOrderNeedsAutomaticReviewPack", "automatic-universal-review-export"]) assert(appSource.includes(marker), `Automatic Review Exchange setup missing marker: ${marker}`);
+  for (const removedMarker of ['name="additionalProjectIds"', 'value="merge">', 'name="routeToIntake"']) assert(!appSource.includes(removedMarker), `Removed review control is still active: ${removedMarker}`);
   assert(!appSource.includes('data-action="export-chatgpt-review-pack"'), "Provider-specific review export remains in the active UI.");
   assert((appSource.match(/data-action="import-reviewed-evidence"/g) || []).length === 1 && !appSource.includes('data-action="import-external-ai-review"'), "Import Reviewed Evidence is not a single automatic-matching Discovery action.");
   assert(!/chatgpt|qwen|ollama/i.test(resultSchemaSource), "Universal result schema contains a provider-specific dependency.");
@@ -32,6 +36,7 @@ async function main() {
 
   const storageRoot = await fsp.mkdtemp(path.join(os.tmpdir(), "project-state-universal-review-"));
   const inputRoot = await fsp.mkdtemp(path.join(os.tmpdir(), "project-state-universal-review-input-"));
+  const exchangeRoot = await fsp.mkdtemp(path.join(os.tmpdir(), "project-state-universal-review-exchange-"));
   const bridge = createProjectStateDesktopBridge({ storageRoot });
   const sourcePath = path.join(inputRoot, "mixed-project-evidence.md");
   const sourceText = Array.from({ length: 16 }, (_, index) => [`## Shared validation ${index + 1}`, "The Alpha Device alias and Beta Project use the same sensor validation procedure.", "A private household continuity note is personal context, not a commercial default.", "A distinct lunar calibration jig may be a separate buildable project."].join("\n")).join("\n\n");
@@ -39,6 +44,7 @@ async function main() {
   await bridge.storage.saveStore({ store: { schemaVersion: "0.1.0", settings: {}, actors: [{ id: "actor_owner", name: "Owner", type: "Human", role: "owner", status: "active" }], intakeItems: [], aiWorkOrders: [], projects: [
     { id: "project_alpha", name: "Alpha Project", aliases: ["Alpha Device"], formerNames: ["Alpha Prototype"], currentSummary: "Primary sensor system", healthFlag: "active", archived: false },
     { id: "project_beta", name: "Beta Project", aliases: ["Beta"], currentSummary: "Related validation platform", archived: true, parentProjectId: "project_alpha", projectFamily: "Sensor Family" },
+    { id: "project_gibm", name: "GIBM", aliases: ["Generalized Inertial Boundary Model"], formerNames: ["G Model"], currentSummary: "Known physics framework and test program", status: "paused", archived: false, projectFamily: "Physics" },
     { id: "project_private", name: "Private Project", currentSummary: "Must not leave local registry", private: true, archived: false }
   ] }, manifest: {} });
   const staged = await bridge.discoveryStorage.stageTrustedFile({ path: sourcePath, actorId: "actor_owner", reason: "Universal exchange fixture", externalSecurityAcknowledged: true });
@@ -50,17 +56,21 @@ async function main() {
     { id: "project_beta", name: "Beta Project", aliases: ["Beta"], currentSummary: "Related validation platform", archived: true, parentProjectId: "project_alpha", projectFamily: "Sensor Family" },
     { id: "project_private", name: "Private Project", currentSummary: "Must not be exported", private: true }
   ];
-  const exported = await bridge.reviewExchange.exportUniversalPack({ workOrder, knownProjects, exportedAt: "2026-07-11T12:00:00.000Z" });
+  const exported = await bridge.reviewExchange.exportUniversalPack({ workOrder, knownProjects: [], exportedAt: "2026-07-11T12:00:00.000Z", outputDirectory: exchangeRoot });
+  assert(path.dirname(exported.path) === exchangeRoot, "Review pack was not stored in the chosen exchange folder.", exported);
   const zipEntries = storedZipEntries(await fsp.readFile(exported.path));
   for (const name of ["review_instructions.md", "evidence.json", "evidence_readable.md", "schema/review_result.schema.json"]) assert(zipEntries.has(name), `Export ZIP is missing ${name}.`);
   const evidence = JSON.parse(zipEntries.get("evidence.json").toString("utf8"));
   const readable = zipEntries.get("evidence_readable.md").toString("utf8");
-  assert(evidence.project_registry.length === 2 && !evidence.project_registry.some((project) => project.project_id === "project_private"), "Private/excluded project leaked into the default registry.", evidence.project_registry);
+  assert(evidence.project_registry.length === 3 && !evidence.project_registry.some((project) => project.project_id === "project_private"), "Current eligible DB projects were not exported or a private project leaked into the registry.", evidence.project_registry);
   const alphaSnapshot = evidence.project_registry.find((project) => project.project_id === "project_alpha");
   const betaSnapshot = evidence.project_registry.find((project) => project.project_id === "project_beta");
+  const gibmSnapshot = evidence.project_registry.find((project) => project.project_id === "project_gibm");
   assert(alphaSnapshot.canonical_name === "Alpha Project" && alphaSnapshot.aliases.includes("Alpha Device") && alphaSnapshot.former_names.includes("Alpha Prototype"), "Canonical project registry lost names or aliases.", alphaSnapshot);
   assert(betaSnapshot.status === "archived" && betaSnapshot.parent_project_id === "project_alpha" && betaSnapshot.project_family === "Sensor Family", "Canonical project registry lost hierarchy/status.", betaSnapshot);
+  assert(gibmSnapshot?.canonical_name === "GIBM" && gibmSnapshot.status === "paused" && gibmSnapshot.aliases.includes("Generalized Inertial Boundary Model"), "Known GIBM project was not recovered from the current Project State project list.", gibmSnapshot);
   assert(readable.includes("## Current Project Registry") && readable.includes(evidence.package_id) && readable.includes(evidence.evidence_sha256) && readable.includes("Alpha Project") && readable.includes("Beta Project"), "Readable Markdown drifted from evidence.json identity or registry.");
+  assert(readable.includes(`\`${gibmSnapshot.project_id}\` — **${gibmSnapshot.canonical_name}**`), "GIBM ID and canonical name are not identical in JSON and Markdown exports.", { gibmSnapshot });
   assert(evidence.chunks.length === extracted.chunks.length && evidence.chunks.every((chunk) => chunk.complete_text && chunk.provisional_entities.every((entity) => entity.provisional === true)), "Complete chunks or provisional labels are missing.");
   assert(evidence.chunk_counts.exported === evidence.chunks.length && evidence.chunk_counts.omitted === 0 && evidence.source_counts.truncated === 0, "Completeness counts are inconsistent.", evidence);
   const instructions = zipEntries.get("review_instructions.md").toString("utf8");
@@ -83,14 +93,15 @@ async function main() {
   const resultPath = await writeJson(path.join(inputRoot, "review-result.json"), baseResult);
   const beforeCore = coreCounts(path.join(storageRoot, DATABASE_FILE));
   const beforeCase = await bridge.discoveryStorage.getCase({ discoveryCaseId: staged.discoveryCaseId });
-  const imported = await bridge.reviewExchange.importExternalReview({ filePath: resultPath, actorId: "actor_owner", reason: "Valid external review", externalTransmissionStatus: "external" });
+  const imported = await bridge.reviewExchange.importPastedExternalReview({ jsonText: JSON.stringify(baseResult, null, 2), outputDirectory: exchangeRoot, actorId: "actor_owner", reason: "Valid pasted external review", externalTransmissionStatus: "external" });
   assert(imported.workOrderId === workOrder.id && imported.discoveryCaseId === staged.discoveryCaseId, "Importer did not automatically locate the source Work Order and Discovery Case.", imported);
+  assert(path.dirname(imported.savedPath) === exchangeRoot && imported.savedFileName === exported.fileName.replace(/\.zip$/i, ".review-result.json"), "Pasted JSON did not use the original export base name in the chosen folder.", imported);
   assert(imported.externalReviewPass.versionNumber === 1 && imported.coreChanged === false, "Valid review did not import as a non-authoritative pass.", imported);
   assert(JSON.stringify(beforeCore) === JSON.stringify(coreCounts(path.join(storageRoot, DATABASE_FILE))), "Import or proposed project changed Core counts.");
   const afterCase = await bridge.discoveryStorage.getCase({ discoveryCaseId: staged.discoveryCaseId });
   assert(afterCase.chunks.length === beforeCase.chunks.length && afterCase.extractions.length === beforeCase.extractions.length, "Import changed local evidence or extraction records.");
   const storedOriginal = await fsp.readFile(path.join(storageRoot, ...imported.externalReviewPass.managedOriginalPath.split("/")));
-  assert(storedOriginal.equals(await fsp.readFile(resultPath)) && imported.externalReviewPass.sourcePackRevision === evidence.pack_revision, "Imported bytes or package provenance were not preserved.");
+  assert(storedOriginal.equals(await fsp.readFile(imported.savedPath)) && imported.externalReviewPass.sourcePackRevision === evidence.pack_revision, "Imported pasted bytes or package provenance were not preserved.");
   const duplicate = await bridge.reviewExchange.importExternalReview({ filePath: resultPath, actorId: "actor_owner", reason: "Duplicate" });
   assert(duplicate.deduplicated && duplicate.externalReviewPass.id === imported.externalReviewPass.id, "Exact duplicate import was not idempotent.");
 
@@ -104,6 +115,9 @@ async function main() {
   await expectRejected(async () => bridge.reviewExchange.importExternalReview({ filePath: await writeJson(path.join(inputRoot, "unknown-project.json"), unknownProject), actorId: "actor_owner" }), "not a known existing project");
   const wrongName = structuredClone(baseResult); wrongName.decisions[0].primary_project.canonical_name = "Alpha Device";
   await expectRejected(async () => bridge.reviewExchange.importExternalReview({ filePath: await writeJson(path.join(inputRoot, "wrong-name.json"), wrongName), actorId: "actor_owner" }), "canonical_name does not match");
+  await expectRejected(() => bridge.reviewExchange.importPastedExternalReview({ jsonText: "{broken", outputDirectory: exchangeRoot, actorId: "actor_owner" }), "malformed JSON");
+  const unvalidatedDraft = await bridge.reviewExchange.savePastedExternalReview({ jsonText: "{broken", outputDirectory: exchangeRoot });
+  assert(unvalidatedDraft.validationBypassed === true && fs.existsSync(unvalidatedDraft.savedPath) && unvalidatedDraft.savedFileName.startsWith("unvalidated-external-review-"), "Save-anyway did not preserve invalid pasted text without importing it.", unvalidatedDraft);
   await fsp.writeFile(path.join(inputRoot, "malformed.json"), "{broken", "utf8");
   await expectRejected(() => bridge.reviewExchange.importExternalReview({ filePath: path.join(inputRoot, "malformed.json"), actorId: "actor_owner" }), "malformed JSON");
   const directCore = structuredClone(baseResult); directCore.decisions[0].execute = "write Core";
@@ -122,9 +136,18 @@ async function main() {
   try { db.prepare("UPDATE review_export_packages SET created_at = 'changed' WHERE id = ?").run(evidence.package_id); } catch { packagesAppendOnly = true; }
   db.close(); assert(passesAppendOnly && actionsAppendOnly && packagesAppendOnly, "Review packages, passes, or human actions are not append-only.");
 
-  await bridge.storage.reset(); await fsp.rm(storageRoot, { recursive: true, force: true }); await fsp.rm(inputRoot, { recursive: true, force: true });
+  const emptyRegistryDb = new DatabaseSync(path.join(storageRoot, DATABASE_FILE));
+  emptyRegistryDb.exec("DELETE FROM projects");
+  emptyRegistryDb.close();
+  const emptyRegistryExport = await bridge.reviewExchange.exportUniversalPack({ workOrder: { ...workOrder, id: "ai_work_order_empty_registry", title: "Empty registry fixture" }, knownProjects: [], exportedAt: "2026-07-11T13:00:00.000Z", outputDirectory: exchangeRoot });
+  const emptyRegistryEntries = storedZipEntries(await fsp.readFile(emptyRegistryExport.path));
+  const emptyRegistryEvidence = JSON.parse(emptyRegistryEntries.get("evidence.json").toString("utf8"));
+  const emptyRegistryMarkdown = emptyRegistryEntries.get("evidence_readable.md").toString("utf8");
+  assert(emptyRegistryEvidence.project_registry.length === 0 && emptyRegistryMarkdown.includes("project registry is empty"), "Empty current registry was not stated explicitly in JSON and Markdown.");
+
+  await bridge.storage.reset(); await fsp.rm(storageRoot, { recursive: true, force: true }); await fsp.rm(inputRoot, { recursive: true, force: true }); await fsp.rm(exchangeRoot, { recursive: true, force: true });
   console.log("Universal Review Exchange Check");
-  console.log(JSON.stringify({ canonicalRegistryJsonAndMarkdown: true, privateProjectsExcluded: true, aliasCanonicalMatch: true, packageIdentity: true, completeEvidence: true, metadataSynchronized: true, automaticWorkOrderMatching: true, mixedDocumentDecisions: 3, multiProjectChunk: true, explicitNewProposalNonCore: true, strictSchema: true, mismatchRejections: true, immutablePassesAndHumanActions: true, noCoreMutation: true }, null, 2));
+  console.log(JSON.stringify({ canonicalRegistryJsonAndMarkdown: true, gibmRegistryFromCurrentProjects: true, registryIdentitySynchronized: true, emptyRegistryExplicit: true, privateProjectsExcluded: true, aliasCanonicalMatch: true, packageIdentity: true, chosenExchangeFolder: true, pastedJsonSavedWithExportName: true, invalidPasteSaveAnyway: true, recoverableNotebookTools: true, simplifiedHumanRouting: true, completeEvidence: true, metadataSynchronized: true, automaticWorkOrderMatching: true, mixedDocumentDecisions: 3, multiProjectChunk: true, explicitNewProposalNonCore: true, strictSchema: true, mismatchRejections: true, immutablePassesAndHumanActions: true, noCoreMutation: true }, null, 2));
   console.log("Universal review exchange: ok");
 }
 

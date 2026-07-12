@@ -301,6 +301,8 @@
     "reviewExchange": [
       "exportUniversalPack",
       "importExternalReview",
+      "importPastedExternalReview",
+      "savePastedExternalReview",
       "listExternalReviews",
       "recordHumanAction",
       "listHumanActions"

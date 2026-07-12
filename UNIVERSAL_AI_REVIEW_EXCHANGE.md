@@ -40,7 +40,11 @@ Importing or approving an External Review Pass never creates the project. The ow
 
 ## Simple import
 
-The AI Work Orders screen has one **Import Reviewed Evidence** action. Select a standalone result JSON or a ZIP containing the result JSON and optional Markdown report. Project State reads `package_id`, automatically locates the source Work Order and Discovery Case, and validates against the stored export record.
+The AI Work Orders screen has one **Import Reviewed Evidence** action. First choose the Review Exchange folder where the returned result should be kept, then paste the complete returned JSON into the note-style import window. Project State reads `package_id`, recovers the original export base name, saves the paste as that export's `.review-result.json` file, automatically locates the source Work Order and Discovery Case, and validates against the stored export record. The chosen-folder copy remains human-controlled while an exact immutable internal copy preserves review history.
+
+Validation failures remain editable in the same notebook window. The owner can continue editing, copy or paste with visible mouse controls, add an exact-evidence span template, save the current text without importing it, or close/cancel through the normal session-draft discard guard. **Save anyway** creates an explicitly unvalidated return file and never creates an External Review Pass.
+
+First-run setup and Settings keep separate **Outgoing Review Packs** and **Incoming Reviewed Results** folders. In automatic mode, completed unknown-material AI Work Orders that are not fully accounted for by known-project matches create one Universal Review Pack in the outgoing folder. Import opens the JSON notebook-style paste window immediately and saves the return in the configured incoming folder. Ask-each-time and configure-later modes remain available.
 
 Import rejects unsupported format/schema versions, identity/hash/revision mismatches, invented chunks/projects, canonical-name snapshot mismatches, inexact evidence excerpts, invalid roles/classifications/confidence, implicit new projects, unknown fields in strict protocol objects, and executable/direct-Core instruction fields. Failure displays one readable report and writes nothing.
 
