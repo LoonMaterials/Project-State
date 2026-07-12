@@ -17,6 +17,18 @@ Each package has an immutable `package_id`, Work Order and Discovery Case IDs, n
 
 `evidence_readable.md` is rendered from the same evidence object, so package identity, the registry, completeness counts, and chunk content cannot follow an independent metadata path.
 
+## Mandatory consolidation protocol
+
+Every package carries one `review_protocol` object and every chunk carries a compact `review_directive`. The protocol is provider/model neutral and requires the reviewer to read the complete package before producing final decisions.
+
+The returned result must first define `concept_clusters`. Clusters collapse exact and near duplicates, merge aliases and alternate names, preserve genuine contradictions, identify umbrella/project/subproject/product/theme/future-idea/reference hierarchy, assign maturity, and retain primary, duplicate, contextual, contradictory, and unresolved chunk IDs. Every final decision must reference a valid `cluster_id`; decisions may not be generated directly from isolated chunks.
+
+`coverage_summary` accounts for the complete exported chunk set through clusters, duplicate groups, contradictions, rejected material, unresolved material, or `unaccounted_chunks`. Counts and IDs are validated against the immutable source package. Duplicate repetition is forbidden from increasing confidence, while every original chunk ID and provenance record remains preserved.
+
+An accurately reported incomplete review may be imported as a non-authoritative pass so it can be corrected. When `unaccounted_chunks` is non-empty, Project State displays a warning and blocks every final human approval/routing action. Only a corrected pass with zero unaccounted chunks can proceed through the normal human-authoritative review path.
+
+Every return must also include `final_self_check`, with seven required booleans confirming full-package concept reconstruction, duplicate-confidence discipline, complete chunk disposition, hierarchy distinctions, contradiction preservation, human-readable reasoning, and cluster-derived decisions. False values are preserved exactly and mark the pass incomplete; Project State never converts them to true. An incomplete self-check may be saved/imported for correction, but UI and bridge gates block final approval and project creation. A claim that `all_chunks_accounted_for` is true while `coverage_summary.unaccounted_chunks` is non-empty fails validation outright.
+
 ## Current Project Registry
 
 The export includes `project_registry`. Every eligible project carries:
@@ -54,7 +66,7 @@ Successful import preserves the exact original bytes, file hash/name, time, acto
 
 Imported decisions are grouped as Existing Project Support, Proposed New Projects, Cross-Project Evidence, Reference Material, Personal Context, Assistant Scaffolding/Noise, Rejected Material, relationships, and human questions.
 
-Each decision shows canonical project names/IDs, source filenames, chunk IDs, exact excerpts, summary, confidence, reasoning, and Candidate Map disagreement. The owner may approve/reject/revise, edit, reclassify, change project matches, split, merge, rename a proposed project, choose its parent/family, and route an approved decision to Intake.
+Each decision shows its source cluster, canonical project name/ID, source filenames, chunk IDs, exact excerpts, summary, confidence, reasoning, and Candidate Map disagreement. The owner may approve/reject/revise, edit, reclassify, choose one known-project destination, split, or rename a proposed project. Merge and normal Airlock routing occur later at the project level.
 
 Every human action is an append-only `external_review_actions` record with actor, reason, time, edits, operation, routing result, and final disposition. Export packages, imported passes, human actions, extraction evidence, local candidates, and Candidate Map records never overwrite one another.
 
@@ -66,3 +78,6 @@ Every human action is an append-only `external_review_actions` record with actor
 - Schemas: `fixtures/review-pack-v1.0.schema.json` and `fixtures/review-result-v1.0.schema.json`
 
 Run `pnpm run check:universal-review`. It covers registry JSON/Markdown synchronization, alias/canonical matching, privacy exclusion, complete evidence, package identity, automatic matching, mixed decisions, multi-project chunks, explicit non-authoritative project proposals, mismatch rejection, immutable pass/action history, and zero Core mutation.
+## Provisional concept profiles
+
+Every exported evidence chunk includes a conservative synthesized `provisional_concept_profile` in JSON and a matching compact block in readable Markdown. It combines chunk text, local summaries, entities, provisional project matches, and current registry context without replacing those raw arrays. The raw arrays remain visible immediately below the profile as supporting signals. The profile includes relationship and overall synthesis reasoning, but remains export guidance only: a starting hypothesis, never a final conclusion. Reviewers must compare the complete package, collapse duplicates, reconstruct concept clusters, and override any provisional field that package-wide evidence contradicts. Repeated chunks with the same provisional profile do not increase confidence. Unreliable local extraction exports explicit unresolved/null values with a human-readable reason instead of blocking the package or inventing precision.

@@ -3,6 +3,7 @@ const fsp = require("node:fs/promises");
 const path = require("node:path");
 const os = require("node:os");
 const crypto = require("node:crypto");
+const { createProvisionalConceptProfile } = require("./review-provisional-profile.cjs");
 const zlib = require("node:zlib");
 const { Readable } = require("node:stream");
 const { DatabaseSync } = require("node:sqlite");
@@ -23,6 +24,8 @@ const REVIEW_RESULT_SCHEMA_FILE = path.join(ROOT, "fixtures", "review-result-v1.
 const REVIEW_PACK_SCHEMA_FILE = path.join(ROOT, "fixtures", "review-pack-v1.0.schema.json");
 const EXTERNAL_REVIEW_CLASSIFICATIONS = ["project_candidate", "existing_project_support", "reference_note", "personal_context_note", "assistant_scaffolding_noise", "rejected_noise"];
 const EXTERNAL_REVIEW_EVIDENCE_ROLES = ["primary_evidence", "background_reference", "duplicate_or_confirming_reference", "validation_or_test_support", "risk_or_contradiction", "patent_licensing_or_outreach_support", "cross_project_reference", "additional_project_reference", "context_only", "noise"];
+const EXTERNAL_REVIEW_HIERARCHY_TYPES = ["umbrella", "project", "subproject", "product", "theme", "future_idea", "reference"];
+const EXTERNAL_REVIEW_MATURITY = ["seed", "exploratory", "forming", "active", "mature", "paused", "archived", "unknown"];
 const DEFAULT_STORAGE_ROOT = path.join(os.homedir(), "Project State Storage");
 const DATABASE_FILE = "project-state.db";
 const FOLDERS = ["sources", "extracts", "attachments", "quarantine", "discovery", "backups", "recovery", "manifests", "logs", "temp", "integrations"];
@@ -4258,6 +4261,39 @@ function reviewPackProjectRegistry(projects = [], { includePrivateProjects = fal
   });
 }
 
+function populateReviewPackConceptProfiles(chunks = [], projectRegistry = []) {
+  return chunks.map((chunk) => {
+    const profile = createProvisionalConceptProfile({
+      text: chunk.complete_text,
+      headings: chunk.provenance.headings,
+      entities: chunk.provisional_entities.map((item) => item.value),
+      localSummaries: chunk.provisional_local_summaries,
+      projectMatches: chunk.provisional_project_matches,
+      registry: projectRegistry,
+      generatedBy: chunk.provisional_local_summaries.length || chunk.provisional_project_matches.length ? "hybrid" : "rule_based"
+    });
+    return {
+      chunk_id: chunk.chunk_id,
+      sequence: chunk.sequence,
+      source_id: chunk.source_id,
+      file_version_id: chunk.file_version_id,
+      provenance: chunk.provenance,
+      text_sha256: chunk.text_sha256,
+      complete_text: chunk.complete_text,
+      provisional_concept_profile: profile,
+      provisional_local_summaries: chunk.provisional_local_summaries,
+      provisional_entities: chunk.provisional_entities,
+      provisional_project_matches: chunk.provisional_project_matches,
+      review_directive: chunk.review_directive
+    };
+  });
+}
+
+function assertReviewPackConceptProfiles(chunks = []) {
+  const missing = chunks.filter((chunk) => !chunk.provisional_concept_profile || typeof chunk.provisional_concept_profile.synthesis_reasoning_summary !== "string").map((chunk) => chunk.chunk_id);
+  if (missing.length) throw new Error(`Universal review export stopped before serialization because provisional concept profiles were not populated for: ${missing.join(", ")}`);
+}
+
 function reviewPackInstructions(evidence) {
   return [
     "# Project State Universal AI Review Pack",
@@ -4270,6 +4306,16 @@ function reviewPackInstructions(evidence) {
     "",
     "## Required reasoning behavior",
     "",
+    "- Read the complete package and account for every exported chunk before producing final decisions.",
+    "- First create concept_clusters. Collapse exact/near duplicates and aliases, preserve contradictions, assign hierarchy and maturity, and retain every original chunk ID/provenance.",
+    "- Generate decisions from concept_clusters only, never directly from isolated chunks.",
+    "- The provisional_concept_profile is a synthesized starting hypothesis. Raw provisional_local_summaries, provisional_entities, and provisional_project_matches are supporting extraction signals only.",
+    "- Do not create final decisions from the provisional profile alone. The reviewer must still perform package-wide clustering and final decisions must come from package-wide concept reconstruction.",
+    "- Compare every chunk against every other chunk before using its provisional profile, and override any profile field when package-wide evidence disagrees. The reviewer may override every profile field.",
+    "- Collapse exact and near duplicates before using estimated concept counts. Repeated chunks carrying the same provisional profile must not increase confidence.",
+    "- Repeated duplicate text must not increase confidence merely because it appears more than once.",
+    "- Return coverage_summary with complete_package_read=true, decisions_generated_from_clusters=true, duplicate_repetition_increased_confidence=false, and every exported chunk accounted for.",
+    "- Before returning, complete final_self_check. Preserve every false value honestly; false means the review is incomplete and cannot be finally approved.",
     "- Prefer matching evidence to a project listed in `project_registry` before proposing a new project.",
     "- Return the exact project_id and canonical_name snapshot for every existing-project match.",
     "- Different wording, an alias, or a former name does not justify a new project.",
@@ -4306,6 +4352,16 @@ function reviewPackReadableMarkdown(evidence) {
     `- Sources: ${evidence.source_counts.total} · complete: ${evidence.source_counts.complete} · truncated: ${evidence.source_counts.truncated}`,
     `- Chunks: ${evidence.chunk_counts.exported} of ${evidence.chunk_counts.detected} detected`,
     "",
+    "## Mandatory Consolidation Protocol",
+    "",
+    `- Protocol: \`${evidence.review_protocol.id}\` v${evidence.review_protocol.version}`,
+    `- Complete package required: ${evidence.review_protocol.complete_package_required ? "yes" : "no"}`,
+    `- Decision source: ${evidence.review_protocol.decision_source}`,
+    `- Duplicate confidence rule: ${evidence.review_protocol.duplicate_repetition_increases_confidence ? "duplicates may increase confidence" : "duplicate repetition must not increase confidence"}`,
+    `- Human authority: ${evidence.review_protocol.human_authoritative ? "required" : "not recorded"}`,
+    `- Final self-check required: ${evidence.review_protocol.final_self_check_required ? "yes" : "no"}`,
+    "- Required sequence: read all chunks → build concept clusters → account for coverage → produce cluster-linked decisions → human review.",
+    "",
     "## Current Project Registry",
     "",
     ...registryLines,
@@ -4319,8 +4375,25 @@ function reviewPackReadableMarkdown(evidence) {
     lines.push(`Source: \`${chunk.source_id}\` · File version: \`${chunk.file_version_id}\` · Sequence: ${chunk.sequence}`);
     if (chunk.provenance?.source_filename) lines.push(`Filename provenance: ${chunk.provenance.source_filename}`);
     if (chunk.provenance?.headings?.length) lines.push(`Heading provenance: ${chunk.provenance.headings.join(" | ")}`);
-    if (chunk.provisional_local_summaries?.length) lines.push(`Provisional local summaries: ${chunk.provisional_local_summaries.map((item) => item.summary || item.title).filter(Boolean).join(" | ")}`);
-    if (chunk.provisional_project_matches?.length) lines.push(`Provisional project matches: ${chunk.provisional_project_matches.map((item) => `${item.canonical_name} (${item.project_id})`).join(" | ")}`);
+    const profile = chunk.provisional_concept_profile;
+    lines.push("");
+    lines.push("**Provisional concept profile**");
+    lines.push(`- Primary concept: ${profile.primary_concept || "unresolved"}`);
+    lines.push(`- Secondary concepts: ${profile.secondary_concepts.length ? profile.secondary_concepts.join(", ") : "none identified"}`);
+    lines.push(`- Estimated distinct concepts: ${profile.estimated_concept_count}`);
+    lines.push(`- Likely hierarchy: ${profile.likely_hierarchy_level}`);
+    lines.push(`- Likely maturity: ${profile.likely_maturity}`);
+    lines.push(`- Likely relationships: ${profile.likely_relationships.length ? profile.likely_relationships.map((item) => `${item.relationship_type} ${item.target_name} (${Math.round(item.confidence * 100)}%) — ${item.reasoning_summary}`).join("; ") : "none identified"}`);
+    lines.push(`- Confidence: ${Math.round(profile.profile_confidence * 100)}%`);
+    lines.push(`- Generated by: ${profile.generated_by}`);
+    lines.push(`- Reviewer may override: ${profile.reviewer_may_override ? "yes" : "no"}`);
+    lines.push(`- Synthesis reasoning: ${profile.synthesis_reasoning_summary}`);
+    lines.push("");
+    lines.push("**Raw provisional extraction signals**");
+    lines.push(`- Provisional local summaries: ${chunk.provisional_local_summaries?.length ? chunk.provisional_local_summaries.map((item) => item.summary || item.title).filter(Boolean).join(" | ") : "none"}`);
+    lines.push(`- Provisional entities: ${chunk.provisional_entities?.length ? chunk.provisional_entities.map((item) => item.value).filter(Boolean).join(" | ") : "none"}`);
+    lines.push(`- Provisional project matches: ${chunk.provisional_project_matches?.length ? chunk.provisional_project_matches.map((item) => `${item.canonical_name} (${item.project_id})`).join(" | ") : "none"}`);
+    lines.push(`Review directive: compare against all chunks: ${chunk.review_directive.compare_against_all_chunks ? "yes" : "no"} · cluster before decision: ${chunk.review_directive.cluster_before_decision ? "yes" : "no"} · may support multiple concepts: ${chunk.review_directive.may_support_multiple_concepts ? "yes" : "no"}`);
     lines.push("");
     lines.push("```text");
     lines.push(chunk.complete_text);
@@ -4411,7 +4484,7 @@ async function createUniversalReviewPack({ storageRoot, dbPath, payload = {} }) 
   const caseView = await getDiscoveryCase({ storageRoot, dbPath, payload: { discoveryCaseId } });
   const extractionById = new Map(caseView.extractions.map((item) => [item.id, item]));
   const versionById = new Map(caseView.fileVersions.map((item) => [item.id, item]));
-  const chunks = [];
+  let chunks = [];
   for (const chunk of [...caseView.chunks].sort((a, b) => String(a.discoveryExtractionId).localeCompare(String(b.discoveryExtractionId)) || Number(a.chunkIndex) - Number(b.chunkIndex))) {
     const read = await readDiscoveryChunkText({ storageRoot, dbPath, payload: { discoveryChunkId: chunk.id } });
     const extraction = extractionById.get(chunk.discoveryExtractionId) || {};
@@ -4426,7 +4499,23 @@ async function createUniversalReviewPack({ storageRoot, dbPath, payload = {} }) 
       complete_text: read.text,
       provisional_local_summaries: (workOrder.candidateMap?.entries || []).filter((entry) => (entry.evidence || []).some((item) => item.discoveryChunkId === chunk.id)).map((entry) => ({ candidate_map_id: entry.id, title: entry.title, summary: entry.neutralSummary || entry.summary || "", classification: entry.projectStateClassification || "", provisional: true })).slice(0, 50),
       provisional_entities: reviewPackEntities(read.text).map((value) => ({ value, provisional: true })),
-      provisional_project_matches: (workOrder.candidateMap?.entries || []).filter((entry) => (entry.evidence || []).some((item) => item.discoveryChunkId === chunk.id)).flatMap((entry) => entry.knownProjectMatches || []).map((match) => ({ project_id: match.projectId, canonical_name: match.name, confidence: match.confidence, provisional: true })).slice(0, 50)
+      provisional_project_matches: (workOrder.candidateMap?.entries || []).filter((entry) => (entry.evidence || []).some((item) => item.discoveryChunkId === chunk.id)).flatMap((entry) => entry.knownProjectMatches || []).map((match) => ({ project_id: match.projectId, canonical_name: match.name, confidence: match.confidence, provisional: true })).slice(0, 50),
+      review_directive: {
+        action: "cluster_before_decision",
+        review_in_isolation: false,
+        compare_against_all_chunks: true,
+        cluster_before_decision: true,
+        may_be_duplicate: true,
+        may_support_multiple_concepts: true,
+        must_receive_final_disposition: true,
+        read_with_complete_package: true,
+        collapse_exact_and_near_duplicates: true,
+        merge_aliases_and_alternate_names: true,
+        preserve_genuine_contradictions: true,
+        assign_hierarchy_and_maturity: true,
+        preserve_chunk_id_and_provenance: true,
+        duplicate_repetition_increases_confidence: false
+      }
     });
   }
   if (!chunks.length) throw new Error("Universal review export requires extracted or indexed Discovery chunks.");
@@ -4441,6 +4530,8 @@ async function createUniversalReviewPack({ storageRoot, dbPath, payload = {} }) 
   });
   const registryProjects = currentReviewRegistryProjects(dbPath, payload.knownProjects || []);
   const projectRegistry = reviewPackProjectRegistry(registryProjects, { includePrivateProjects: payload.includePrivateProjects === true });
+  chunks = populateReviewPackConceptProfiles(chunks, projectRegistry);
+  assertReviewPackConceptProfiles(chunks);
   const sourceComplete = sourceManifest.every((source) => source.complete);
   const packageVersion = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8")).version || "unknown";
   const evidenceWithoutHash = {
@@ -4452,8 +4543,20 @@ async function createUniversalReviewPack({ storageRoot, dbPath, payload = {} }) 
     project_state_version: packageVersion,
     format: "project-state-review-pack",
     format_version: "1.0",
-    review_protocol: "project-state-model-neutral-review",
-    review_protocol_version: "1.0",
+    review_protocol: {
+      id: "project-state-model-neutral-consolidated-review",
+      version: "1.1",
+      model_neutral: true,
+      human_authoritative: true,
+      complete_package_required: true,
+      decision_source: "concept_clusters",
+      coverage_required: true,
+      preserve_original_chunk_ids_and_provenance: true,
+      duplicate_repetition_increases_confidence: false,
+      approval_requires_zero_unaccounted_chunks: true,
+      final_self_check_required: true
+    },
+    review_protocol_version: "1.1",
     source_complete: sourceComplete,
     source_counts: { total: sourceManifest.length, complete: sourceManifest.filter((source) => source.complete).length, truncated: sourceManifest.filter((source) => source.truncated).length },
     source_manifest: sourceManifest,
@@ -4467,6 +4570,7 @@ async function createUniversalReviewPack({ storageRoot, dbPath, payload = {} }) 
   };
   const evidenceSha256 = crypto.createHash("sha256").update(JSON.stringify(evidenceWithoutHash)).digest("hex");
   const evidence = { ...evidenceWithoutHash, evidence_sha256: evidenceSha256 };
+  assertReviewPackConceptProfiles(evidence.chunks);
   const resultSchema = fs.readFileSync(REVIEW_RESULT_SCHEMA_FILE, "utf8");
   const packName = safeFileName(`${workOrder.title || workOrderId}.universal-ai-review-pack-${safeStamp()}.zip`);
   const requestedOutputDirectory = String(payload.outputDirectory || "").trim();
@@ -4483,7 +4587,7 @@ async function createUniversalReviewPack({ storageRoot, dbPath, payload = {} }) 
   await fsp.writeFile(packPath, zip);
   const managedRelativePath = relativeManagedPath(storageRoot, packPath);
   const insideManagedStorage = managedRelativePath !== ".." && !managedRelativePath.startsWith(`..${path.sep}`) && !managedRelativePath.startsWith("../");
-  const record = { id: packageId, packageId, workOrderId, discoveryCaseId, packRevision, createdAt, projectStateVersion: packageVersion, format: evidence.format, formatVersion: evidence.format_version, reviewProtocol: evidence.review_protocol, reviewProtocolVersion: evidence.review_protocol_version, evidenceSha256, sourceComplete, projectRegistry: cloneJson(projectRegistry), chunkIds: chunks.map((chunk) => chunk.chunk_id), sourceIds: sourceManifest.map((source) => source.source_id), exportFileName: packName, exportPath: insideManagedStorage ? managedRelativePath : "", externalExportPath: insideManagedStorage ? "" : packPath, includePrivateProjects: payload.includePrivateProjects === true };
+  const record = { id: packageId, packageId, workOrderId, discoveryCaseId, packRevision, createdAt, projectStateVersion: packageVersion, format: evidence.format, formatVersion: evidence.format_version, reviewProtocol: evidence.review_protocol.id, reviewProtocolVersion: evidence.review_protocol.version, evidenceSha256, sourceComplete, projectRegistry: cloneJson(projectRegistry), chunkIds: chunks.map((chunk) => chunk.chunk_id), sourceIds: sourceManifest.map((source) => source.source_id), exportFileName: packName, exportPath: insideManagedStorage ? managedRelativePath : "", externalExportPath: insideManagedStorage ? "" : packPath, includePrivateProjects: payload.includePrivateProjects === true };
   const packageDb = openDatabase(dbPath);
   try { insertStrict(packageDb, "review_export_packages", { id: packageId, work_order_id: workOrderId, discovery_case_id: discoveryCaseId, pack_revision: packRevision, evidence_sha256: evidenceSha256, created_at: createdAt, record_json: JSON.stringify(record) }); }
   catch (error) { await fsp.rm(packPath, { force: true }); throw error; }
@@ -4523,7 +4627,7 @@ function validateExternalProjectMatch(match, prefix, projectSnapshotById, curren
 function validateExternalReviewResult({ result, expectedPackage, chunkIds, chunkTextById, projectSnapshotById, currentProjectIds }) {
   const errors = [];
   if (!result || typeof result !== "object" || Array.isArray(result)) errors.push("Result must be one JSON object.");
-  externalReviewUnexpectedKeys(result, new Set(["format", "format_version", "package_id", "work_order_id", "discovery_case_id", "pack_revision", "evidence_sha256", "reviewer", "source_complete", "decisions", "relationships", "human_questions", "rejected_material"]), "result", errors);
+  externalReviewUnexpectedKeys(result, new Set(["format", "format_version", "package_id", "work_order_id", "discovery_case_id", "pack_revision", "evidence_sha256", "reviewer", "source_complete", "concept_clusters", "coverage_summary", "final_self_check", "decisions", "relationships", "human_questions", "rejected_material"]), "result", errors);
   if (result?.format !== "project-state-review-result") errors.push("format must be project-state-review-result.");
   if (result?.format_version !== "1.0") errors.push("format_version must be 1.0.");
   for (const [field, expected] of [["package_id", expectedPackage.packageId], ["work_order_id", expectedPackage.workOrderId], ["discovery_case_id", expectedPackage.discoveryCaseId], ["pack_revision", expectedPackage.packRevision], ["evidence_sha256", expectedPackage.evidenceSha256]]) if (result?.[field] !== expected) errors.push(`${field} must match the source export (${expected}).`);
@@ -4531,7 +4635,59 @@ function validateExternalReviewResult({ result, expectedPackage, chunkIds, chunk
   externalReviewUnexpectedKeys(result?.reviewer, new Set(["reviewer_type", "provider", "model", "name", "reviewed_at"]), "reviewer", errors);
   if (typeof result?.source_complete !== "boolean") errors.push("source_complete must be true or false.");
   else if (result.source_complete !== expectedPackage.sourceComplete) errors.push(`source_complete must match the source export (${expectedPackage.sourceComplete}).`);
-  for (const field of ["decisions", "relationships", "human_questions", "rejected_material"]) if (!Array.isArray(result?.[field])) errors.push(`${field} must be an array.`);
+  for (const field of ["concept_clusters", "decisions", "relationships", "human_questions", "rejected_material"]) if (!Array.isArray(result?.[field])) errors.push(`${field} must be an array.`);
+  const clusterIds = new Set();
+  const clusterChunkIdsById = new Map();
+  const clusterAccountedChunkIds = new Set();
+  for (const [index, cluster] of (result?.concept_clusters || []).entries()) {
+    const prefix = `concept_clusters[${index}]`;
+    externalReviewUnexpectedKeys(cluster, new Set(["cluster_id", "concept_title", "summary", "aliases", "hierarchy_type", "parent_cluster_id", "maturity", "primary_chunk_ids", "duplicate_chunk_ids", "contextual_chunk_ids", "contradictory_chunk_ids", "unresolved_chunk_ids", "confidence", "confidence_basis"]), prefix, errors);
+    if (!String(cluster?.cluster_id || "").trim() || clusterIds.has(cluster.cluster_id)) errors.push(`${prefix}.cluster_id must be present and unique.`); else clusterIds.add(cluster.cluster_id);
+    for (const field of ["concept_title", "summary", "confidence_basis"]) if (typeof cluster?.[field] !== "string" || !cluster[field].trim()) errors.push(`${prefix}.${field} is required.`);
+    if (!EXTERNAL_REVIEW_HIERARCHY_TYPES.includes(cluster?.hierarchy_type)) errors.push(`${prefix}.hierarchy_type is not allowed.`);
+    if (!EXTERNAL_REVIEW_MATURITY.includes(cluster?.maturity)) errors.push(`${prefix}.maturity is not allowed.`);
+    if (!("parent_cluster_id" in (cluster || {}))) errors.push(`${prefix}.parent_cluster_id must be present (null is allowed).`);
+    if (!Array.isArray(cluster?.aliases)) errors.push(`${prefix}.aliases must be an array.`);
+    for (const field of ["primary_chunk_ids", "duplicate_chunk_ids", "contextual_chunk_ids", "contradictory_chunk_ids", "unresolved_chunk_ids"]) {
+      if (!Array.isArray(cluster?.[field])) errors.push(`${prefix}.${field} must be an array.`);
+      for (const id of cluster?.[field] || []) {
+        if (!chunkIds.has(id)) errors.push(`${prefix}.${field} references unknown chunk ID ${id}.`);
+        else clusterAccountedChunkIds.add(id);
+      }
+    }
+    if (cluster?.cluster_id) clusterChunkIdsById.set(cluster.cluster_id, new Set([...(cluster.primary_chunk_ids || []), ...(cluster.duplicate_chunk_ids || []), ...(cluster.contextual_chunk_ids || []), ...(cluster.contradictory_chunk_ids || []), ...(cluster.unresolved_chunk_ids || [])]));
+    if (!(cluster?.primary_chunk_ids || []).length) errors.push(`${prefix}.primary_chunk_ids must contain at least one chunk.`);
+    if (typeof cluster?.confidence !== "number" || cluster.confidence < 0 || cluster.confidence > 1) errors.push(`${prefix}.confidence must be between 0 and 1.`);
+  }
+  for (const [index, cluster] of (result?.concept_clusters || []).entries()) if (cluster?.parent_cluster_id && !clusterIds.has(cluster.parent_cluster_id)) errors.push(`concept_clusters[${index}].parent_cluster_id references unknown cluster ID ${cluster.parent_cluster_id}.`);
+  const coverage = result?.coverage_summary;
+  if (!coverage || typeof coverage !== "object" || Array.isArray(coverage)) errors.push("coverage_summary must be an object.");
+  externalReviewUnexpectedKeys(coverage, new Set(["exported_chunk_count", "accounted_chunk_count", "complete_package_read", "decisions_generated_from_clusters", "duplicate_repetition_increased_confidence", "duplicate_groups", "contradiction_chunk_ids", "rejected_chunk_ids", "unresolved_chunk_ids", "unaccounted_chunks"]), "coverage_summary", errors);
+  for (const field of ["duplicate_groups", "contradiction_chunk_ids", "rejected_chunk_ids", "unresolved_chunk_ids", "unaccounted_chunks"]) if (!Array.isArray(coverage?.[field])) errors.push(`coverage_summary.${field} must be an array.`);
+  if (coverage?.complete_package_read !== true) errors.push("coverage_summary.complete_package_read must be true.");
+  if (coverage?.decisions_generated_from_clusters !== true) errors.push("coverage_summary.decisions_generated_from_clusters must be true.");
+  if (coverage?.duplicate_repetition_increased_confidence !== false) errors.push("coverage_summary.duplicate_repetition_increased_confidence must be false.");
+  for (const [index, group] of (coverage?.duplicate_groups || []).entries()) {
+    externalReviewUnexpectedKeys(group, new Set(["group_id", "canonical_chunk_id", "duplicate_chunk_ids", "near_duplicate", "rationale"]), `coverage_summary.duplicate_groups[${index}]`, errors);
+    if (!String(group?.group_id || "").trim()) errors.push(`coverage_summary.duplicate_groups[${index}].group_id is required.`);
+    if (!chunkIds.has(group?.canonical_chunk_id)) errors.push(`coverage_summary.duplicate_groups[${index}].canonical_chunk_id is unknown.`); else clusterAccountedChunkIds.add(group.canonical_chunk_id);
+    if (!Array.isArray(group?.duplicate_chunk_ids) || !group.duplicate_chunk_ids.length) errors.push(`coverage_summary.duplicate_groups[${index}].duplicate_chunk_ids must contain duplicates.`);
+    for (const id of group?.duplicate_chunk_ids || []) { if (!chunkIds.has(id)) errors.push(`coverage_summary.duplicate_groups[${index}] references unknown duplicate chunk ID ${id}.`); else clusterAccountedChunkIds.add(id); }
+    if (typeof group?.near_duplicate !== "boolean" || typeof group?.rationale !== "string") errors.push(`coverage_summary.duplicate_groups[${index}] requires near_duplicate and rationale.`);
+  }
+  for (const field of ["contradiction_chunk_ids", "rejected_chunk_ids", "unresolved_chunk_ids"]) for (const id of coverage?.[field] || []) { if (!chunkIds.has(id)) errors.push(`coverage_summary.${field} references unknown chunk ID ${id}.`); else clusterAccountedChunkIds.add(id); }
+  for (const rejected of result?.rejected_material || []) for (const id of rejected?.supporting_chunk_ids || []) if (chunkIds.has(id)) clusterAccountedChunkIds.add(id);
+  const actualUnaccounted = [...chunkIds].filter((id) => !clusterAccountedChunkIds.has(id)).sort();
+  const declaredUnaccounted = [...new Set((coverage?.unaccounted_chunks || []).map(String))].sort();
+  if (JSON.stringify(actualUnaccounted) !== JSON.stringify(declaredUnaccounted)) errors.push(`coverage_summary.unaccounted_chunks must exactly list every unaccounted exported chunk (${actualUnaccounted.join(", ") || "none"}).`);
+  if (coverage?.exported_chunk_count !== chunkIds.size) errors.push(`coverage_summary.exported_chunk_count must equal ${chunkIds.size}.`);
+  if (coverage?.accounted_chunk_count !== chunkIds.size - actualUnaccounted.length) errors.push(`coverage_summary.accounted_chunk_count must equal ${chunkIds.size - actualUnaccounted.length}.`);
+  const finalSelfCheck = result?.final_self_check;
+  const finalSelfCheckFields = ["concepts_reconstructed", "duplicates_did_not_inflate_confidence", "all_chunks_accounted_for", "hierarchy_distinguished", "contradictions_preserved", "recommendations_explained", "decisions_generated_from_clusters"];
+  if (!finalSelfCheck || typeof finalSelfCheck !== "object" || Array.isArray(finalSelfCheck)) errors.push("final_self_check must be an object.");
+  externalReviewUnexpectedKeys(finalSelfCheck, new Set(finalSelfCheckFields), "final_self_check", errors);
+  for (const field of finalSelfCheckFields) if (typeof finalSelfCheck?.[field] !== "boolean") errors.push(`final_self_check.${field} must be boolean.`);
+  if (finalSelfCheck?.all_chunks_accounted_for === true && actualUnaccounted.length) errors.push("final_self_check.all_chunks_accounted_for cannot be true while coverage_summary.unaccounted_chunks is non-empty.");
   const decisionIds = new Set();
   for (const [index, decision] of (result?.decisions || []).entries()) {
     const prefix = `decisions[${index}]`;
@@ -4539,7 +4695,8 @@ function validateExternalReviewResult({ result, expectedPackage, chunkIds, chunk
     if (!String(decision?.concept_title || "").trim()) errors.push(`${prefix}.concept_title is required.`);
     if (typeof decision?.summary !== "string") errors.push(`${prefix}.summary must be a string.`);
     if (typeof decision?.reasoning_summary !== "string") errors.push(`${prefix}.reasoning_summary must be a string.`);
-    externalReviewUnexpectedKeys(decision, new Set(["decision_id", "concept_title", "classification", "primary_project", "additional_projects", "proposed_new_project", "summary", "supporting_chunk_ids", "evidence_spans", "confidence", "reasoning_summary", "evidence_role", "personal_aether_support", "commercial_default_allowed", "requires_separate_design_review", "human_review_required"]), prefix, errors);
+    externalReviewUnexpectedKeys(decision, new Set(["decision_id", "cluster_id", "concept_title", "classification", "primary_project", "additional_projects", "proposed_new_project", "summary", "supporting_chunk_ids", "evidence_spans", "confidence", "reasoning_summary", "evidence_role", "personal_aether_support", "commercial_default_allowed", "requires_separate_design_review", "human_review_required"]), prefix, errors);
+    if (!clusterIds.has(decision?.cluster_id)) errors.push(`${prefix}.cluster_id must reference a concept cluster.`);
     if (!EXTERNAL_REVIEW_CLASSIFICATIONS.includes(decision?.classification)) errors.push(`${prefix}.classification is not allowed.`);
     if (decision?.primary_project !== null) validateExternalProjectMatch(decision?.primary_project, `${prefix}.primary_project`, projectSnapshotById, currentProjectIds, errors);
     if (!Array.isArray(decision?.additional_projects)) errors.push(`${prefix}.additional_projects must be an array.`);
@@ -4562,6 +4719,7 @@ function validateExternalReviewResult({ result, expectedPackage, chunkIds, chunk
       if (typeof proposed.confidence !== "number" || proposed.confidence < 0 || proposed.confidence > 1) errors.push(`${prefix}.proposed_new_project.confidence must be between 0 and 1.`);
     }
     if (!Array.isArray(decision?.supporting_chunk_ids) || !decision.supporting_chunk_ids.length) errors.push(`${prefix}.supporting_chunk_ids must contain evidence.`);
+    for (const id of decision?.supporting_chunk_ids || []) if (clusterChunkIdsById.has(decision?.cluster_id) && !clusterChunkIdsById.get(decision.cluster_id).has(id)) errors.push(`${prefix}.supporting_chunk_ids includes ${id}, which is not part of its concept cluster.`);
     if (new Set(decision?.supporting_chunk_ids || []).size !== (decision?.supporting_chunk_ids || []).length) errors.push(`${prefix}.supporting_chunk_ids must not contain duplicates.`);
     for (const id of externalReviewChunkReferences(decision)) if (!chunkIds.has(id)) errors.push(`${prefix} references unknown chunk ID ${id}.`);
     if (!Array.isArray(decision?.evidence_spans)) errors.push(`${prefix}.evidence_spans must be an array.`);
@@ -4678,7 +4836,9 @@ async function importExternalReviewPass({ storageRoot, dbPath, payload = {} }) {
     importedAt, importedBy: String(payload.actorId || ""), importReason: String(payload.reason || ""), originalFilename: path.basename(filePath), managedOriginalPath: relativeManagedPath(storageRoot, originalPath), importHash,
     sourcePackageId: expectedPackage.packageId, sourcePackRevision: expectedPackage.packRevision, sourceEvidenceSha256: expectedPackage.evidenceSha256,
     reviewer: cloneJson(result.reviewer), externalTransmissionStatus: String(payload.externalTransmissionStatus || "unknown"), schemaValidation: { valid: true, schema: "project-state-review-result/1.0", errors: [] },
-    sourceComplete: result.source_complete, result: cloneJson(result), companionMarkdownStored: Boolean(companionMarkdown), coreAuthority: false, coreChanged: false
+    sourceComplete: result.source_complete,
+    consolidationCoverage: { exportedChunkCount: result.coverage_summary.exported_chunk_count, accountedChunkCount: result.coverage_summary.accounted_chunk_count, unaccountedChunkIds: cloneJson(result.coverage_summary.unaccounted_chunks), coverageComplete: result.coverage_summary.unaccounted_chunks.length === 0, finalSelfCheckComplete: Object.values(result.final_self_check).every((value) => value === true), complete: result.coverage_summary.unaccounted_chunks.length === 0 && Object.values(result.final_self_check).every((value) => value === true) },
+    result: cloneJson(result), companionMarkdownStored: Boolean(companionMarkdown), coreAuthority: false, coreChanged: false
   };
   const writeDb = openDatabase(dbPath);
   try { insertStrict(writeDb, "external_review_passes", { id, discovery_case_id: discoveryCaseId, work_order_id: workOrderId, import_hash: importHash, imported_at: importedAt, record_json: JSON.stringify(record) }); }
@@ -4799,6 +4959,10 @@ async function recordExternalReviewAction({ storageRoot, dbPath, payload = {} })
   } finally { db.close(); }
   const disposition = String(payload.disposition || "needs_revision");
   if (!["approved", "rejected", "needs_revision"].includes(disposition)) throw new Error("Human review disposition is not supported.");
+  const unaccountedChunks = pass.result?.coverage_summary?.unaccounted_chunks || [];
+  if (disposition === "approved" && unaccountedChunks.length) throw new Error(`Final approval is blocked because ${unaccountedChunks.length} exported chunk${unaccountedChunks.length === 1 ? " is" : "s are"} unaccounted for.`);
+  const failedSelfChecks = Object.entries(pass.result?.final_self_check || {}).filter(([, value]) => value !== true).map(([field]) => field);
+  if (disposition === "approved" && failedSelfChecks.length) throw new Error(`Final approval and project creation are blocked because final_self_check is incomplete: ${failedSelfChecks.join(", ")}.`);
   const classification = String(payload.classification || "");
   if (!EXTERNAL_REVIEW_CLASSIFICATIONS.includes(classification)) throw new Error("Human review classification is not supported.");
   const primaryProjectId = String(payload.primaryProjectId || "");

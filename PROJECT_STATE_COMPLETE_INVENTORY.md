@@ -1247,3 +1247,54 @@ Release result:
 - Signature status: `NotSigned`
 - Distribution status: local/offline test build only; not public-distribution ready.
 - Remaining gate: real-time desktop testing of setup folder selection, automatic export, notebook correction/save-anyway, pasted import, and uninstall/reinstall data preservation.
+
+## 33. Mandatory Universal Review Consolidation Layer
+
+Status: implemented and regression-checked 2026-07-12; not repackaged in this change.
+
+- `evidence.json` now carries a strict package-level `review_protocol` object declaring model neutrality, human authority, complete-package reading, cluster-first decision generation, required coverage, original provenance preservation, duplicate-confidence controls, and the zero-unaccounted approval gate.
+- `evidence_readable.md` renders the same protocol object and required read → cluster → coverage → decision → human-review sequence.
+- Every exported chunk now includes a compact `review_directive` requiring cluster-before-decision review, exact/near-duplicate collapse, alias merging, contradiction preservation, hierarchy/maturity assignment, stable chunk/provenance preservation, and no confidence increase from duplicate repetition.
+- Returned reviews must define strict `concept_clusters` before decisions. Each cluster records canonical concept title/aliases, summary, umbrella/project/subproject/product/theme/future-idea/reference hierarchy, optional parent cluster, maturity, confidence basis, and primary/duplicate/contextual/contradictory/unresolved chunk IDs.
+- Every decision now requires `cluster_id`; supporting chunk IDs must belong to that cluster.
+- Strict `coverage_summary` records exported/accounted counts, complete-package confirmation, cluster-derived-decision confirmation, duplicate-confidence confirmation, duplicate groups, contradiction/rejected/unresolved chunk IDs, and exact `unaccounted_chunks`.
+- Import validates the complete exported chunk set against cluster, duplicate, contradiction, rejected, unresolved, and unaccounted dispositions while preserving every original chunk ID and source provenance.
+- Accurately reported incomplete reviews remain importable for correction, but both UI and bridge independently block final approval whenever `unaccounted_chunks` is non-empty.
+- Review display now exposes cluster IDs, cluster hierarchy/maturity/evidence, coverage counts, and explicit incomplete-coverage warnings.
+- The model-neutral result schema, pack schema, valid sample, sample ZIP, generator, documentation, and universal exchange regression were updated together.
+
+## 34. Mandatory Universal Review Final Self-Check
+
+Status: implemented and regression-checked 2026-07-12; not repackaged in this change.
+
+- `review_protocol.final_self_check_required` now declares the mandatory return gate in both JSON and readable Markdown instructions.
+- Every returned review must contain strict `final_self_check` booleans for full-package concept reconstruction, duplicate-confidence discipline, complete chunk accounting, hierarchy distinction, contradiction preservation, human-readable recommendation reasoning, and cluster-derived decisions.
+- All seven fields are required booleans with `additionalProperties: false`; false values remain false and mark the review incomplete.
+- Import accepts honestly incomplete self-checks as non-authoritative passes for correction while retaining the exact result.
+- Human Review displays a clear warning listing every false/missing check.
+- Both UI and storage bridge independently block final approval, Intake routing, and project creation while any self-check is false.
+- Validation rejects a claim that `all_chunks_accounted_for` is true when `coverage_summary.unaccounted_chunks` is non-empty.
+- The result schema, pack protocol schema, sample result, sample ZIP, generator, documentation, and universal regression were updated together.
+## 35. Universal Review Provisional Concept Profiles
+
+- Every Universal AI Review evidence chunk now exports a conservative `provisional_concept_profile` in both `evidence.json` and `evidence_readable.md`.
+- The profile is a distinct synthesis layer derived from the chunk text, local summaries, entities, provisional project matches, and current project registry while preserving all three raw extraction arrays below it.
+- The profile records a primary hypothesis, secondary concepts, estimated distinct concept count, likely hierarchy, likely maturity, relationships with allowed relationship types and reasoning, confidence, generation method, an explicit reviewer override flag, and a human-readable synthesis explanation.
+- Low-confidence extraction resolves to null/zero/unresolved values and never blocks export.
+- The per-chunk review directive explicitly forbids isolated review, requires comparison across all chunks and cluster-first decisions, allows duplicates and multi-concept support, and requires a final disposition.
+- Package instructions state that provisional profiles are starting hypotheses only; duplicates are collapsed before concept counting and repeated profiles cannot inflate confidence.
+- Final concept clusters and decisions remain authoritative only after external review and human approval. The external result schema does not require the provisional profile to be returned.
+- Regression coverage includes clear projects, multi-concept chunks, exact/near duplicates, one project with several applications, umbrella/child hierarchy, product/parent hierarchy, exploratory versus active maturity, and unresolved low-confidence extraction.
+## 36. Project State 0.2.3 Full Offline Test Release Candidate
+
+- Release sweep completed July 12, 2026 after the Universal Review profile-export correction.
+- Static wiring audit covers 96 rendered actions, 98 handlers, all five JSON-review notebook tools, eight setup/settings submit routes, and non-action modal control families. No missing handlers, unreachable handlers, orphaned submit routes, or unconnected tool buttons were found.
+- Live rendered-control sweep covered all seven top-level screens with 107 rendered buttons, eight dropdowns, seven forms, duplicate-ID detection, empty-dropdown detection, unnamed-field detection, and renderer exception monitoring. All passed.
+- Language verification confirms English, French, German, and Spanish dictionaries remain in exact parity at 746 keys each, with all 707 active translation keys present. The visible hardcoded-label regression set passed.
+- The full desktop, API arm, local transport, file arm, Discovery, folder, multi-idea, huge-file, candidate-map, Universal Review, backup/restore, storage safety, and Electron/SQLite runtime suites passed.
+- Release version: `0.2.3`.
+- Installer: `release/Project-State-Setup-0.2.3-x64.exe`.
+- Exact installer size and SHA-256 are generated after packaging in `release/release-candidate-manifest.json` so the packaged inventory does not contain a circular, stale artifact hash.
+- Installer signature status: `NotSigned`. This is a local/offline full-test build, not a public distribution build.
+- Uninstall configuration preserves user data, and the runtime rejects any storage root inside the application/install directory.
+- Packaged artifact inspection found no bundled user data or secrets and confirmed the local Qwen/Ollama provider connection remains available for AI Work Orders.

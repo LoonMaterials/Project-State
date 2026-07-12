@@ -5,7 +5,7 @@
   "work_order_id": "ai_work_order_sample_001",
   "discovery_case_id": "discovery_case_sample_001",
   "pack_revision": 1,
-  "evidence_sha256": "0846dcc693f42ff818408afe69a4d959791e4b60059735eabd498a479ffcc2b3",
+  "evidence_sha256": "a14f9facc989408b54dfb8728c8fedae784deba28e6b84c42a4eb3618fdf6cb0",
   "reviewer": {
     "reviewer_type": "ai",
     "provider": "optional-provider",
@@ -46,7 +46,8 @@
       "personal_aether_support": false,
       "commercial_default_allowed": true,
       "requires_separate_design_review": false,
-      "human_review_required": true
+      "human_review_required": true,
+      "cluster_id": "cluster_sample_001"
     }
   ],
   "relationships": [],
@@ -62,5 +63,48 @@
       ]
     }
   ],
-  "rejected_material": []
+  "rejected_material": [],
+  "concept_clusters": [
+    {
+      "cluster_id": "cluster_sample_001",
+      "concept_title": "Shared validation support",
+      "summary": "The package contains shared validation evidence.",
+      "aliases": [
+        "Shared validation"
+      ],
+      "hierarchy_type": "theme",
+      "parent_cluster_id": null,
+      "maturity": "active",
+      "primary_chunk_ids": [
+        "chunk_sample_001"
+      ],
+      "duplicate_chunk_ids": [],
+      "contextual_chunk_ids": [],
+      "contradictory_chunk_ids": [],
+      "unresolved_chunk_ids": [],
+      "confidence": 0.86,
+      "confidence_basis": "Based on one substantive primary chunk; duplicate repetition did not increase confidence."
+    }
+  ],
+  "coverage_summary": {
+    "exported_chunk_count": 1,
+    "accounted_chunk_count": 1,
+    "complete_package_read": true,
+    "decisions_generated_from_clusters": true,
+    "duplicate_repetition_increased_confidence": false,
+    "duplicate_groups": [],
+    "contradiction_chunk_ids": [],
+    "rejected_chunk_ids": [],
+    "unresolved_chunk_ids": [],
+    "unaccounted_chunks": []
+  },
+  "final_self_check": {
+    "concepts_reconstructed": true,
+    "duplicates_did_not_inflate_confidence": true,
+    "all_chunks_accounted_for": true,
+    "hierarchy_distinguished": true,
+    "contradictions_preserved": true,
+    "recommendations_explained": true,
+    "decisions_generated_from_clusters": true
+  }
 }

@@ -14,14 +14,80 @@
     "project_state_version": { "type": "string" },
     "format": { "const": "project-state-review-pack" },
     "format_version": { "const": "1.0" },
-    "review_protocol": { "const": "project-state-model-neutral-review" },
-    "review_protocol_version": { "const": "1.0" },
+    "review_protocol": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "version", "model_neutral", "human_authoritative", "complete_package_required", "decision_source", "coverage_required", "preserve_original_chunk_ids_and_provenance", "duplicate_repetition_increases_confidence", "approval_requires_zero_unaccounted_chunks", "final_self_check_required"],
+      "properties": {
+        "id": { "const": "project-state-model-neutral-consolidated-review" },
+        "version": { "const": "1.1" },
+        "model_neutral": { "const": true },
+        "human_authoritative": { "const": true },
+        "complete_package_required": { "const": true },
+        "decision_source": { "const": "concept_clusters" },
+        "coverage_required": { "const": true },
+        "preserve_original_chunk_ids_and_provenance": { "const": true },
+        "duplicate_repetition_increases_confidence": { "const": false },
+        "approval_requires_zero_unaccounted_chunks": { "const": true },
+        "final_self_check_required": { "const": true }
+      }
+    },
+    "review_protocol_version": { "const": "1.1" },
     "evidence_sha256": { "type": "string", "pattern": "^[a-fA-F0-9]{64}$" },
     "source_complete": { "type": "boolean" },
     "source_counts": { "type": "object" },
     "source_manifest": { "type": "array" },
     "chunk_counts": { "type": "object" },
-    "chunks": { "type": "array" },
+    "chunks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["chunk_id", "provenance", "complete_text", "provisional_concept_profile", "review_directive"],
+        "properties": {
+          "chunk_id": { "type": "string", "minLength": 1 },
+          "provenance": { "type": "object" },
+          "complete_text": { "type": "string" },
+          "provisional_concept_profile": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["primary_concept", "secondary_concepts", "estimated_concept_count", "likely_hierarchy_level", "likely_maturity", "likely_relationships", "profile_confidence", "generated_by", "reviewer_may_override", "synthesis_reasoning_summary"],
+            "properties": {
+              "primary_concept": { "type": ["string", "null"] },
+              "secondary_concepts": { "type": "array", "items": { "type": "string" } },
+              "estimated_concept_count": { "type": "integer", "minimum": 0 },
+              "likely_hierarchy_level": { "enum": ["portfolio", "organization", "project", "subproject", "product", "research_theme", "future_idea", "reference_note", "unresolved"] },
+              "likely_maturity": { "enum": ["active", "formalizing", "exploratory", "paused", "completed", "abandoned", "historical", "unresolved"] },
+              "likely_relationships": { "type": "array", "items": { "type": "object", "additionalProperties": false, "required": ["target_name", "relationship_type", "confidence", "reasoning_summary"], "properties": { "target_name": { "type": "string" }, "relationship_type": { "enum": ["parent_of", "child_of", "supports", "related_to", "product_of", "part_of", "derived_from", "unresolved"] }, "confidence": { "type": "number", "minimum": 0, "maximum": 1 }, "reasoning_summary": { "type": "string" } } } },
+              "profile_confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+              "generated_by": { "enum": ["local_extraction", "rule_based", "local_model", "hybrid"] },
+              "reviewer_may_override": { "const": true },
+              "synthesis_reasoning_summary": { "type": "string" }
+            }
+          },
+          "review_directive": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["action", "review_in_isolation", "compare_against_all_chunks", "cluster_before_decision", "may_be_duplicate", "may_support_multiple_concepts", "must_receive_final_disposition", "read_with_complete_package", "collapse_exact_and_near_duplicates", "merge_aliases_and_alternate_names", "preserve_genuine_contradictions", "assign_hierarchy_and_maturity", "preserve_chunk_id_and_provenance", "duplicate_repetition_increases_confidence"],
+            "properties": {
+              "action": { "const": "cluster_before_decision" },
+              "review_in_isolation": { "const": false },
+              "compare_against_all_chunks": { "const": true },
+              "cluster_before_decision": { "const": true },
+              "may_be_duplicate": { "const": true },
+              "may_support_multiple_concepts": { "const": true },
+              "must_receive_final_disposition": { "const": true },
+              "read_with_complete_package": { "const": true },
+              "collapse_exact_and_near_duplicates": { "const": true },
+              "merge_aliases_and_alternate_names": { "const": true },
+              "preserve_genuine_contradictions": { "const": true },
+              "assign_hierarchy_and_maturity": { "const": true },
+              "preserve_chunk_id_and_provenance": { "const": true },
+              "duplicate_repetition_increases_confidence": { "const": false }
+            }
+          }
+        }
+      }
+    },
     "project_registry": { "type": "array" },
     "boundary_rules": { "type": "array" },
     "allowed_classifications": { "type": "array" },

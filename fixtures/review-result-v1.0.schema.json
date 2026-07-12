@@ -4,7 +4,7 @@
   "title": "Project State External Review Result",
   "type": "object",
   "additionalProperties": false,
-  "required": ["format", "format_version", "package_id", "work_order_id", "discovery_case_id", "pack_revision", "evidence_sha256", "reviewer", "source_complete", "decisions", "relationships", "human_questions", "rejected_material"],
+  "required": ["format", "format_version", "package_id", "work_order_id", "discovery_case_id", "pack_revision", "evidence_sha256", "reviewer", "source_complete", "concept_clusters", "coverage_summary", "final_self_check", "decisions", "relationships", "human_questions", "rejected_material"],
   "properties": {
     "format": { "const": "project-state-review-result" },
     "format_version": { "const": "1.0" },
@@ -15,6 +15,9 @@
     "evidence_sha256": { "type": "string", "pattern": "^[a-fA-F0-9]{64}$" },
     "reviewer": { "$ref": "#/$defs/reviewer" },
     "source_complete": { "type": "boolean" },
+    "concept_clusters": { "type": "array", "items": { "$ref": "#/$defs/concept_cluster" } },
+    "coverage_summary": { "$ref": "#/$defs/coverage_summary" },
+    "final_self_check": { "$ref": "#/$defs/final_self_check" },
     "decisions": { "type": "array", "items": { "$ref": "#/$defs/decision" } },
     "relationships": { "type": "array", "items": { "$ref": "#/$defs/relationship" } },
     "human_questions": { "type": "array", "items": { "$ref": "#/$defs/human_question" } },
@@ -69,12 +72,77 @@
         "excerpt": { "type": "string" }
       }
     },
+    "concept_cluster": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["cluster_id", "concept_title", "summary", "aliases", "hierarchy_type", "parent_cluster_id", "maturity", "primary_chunk_ids", "duplicate_chunk_ids", "contextual_chunk_ids", "contradictory_chunk_ids", "unresolved_chunk_ids", "confidence", "confidence_basis"],
+      "properties": {
+        "cluster_id": { "type": "string", "minLength": 1 },
+        "concept_title": { "type": "string", "minLength": 1 },
+        "summary": { "type": "string", "minLength": 1 },
+        "aliases": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+        "hierarchy_type": { "enum": ["umbrella", "project", "subproject", "product", "theme", "future_idea", "reference"] },
+        "parent_cluster_id": { "type": ["string", "null"] },
+        "maturity": { "enum": ["seed", "exploratory", "forming", "active", "mature", "paused", "archived", "unknown"] },
+        "primary_chunk_ids": { "type": "array", "items": { "type": "string" }, "minItems": 1, "uniqueItems": true },
+        "duplicate_chunk_ids": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+        "contextual_chunk_ids": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+        "contradictory_chunk_ids": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+        "unresolved_chunk_ids": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+        "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+        "confidence_basis": { "type": "string", "minLength": 1 }
+      }
+    },
+    "duplicate_group": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["group_id", "canonical_chunk_id", "duplicate_chunk_ids", "near_duplicate", "rationale"],
+      "properties": {
+        "group_id": { "type": "string", "minLength": 1 },
+        "canonical_chunk_id": { "type": "string", "minLength": 1 },
+        "duplicate_chunk_ids": { "type": "array", "items": { "type": "string" }, "minItems": 1, "uniqueItems": true },
+        "near_duplicate": { "type": "boolean" },
+        "rationale": { "type": "string" }
+      }
+    },
+    "coverage_summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["exported_chunk_count", "accounted_chunk_count", "complete_package_read", "decisions_generated_from_clusters", "duplicate_repetition_increased_confidence", "duplicate_groups", "contradiction_chunk_ids", "rejected_chunk_ids", "unresolved_chunk_ids", "unaccounted_chunks"],
+      "properties": {
+        "exported_chunk_count": { "type": "integer", "minimum": 0 },
+        "accounted_chunk_count": { "type": "integer", "minimum": 0 },
+        "complete_package_read": { "const": true },
+        "decisions_generated_from_clusters": { "const": true },
+        "duplicate_repetition_increased_confidence": { "const": false },
+        "duplicate_groups": { "type": "array", "items": { "$ref": "#/$defs/duplicate_group" } },
+        "contradiction_chunk_ids": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+        "rejected_chunk_ids": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+        "unresolved_chunk_ids": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+        "unaccounted_chunks": { "type": "array", "items": { "type": "string" }, "uniqueItems": true }
+      }
+    },
+    "final_self_check": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["concepts_reconstructed", "duplicates_did_not_inflate_confidence", "all_chunks_accounted_for", "hierarchy_distinguished", "contradictions_preserved", "recommendations_explained", "decisions_generated_from_clusters"],
+      "properties": {
+        "concepts_reconstructed": { "type": "boolean" },
+        "duplicates_did_not_inflate_confidence": { "type": "boolean" },
+        "all_chunks_accounted_for": { "type": "boolean" },
+        "hierarchy_distinguished": { "type": "boolean" },
+        "contradictions_preserved": { "type": "boolean" },
+        "recommendations_explained": { "type": "boolean" },
+        "decisions_generated_from_clusters": { "type": "boolean" }
+      }
+    },
     "decision": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["decision_id", "concept_title", "classification", "primary_project", "additional_projects", "summary", "supporting_chunk_ids", "evidence_spans", "confidence", "reasoning_summary", "evidence_role", "personal_aether_support", "commercial_default_allowed", "requires_separate_design_review", "human_review_required"],
+      "required": ["decision_id", "cluster_id", "concept_title", "classification", "primary_project", "additional_projects", "summary", "supporting_chunk_ids", "evidence_spans", "confidence", "reasoning_summary", "evidence_role", "personal_aether_support", "commercial_default_allowed", "requires_separate_design_review", "human_review_required"],
       "properties": {
         "decision_id": { "type": "string", "minLength": 1 },
+        "cluster_id": { "type": "string", "minLength": 1 },
         "concept_title": { "type": "string", "minLength": 1 },
         "classification": { "enum": ["project_candidate", "existing_project_support", "reference_note", "personal_context_note", "assistant_scaffolding_noise", "rejected_noise"] },
         "primary_project": { "oneOf": [{ "$ref": "#/$defs/project_match" }, { "type": "null" }] },

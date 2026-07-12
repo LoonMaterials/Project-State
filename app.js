@@ -8419,7 +8419,7 @@ function openProjectFileImportModal(selection) {
   const defaultProjectName = isFolderImport ? folderName : titleFromFileName(selection.candidates?.[0]?.name || "");
   const selectedSummary = projectFileImportCategorySummary(selection.candidates);
   const activeProjects = store.projects.filter((project) => !project.archived);
-  const reviewModal = showModal({
+  showModal({
     title: isFolderImport ? "Add project folder" : "Add files to project",
     submitText: "Finish import",
     forceReplace: true,
@@ -13967,7 +13967,7 @@ async function openExternalReviewImportModal() {
     if (automatic) store.settings.reviewExchangeIncomingFolder = incomingDirectory;
     await saveStore({ allowWithoutCoreApproval: true, reason: "remember-review-exchange-incoming-folder" });
   }
-  showModal({
+  const reviewModal = showModal({
     title: "Paste Reviewed Evidence JSON",
     submitText: "Save, validate, and import",
     flowStep: 4,
@@ -14113,7 +14113,7 @@ function renderExternalReviewDecision(workOrder, pass, decision, chunkTextById =
   const localDisagreement = localMatch && (nameKey(localMatch.title || localMatch.conceptTitle) !== nameKey(decision.concept_title) || (localClassification && localClassification !== decision.classification));
   return `<article class="item">
     <p class="item-title">${escapeDisplay(decision.concept_title || "Untitled decision", DISPLAY_META_LIMIT)}</p>
-    <p class="item-meta">${escapeHtml(externalReviewClassificationLabel(decision.classification))} · confidence ${Math.round(Number(decision.confidence || 0) * 100)}% · evidence role: ${escapeHtml(String(decision.evidence_role || "").replaceAll("_", " "))}</p>
+    <p class="item-meta">${escapeHtml(externalReviewClassificationLabel(decision.classification))} · cluster ${escapeDisplay(decision.cluster_id || "missing", DISPLAY_META_LIMIT)} · confidence ${Math.round(Number(decision.confidence || 0) * 100)}% · evidence role: ${escapeHtml(String(decision.evidence_role || "").replaceAll("_", " "))}</p>
     <p class="item-meta">Primary project: ${escapeDisplay(primaryName, DISPLAY_META_LIMIT)}${additional ? ` · Additional projects: ${escapeDisplay(additional, DISPLAY_META_LIMIT)}` : ""}</p>
     ${decision.proposed_new_project ? `<p class="notice"><strong>Proposed new project:</strong> ${escapeDisplay(decision.proposed_new_project.suggested_name, DISPLAY_META_LIMIT)} · confidence ${Math.round(Number(decision.proposed_new_project.confidence || 0) * 100)}%${decision.proposed_new_project.proposed_parent_project_id ? ` · proposed parent ${escapeDisplay(decision.proposed_new_project.proposed_parent_project_id, DISPLAY_META_LIMIT)}` : ""}<br>${escapeDisplay(decision.proposed_new_project.reason_distinct_from_existing_projects || "", DISPLAY_TEXT_LIMIT)}</p>` : ""}
     ${sourceFiles.length ? `<p class="item-meta">Source files: ${escapeDisplay(sourceFiles.join(", "), DISPLAY_TEXT_LIMIT)}</p>` : ""}
@@ -14160,10 +14160,15 @@ async function openExternalReviewPassesModal(workOrderId) {
             ? "cross_project_evidence"
             : decision.classification;
         const groups = Object.groupBy ? Object.groupBy(pass.result.decisions || [], reviewGroup) : (pass.result.decisions || []).reduce((all, decision) => ((all[reviewGroup(decision)] ||= []).push(decision), all), {});
+        const unaccountedChunks = pass.result.coverage_summary?.unaccounted_chunks || [];
+        const failedSelfChecks = Object.entries(pass.result.final_self_check || {}).filter(([, value]) => value !== true).map(([field]) => field);
         return `<section class="item">
           <p class="item-title">External Review Pass ${Number(pass.versionNumber).toLocaleString()}</p>
           <p class="item-meta">Imported ${escapeHtml(formatDate(pass.importedAt))} · ${escapeDisplay(pass.reviewer?.provider || pass.reviewer?.model || pass.reviewer?.reviewer_type || "Unspecified reviewer", DISPLAY_META_LIMIT)} · ${pass.sourceComplete ? "source complete" : "partial source review"} · immutable import hash ${escapeDisplay(String(pass.importHash || "").slice(0, 16), 20)}…</p>
           <p class="notice">This pass is non-authoritative. Every decision below requires a separate human action before anything can enter Intake.</p>
+          <p class="${unaccountedChunks.length ? "notice health-blocked" : "item-meta"}"><strong>Consolidation coverage:</strong> ${Number(pass.result.coverage_summary?.accounted_chunk_count || 0).toLocaleString()} of ${Number(pass.result.coverage_summary?.exported_chunk_count || 0).toLocaleString()} chunks accounted for.${unaccountedChunks.length ? ` Final approval is blocked. Unaccounted: ${escapeDisplay(unaccountedChunks.join(", "), DISPLAY_TEXT_LIMIT)}` : " Complete; cluster-linked decisions may proceed to human review."}</p>
+          <p class="${failedSelfChecks.length ? "notice health-blocked" : "item-meta"}"><strong>Final self-check:</strong> ${failedSelfChecks.length ? `Incomplete. Approval and project creation are blocked. False/missing checks: ${escapeDisplay(failedSelfChecks.join(", "), DISPLAY_TEXT_LIMIT)}` : "All mandatory reviewer confirmations are true."}</p>
+          ${(pass.result.concept_clusters || []).length ? `<details class="technical-details"><summary>Concept clusters (${pass.result.concept_clusters.length})</summary>${pass.result.concept_clusters.map((cluster) => `<p class="item-body"><strong>${escapeDisplay(cluster.concept_title, DISPLAY_META_LIMIT)}</strong> · ${escapeHtml(String(cluster.hierarchy_type).replaceAll("_", " "))} · ${escapeHtml(cluster.maturity)} · cluster ${escapeDisplay(cluster.cluster_id, DISPLAY_META_LIMIT)}<br>${escapeDisplay(cluster.summary, DISPLAY_TEXT_LIMIT)}<br><span class="item-meta">Primary: ${escapeDisplay((cluster.primary_chunk_ids || []).join(", "), DISPLAY_TEXT_LIMIT)}${(cluster.duplicate_chunk_ids || []).length ? ` · duplicates: ${escapeDisplay(cluster.duplicate_chunk_ids.join(", "), DISPLAY_TEXT_LIMIT)}` : ""}${(cluster.contradictory_chunk_ids || []).length ? ` · contradictions: ${escapeDisplay(cluster.contradictory_chunk_ids.join(", "), DISPLAY_TEXT_LIMIT)}` : ""}</span></p>`).join("")}</details>` : ""}
           ${Object.entries(groups).map(([classification, decisions]) => `<h3 class="section-title">${escapeHtml(externalReviewClassificationLabel(classification))} (${decisions.length})</h3>${decisions.map((decision) => renderExternalReviewDecision(workOrder, pass, decision, chunkTextById, chunkSourceById)).join("")}`).join("")}
           ${(pass.result.relationships || []).length ? `<details class="technical-details"><summary>Relationships (${pass.result.relationships.length})</summary><pre class="code-block">${escapeHtml(JSON.stringify(pass.result.relationships, null, 2))}</pre></details>` : ""}
           ${(pass.result.human_questions || []).length ? `<details class="technical-details"><summary>Questions for human review (${pass.result.human_questions.length})</summary>${pass.result.human_questions.map((question) => `<p class="item-body">${escapeDisplay(question.question || question.text || JSON.stringify(question), DISPLAY_TEXT_LIMIT)}</p>`).join("")}</details>` : ""}
@@ -14219,6 +14224,10 @@ function openExternalDecisionReviewModal(workOrderId, passId, decisionId) {
       `,
       async onSubmit(data, form) {
         const actor = getOrCreateActor(data.actorName, "Human");
+        const unaccountedChunks = pass.result.coverage_summary?.unaccounted_chunks || [];
+        if (data.disposition === "approved" && unaccountedChunks.length) { window.alert(`Final approval is blocked because ${unaccountedChunks.length} exported chunk${unaccountedChunks.length === 1 ? " is" : "s are"} unaccounted for. Import a corrected consolidated review first.`); return false; }
+        const failedSelfChecks = Object.entries(pass.result.final_self_check || {}).filter(([, value]) => value !== true).map(([field]) => field);
+        if (data.disposition === "approved" && failedSelfChecks.length) { window.alert(`Final approval and project creation are blocked until every final self-check is true. Incomplete: ${failedSelfChecks.join(", ")}.`); return false; }
         const targetProjectId = String(data.targetProjectId || "").trim();
         const effectiveClassification = targetProjectId ? "existing_project_support" : data.classification;
         if (data.reviewOperation === "split" && !data.splitConceptTitle.trim()) { window.alert("Enter the second concept title for the split."); return false; }
