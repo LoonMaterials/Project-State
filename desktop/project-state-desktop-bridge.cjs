@@ -2008,7 +2008,21 @@ function chunkDeterministicText(text, targetCharacters) {
     remaining = remaining.slice(splitAt).trimStart();
   }
   if (remaining.trim()) chunks.push(remaining.trim());
+  if (chunks.length > 1 && chunks[chunks.length - 1].length < 500 && looksLikeContinuationText(chunks[chunks.length - 1], chunks[chunks.length - 2])) {
+    chunks[chunks.length - 2] = `${chunks[chunks.length - 2]}\n${chunks.pop()}`;
+  }
   return chunks;
+}
+
+function looksLikeContinuationText(text = "", previousText = "", minimumCharacters = 500) {
+  const value = String(text || "").trim();
+  if (!value || value.length >= Math.max(64, Number(minimumCharacters) || 500)) return false;
+  const prior = String(previousText || "").trim();
+  const startsAsContinuation = /^(?:[-*•]\s*|\d+[.)]\s*|(?:open|remaining|follow-up|unresolved) questions?\b)/i.test(value);
+  const continuationMarks = (value.match(/[?•]|(?:^|\n)\s*(?:[-*]|\d+[.)])\s+/g) || []).length;
+  const priorInvitesContinuation = /(?:open|remaining|follow-up|unresolved) questions?\s*:?[ \t]*$/i.test(prior);
+  const mostlyShortPrompts = value.split(/(?:\n|•)/).filter((part) => part.trim()).every((part) => part.trim().length <= 180);
+  return mostlyShortPrompts && (priorInvitesContinuation || startsAsContinuation || continuationMarks >= 2);
 }
 
 const DISCOVERY_DESTINATIONS = new Set(["existing_project", "additional_project_link", "proposed_new_project", "general_reference", "orphaned_idea", "ai_work_order", "large_ai_work_order", "unassigned", "rejected", "multiple_routes"]);
@@ -4206,12 +4220,13 @@ function classifyDiscoveryFile(fileName = "") {
 
 
 function reviewPackEntities(text = "") {
+  const generic = new Set(["the", "this", "that", "these", "those", "internally", "which", "best", "final", "current", "bottom", "one", "none", "single", "small", "larger", "multiple", "initial", "integrated", "extensive", "discussed", "discussion", "advantages", "candidate", "concept", "summary", "overview", "purpose", "introduction", "conclusion", "important", "applications", "examples", "next steps", "open questions", "core concept", "key conclusions", "architecture", "coupling layer", "prototype roadmap", "bench testing", "patent strategy", "prior-art discussion", "uspto update"]);
   const values = [];
   const seen = new Set();
-  for (const match of String(text || "").matchAll(/\b[A-Z][A-Za-z0-9]*(?:[\s\/-]+[A-Z][A-Za-z0-9]*){0,5}\b/g)) {
+  for (const match of String(text || "").matchAll(/\b[A-Z][A-Za-z0-9]*(?:[ \t\/-]+[A-Z][A-Za-z0-9]*){0,5}\b/g)) {
     const value = match[0].trim();
     const key = value.toLowerCase();
-    if (value.length < 3 || seen.has(key)) continue;
+    if (value.length < 3 || generic.has(key) || seen.has(key)) continue;
     seen.add(key);
     values.push(value);
     if (values.length >= 100) break;
@@ -4262,13 +4277,25 @@ function reviewPackProjectRegistry(projects = [], { includePrivateProjects = fal
 }
 
 function populateReviewPackConceptProfiles(chunks = [], projectRegistry = []) {
+  const registryById = new Map(projectRegistry.map((project) => [String(project.project_id), project]));
   return chunks.map((chunk) => {
+    const validProjectMatches = [];
+    const unregisteredAnchors = [];
+    for (const match of chunk.provisional_project_matches || []) {
+      const registryProject = registryById.get(String(match.project_id || ""));
+      if (!registryProject) {
+        unregisteredAnchors.push(match);
+        continue;
+      }
+      validProjectMatches.push({ project_id: registryProject.project_id, canonical_name: registryProject.canonical_name, confidence: Number(match.confidence) || 0, provisional: true });
+    }
     const profile = createProvisionalConceptProfile({
       text: chunk.complete_text,
       headings: chunk.provenance.headings,
       entities: chunk.provisional_entities.map((item) => item.value),
       localSummaries: chunk.provisional_local_summaries,
-      projectMatches: chunk.provisional_project_matches,
+      projectMatches: validProjectMatches,
+      unregisteredAnchors,
       registry: projectRegistry,
       generatedBy: chunk.provisional_local_summaries.length || chunk.provisional_project_matches.length ? "hybrid" : "rule_based"
     });
@@ -4280,12 +4307,34 @@ function populateReviewPackConceptProfiles(chunks = [], projectRegistry = []) {
       provenance: chunk.provenance,
       text_sha256: chunk.text_sha256,
       complete_text: chunk.complete_text,
+      ...(chunk.continuation_of_chunk_id ? { continuation_of_chunk_id: chunk.continuation_of_chunk_id } : {}),
       provisional_concept_profile: profile,
       provisional_local_summaries: chunk.provisional_local_summaries,
       provisional_entities: chunk.provisional_entities,
-      provisional_project_matches: chunk.provisional_project_matches,
+      provisional_project_matches: validProjectMatches,
       review_directive: chunk.review_directive
     };
+  });
+}
+
+function annotateReviewPackContinuations(chunks = [], minimumCharacters = 500) {
+  return chunks.map((chunk, index) => {
+    const previous = chunks[index - 1];
+    if (!previous || previous.file_version_id !== chunk.file_version_id || Number(previous.sequence) + 1 !== Number(chunk.sequence) || !looksLikeContinuationText(chunk.complete_text, previous.complete_text, minimumCharacters)) return chunk;
+    return { ...chunk, continuation_of_chunk_id: previous.chunk_id };
+  });
+}
+
+function inheritReviewPackContinuationProfiles(chunks = []) {
+  const byId = new Map(chunks.map((chunk) => [chunk.chunk_id, chunk]));
+  return chunks.map((chunk) => {
+    if (!chunk.continuation_of_chunk_id) return chunk;
+    const parent = byId.get(chunk.continuation_of_chunk_id);
+    if (!parent?.provisional_concept_profile) return chunk;
+    const inherited = cloneJson(parent.provisional_concept_profile);
+    inherited.profile_confidence = Number(Math.max(0, inherited.profile_confidence * 0.75).toFixed(2));
+    inherited.synthesis_reasoning_summary = `This small trailing section continues chunk ${parent.chunk_id}; its provisional concept profile is inherited with reduced confidence and remains fully overridable.`;
+    return { ...chunk, provisional_concept_profile: inherited };
   });
 }
 
@@ -4375,6 +4424,7 @@ function reviewPackReadableMarkdown(evidence) {
     lines.push(`Source: \`${chunk.source_id}\` · File version: \`${chunk.file_version_id}\` · Sequence: ${chunk.sequence}`);
     if (chunk.provenance?.source_filename) lines.push(`Filename provenance: ${chunk.provenance.source_filename}`);
     if (chunk.provenance?.headings?.length) lines.push(`Heading provenance: ${chunk.provenance.headings.join(" | ")}`);
+    if (chunk.continuation_of_chunk_id) lines.push(`Continuation of chunk: \`${chunk.continuation_of_chunk_id}\``);
     const profile = chunk.provisional_concept_profile;
     lines.push("");
     lines.push("**Provisional concept profile**");
@@ -4530,7 +4580,9 @@ async function createUniversalReviewPack({ storageRoot, dbPath, payload = {} }) 
   });
   const registryProjects = currentReviewRegistryProjects(dbPath, payload.knownProjects || []);
   const projectRegistry = reviewPackProjectRegistry(registryProjects, { includePrivateProjects: payload.includePrivateProjects === true });
+  chunks = annotateReviewPackContinuations(chunks, payload.continuationMinimumCharacters);
   chunks = populateReviewPackConceptProfiles(chunks, projectRegistry);
+  chunks = inheritReviewPackContinuationProfiles(chunks);
   assertReviewPackConceptProfiles(chunks);
   const sourceComplete = sourceManifest.every((source) => source.complete);
   const packageVersion = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8")).version || "unknown";
@@ -5051,7 +5103,8 @@ async function extractDocxTextWindow(bytes, { chunkCharacters = 12000, startChun
   const finishTag = () => {
     const normalized = tag.trim().toLowerCase();
     if (normalized === "w:tab/" || normalized === "w:tab") addText("\t");
-    else if (normalized.startsWith("/w:p") || normalized.startsWith("w:br")) addText("\n");
+    else if (normalized.startsWith("/w:p") || normalized.startsWith("/w:tr") || normalized.startsWith("w:br") || normalized.startsWith("w:cr")) addText("\n");
+    else if (normalized.startsWith("/w:tc")) addText("\t");
     tag = "";
   };
 
@@ -5105,6 +5158,9 @@ async function extractDocxTextWindow(bytes, { chunkCharacters = 12000, startChun
 
   const finalPiece = cleanExtractedText(piece);
   if (finalPiece && !textLooksBinaryOrGibberish(finalPiece) && pieceIndex >= start && pieces.length < target) pieces.push(finalPiece);
+  if (pieces.length > 1 && pieces[pieces.length - 1].length < 500 && looksLikeContinuationText(pieces[pieces.length - 1], pieces[pieces.length - 2])) {
+    pieces[pieces.length - 2] = `${pieces[pieces.length - 2]}\n${pieces.pop()}`;
+  }
   const complete = !stopped;
   return {
     pieces,
@@ -5168,7 +5224,12 @@ function extractPdfText(bytes) {
 }
 
 function xmlToText(xml = "") {
-  return decodeXmlEntities(xml.replace(/<w:tab\/>/g, "\t").replace(/<\/w:p>/g, "\n").replace(/<[^>]+>/g, ""));
+  return decodeXmlEntities(String(xml || "")
+    .replace(/<w:tab\s*\/>/gi, "\t")
+    .replace(/<w:(?:br|cr)\b[^>]*\/>/gi, "\n")
+    .replace(/<\/w:tc>/gi, "\t")
+    .replace(/<\/w:(?:p|tr)>/gi, "\n")
+    .replace(/<[^>]+>/g, ""));
 }
 
 function decodeXmlEntities(text = "") {
@@ -5335,5 +5396,12 @@ module.exports = {
   FOLDERS,
   BACKUP_MANAGED_FOLDERS,
   REQUIRED_TABLES,
-  DATABASE_FILE
+  DATABASE_FILE,
+  __test: {
+    annotateReviewPackContinuations,
+    inheritReviewPackContinuationProfiles,
+    looksLikeContinuationText,
+    reviewPackEntities,
+    xmlToText
+  }
 };

@@ -25,7 +25,7 @@
     "check:ai-analysis-foundation": "node scripts/ai-analysis-storage-fake-arm-check.js && node scripts/local-ai-provider-plumbing-check.js && node scripts/local-ai-prompt-boundary-check.js && node scripts/candidate-classification-regression-check.js && node scripts/candidate-map-flow-check.js && node scripts/candidate-map-merge-regression-check.js && node scripts/existing-project-enrichment-regression-check.js && node scripts/universal-review-exchange-check.js && node scripts/ai-analysis-arm-contract-check.js && node scripts/idea-candidate-model-check.js && node scripts/discovery-storage-foundation-check.js && node scripts/desktop-backup-package-check.js && node scripts/desktop-restore-package-check.js",
     "check:candidate-map": "node scripts/candidate-map-flow-check.js && node scripts/candidate-map-merge-regression-check.js && node scripts/existing-project-enrichment-regression-check.js",
     "check:chatgpt-review-pack": "node scripts/chatgpt-review-pack-check.js",
-    "check:universal-review": "node scripts/provisional-concept-profile-check.js && node scripts/universal-review-exchange-check.js",
+    "check:universal-review": "node scripts/provisional-concept-profile-check.js && node scripts/review-pack-pocket-regression-check.js && node scripts/universal-review-exchange-check.js",
     "check:local-ai-qwen": "node scripts/local-ai-qwen-smoke-check.js",
     "check:local-ai-qwen-heavy": "node scripts/local-ai-qwen-heavy-pass-check.js",
     "check:idea-review-ui": "node scripts/idea-review-ui-check.js && node scripts/ai-analysis-storage-fake-arm-check.js && node scripts/ai-analysis-arm-contract-check.js && node scripts/idea-candidate-model-check.js && node scripts/discovery-ui-flow-check.js",

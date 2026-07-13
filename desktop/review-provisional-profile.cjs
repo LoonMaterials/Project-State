@@ -29,6 +29,16 @@ function words(value = "") { return new Set(key(value).split(" ").filter((word) 
 function overlap(left, right) { const a = words(left); const b = words(right); if (!a.size || !b.size) return 0; let common = 0; for (const word of a) if (b.has(word)) common += 1; return common / Math.min(a.size, b.size); }
 function meaningfulLabel(value = "") { const label = clean(value); const tokens = [...words(label)]; return label.length >= 3 && label.length <= 140 && !GENERIC_HEADING.test(label) && tokens.length > 0 && new Set(tokens).size === tokens.length; }
 
+function explicitProjectTitle(text = "") {
+  const source = String(text || "").slice(0, 8000);
+  const parenthetical = source.match(/\b([A-Z][A-Za-z0-9]*(?:[ \t]+[A-Z][A-Za-z0-9/-]*){1,6})[ \t]*\(([A-Z]{1,10}-?\d{1,8})\)/);
+  if (parenthetical) return `${clean(parenthetical[1])} / ${clean(parenthetical[2])}`;
+  const summaryTitle = source.match(/\bProject[ \t]+([A-Z]{1,10}-?\d{1,8})[ \t]+Summary[ \t\r\n]*([A-Z][^\r\n/]{2,100})/i);
+  if (summaryTitle) return `${clean(summaryTitle[2])} / ${clean(summaryTitle[1]).toUpperCase()}`;
+  const declared = source.match(/^(?:project(?: name)?|document title|title)[ \t]*:[ \t]*([^\r\n]{3,120})/im);
+  return declared && meaningfulLabel(declared[1]) ? clean(declared[1]) : null;
+}
+
 function registryIndex(registry = []) {
   const aliases = [];
   const byId = new Map();
@@ -75,10 +85,12 @@ function collapseConceptLabels(labels, registry) {
 }
 
 function synthesizedLabels(input, registryMatches) {
+  const explicitTitle = explicitProjectTitle(input.text);
   const summaryLabels = (input.localSummaries || []).flatMap((item) => [item?.title, item?.conceptTitle]).filter(Boolean);
   const headingLabels = (input.headings || []).filter((heading) => /(?:project|aether|node|platform|engine|wheel|lattice|detector|system|device|model|network|protocol|studio|labs?|works|portfolio|organization)$/i.test(clean(heading)));
   const entityLabels = (input.entities || []).filter((entity) => /(?:project|aether|node|platform|engine|wheel|lattice|detector|system|device|model|network|protocol|studio|labs?|works)$/i.test(clean(entity)));
   return collapseConceptLabels([
+    explicitTitle,
     ...summaryLabels,
     ...headingLabels,
     ...entityLabels,
@@ -105,7 +117,7 @@ function relationship(targetName, type, confidence, reasoning) {
   return { target_name: String(targetName), relationship_type: RELATIONSHIP_TYPES.has(type) ? type : "unresolved", confidence: Number(Math.max(0, Math.min(1, confidence)).toFixed(2)), reasoning_summary: clean(reasoning).slice(0, 240) };
 }
 
-function inferRelationships(text, primary, labels, matches, registry) {
+function inferRelationships(text, primary, labels, matches, registry, input = {}) {
   const index = registryIndex(registry);
   const primaryMatch = matches.find((match) => key(match.project.canonical_name) === key(primary));
   const output = [];
@@ -117,10 +129,16 @@ function inferRelationships(text, primary, labels, matches, registry) {
   if ((PORTFOLIO.test(text) || ORGANIZATION.test(text)) && labels.length > 1) {
     for (const child of labels.slice(1, 6)) output.push(relationship(child, "parent_of", 0.58, `The chunk describes ${primary} as an umbrella and names ${child} as a contained concept.`));
   }
+  if (key(primary) !== "aether" && /\bAether\b/.test(text) && /\b(?:Aether\s+(?:coprocessor|integration|platform|interface|node)|interface\s+to\s+Aether|future\s+Aether\s+coprocessor)\b/i.test(text)) {
+    output.push(relationship("Aether", "part_of", 0.72, `${primary} is explicitly described as hardware or integration context for Aether, so Aether is retained as a provisional parent context rather than the primary concept.`));
+  }
+  for (const anchor of inputUnregisteredAnchors(input)) output.push(relationship(anchor.canonical_name || anchor.name || anchor.project_id || "Unresolved anchor", "unresolved", Math.min(0.35, Number(anchor.confidence) || 0.25), "This local anchor is not present in the exported project registry, so it is retained only as an unresolved textual relationship and not as an existing-project match."));
   const uncertain = text.match(/\b(?:may|might|possibly|perhaps)\s+(?:be\s+)?(?:related|connected|linked)\s+to\s+([A-Z][A-Za-z0-9 '\/-]{2,80})/i);
   if (uncertain) output.push(relationship(clean(uncertain[1]), "unresolved", 0.2, "The text suggests a relationship but does not establish its type or project identity."));
   return output.slice(0, 20);
 }
+
+function inputUnregisteredAnchors(value) { return Array.isArray(value?.unregisteredAnchors) ? value.unregisteredAnchors : []; }
 
 function unresolvedProfile(reason = "Local extraction did not provide enough consistent evidence to identify a distinct concept without false precision.") {
   return { primary_concept: null, secondary_concepts: [], estimated_concept_count: 0, likely_hierarchy_level: "unresolved", likely_maturity: "unresolved", likely_relationships: [], profile_confidence: 0, generated_by: "rule_based", reviewer_may_override: true, synthesis_reasoning_summary: reason };
@@ -141,7 +159,7 @@ function createProvisionalConceptProfile(input = {}) {
   const maturity = inferMaturity(text);
   const signalKinds = [matches.length, (input.localSummaries || []).length, (input.entities || []).length, (input.headings || []).length].filter((count) => count > 0).length;
   const confidence = Math.min(0.86, 0.34 + signalKinds * 0.1 + (matches.length ? 0.12 : 0) + (text.length >= 250 ? 0.06 : 0));
-  const relationships = inferRelationships(text, primary, labels, matches, input.registry || []);
+  const relationships = inferRelationships(text, primary, labels, matches, input.registry || [], input);
   const evidenceDescription = [matches.length ? `${matches.length} project-registry match${matches.length === 1 ? "" : "es"}` : "", (input.localSummaries || []).length ? `${input.localSummaries.length} local summar${input.localSummaries.length === 1 ? "y" : "ies"}` : "", (input.entities || []).length ? "named-entity signals" : "", (input.headings || []).length ? "heading provenance" : ""].filter(Boolean).join(", ");
   return {
     primary_concept: primary,
