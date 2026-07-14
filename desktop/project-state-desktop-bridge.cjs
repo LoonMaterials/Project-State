@@ -4235,7 +4235,13 @@ function reviewPackEntities(text = "") {
 }
 
 function reviewPackHeadings(text = "") {
-  return String(text || "").split(/\r?\n/).map((line) => line.trim()).filter((line) => /^#{1,6}\s+\S/.test(line) || (/^[A-Z][A-Z0-9 '&/()_-]{3,100}$/.test(line) && line.length <= 120)).slice(0, 100);
+  return String(text || "").split(/\r?\n/).map((line) => line.trim()).filter((line) => {
+    if (/^#{1,6}\s+\S/.test(line) || (/^[A-Z][A-Z0-9 '&/()_-]{3,100}$/.test(line) && line.length <= 120)) return true;
+    if (!line || line.length > 100 || /[.!?;]$/.test(line) || /^(?:[-*•]|\d+[.)])\s+/.test(line)) return false;
+    const words = line.replace(/:$/, "").split(/\s+/).filter(Boolean);
+    if (!words.length || words.length > 10) return false;
+    return /:$/.test(line) || words.every((word) => /^(?:[&/+-]|[A-Z][A-Za-z0-9'/-]*|[A-Z0-9]{2,})$/.test(word));
+  }).slice(0, 100);
 }
 
 function reviewProjectIsPrivate(project = {}) {
@@ -4278,7 +4284,7 @@ function reviewPackProjectRegistry(projects = [], { includePrivateProjects = fal
 
 function populateReviewPackConceptProfiles(chunks = [], projectRegistry = []) {
   const registryById = new Map(projectRegistry.map((project) => [String(project.project_id), project]));
-  return chunks.map((chunk) => {
+  const normalized = chunks.map((chunk) => {
     const validProjectMatches = [];
     const unregisteredAnchors = [];
     for (const match of chunk.provisional_project_matches || []) {
@@ -4289,13 +4295,37 @@ function populateReviewPackConceptProfiles(chunks = [], projectRegistry = []) {
       }
       validProjectMatches.push({ project_id: registryProject.project_id, canonical_name: registryProject.canonical_name, confidence: Number(match.confidence) || 0, provisional: true });
     }
+    return { ...chunk, validProjectMatches, unregisteredAnchors };
+  });
+  const sourceContexts = new Map();
+  for (const chunk of normalized) {
+    if (sourceContexts.has(chunk.file_version_id)) continue;
+    const siblings = normalized.filter((item) => item.file_version_id === chunk.file_version_id);
+    const totalCharacters = siblings.reduce((sum, item) => sum + item.complete_text.length, 0);
+    const sampledText = totalCharacters <= 500000
+      ? siblings.map((item) => item.complete_text).join("\n\n")
+      : siblings.map((item) => item.complete_text.slice(0, 4000)).join("\n\n").slice(0, 500000);
+    sourceContexts.set(chunk.file_version_id, {
+      text: sampledText,
+      sourceFilename: siblings.find((item) => item.provenance?.source_filename)?.provenance.source_filename || "",
+      headings: [...new Set(siblings.flatMap((item) => item.provenance?.headings || []))],
+      entities: [...new Set(siblings.flatMap((item) => item.provisional_entities.map((entity) => entity.value)))],
+      localSummaries: siblings.flatMap((item) => item.provisional_local_summaries).slice(0, 500),
+      projectMatches: siblings.flatMap((item) => item.validProjectMatches).slice(0, 500),
+      unregisteredAnchors: siblings.flatMap((item) => item.unregisteredAnchors).slice(0, 500)
+    });
+  }
+  return normalized.map((chunk) => {
+    const sourceContext = sourceContexts.get(chunk.file_version_id);
     const profile = createProvisionalConceptProfile({
       text: chunk.complete_text,
+      sourceFilename: chunk.provenance.source_filename,
       headings: chunk.provenance.headings,
       entities: chunk.provisional_entities.map((item) => item.value),
       localSummaries: chunk.provisional_local_summaries,
-      projectMatches: validProjectMatches,
-      unregisteredAnchors,
+      projectMatches: chunk.validProjectMatches,
+      unregisteredAnchors: chunk.unregisteredAnchors,
+      sourceContext,
       registry: projectRegistry,
       generatedBy: chunk.provisional_local_summaries.length || chunk.provisional_project_matches.length ? "hybrid" : "rule_based"
     });
@@ -4311,7 +4341,7 @@ function populateReviewPackConceptProfiles(chunks = [], projectRegistry = []) {
       provisional_concept_profile: profile,
       provisional_local_summaries: chunk.provisional_local_summaries,
       provisional_entities: chunk.provisional_entities,
-      provisional_project_matches: validProjectMatches,
+      provisional_project_matches: chunk.validProjectMatches,
       review_directive: chunk.review_directive
     };
   });

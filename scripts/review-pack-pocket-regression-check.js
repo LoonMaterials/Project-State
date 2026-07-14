@@ -11,10 +11,21 @@ const pocketText = [
 const profile = createProvisionalConceptProfile({
   text: pocketText,
   localSummaries: [{ title: "Aether — hardware support" }],
-  entities: ["Aether", "Pocket Aether Node"]
+  entities: ["Aether", "Pocket Aether Node"],
+  registry: [{ project_id: "project_aether", canonical_name: "Aether", aliases: ["Pocket Aether Node"], former_names: [], parent_project_id: null }],
+  projectMatches: [{ project_id: "project_aether", canonical_name: "Aether", confidence: 0.94 }]
 });
-assert.equal(profile.primary_concept, "Pocket Aether Node / AN-1", "Explicit Pocket Aether Node / AN-1 title did not outrank an umbrella Aether label.");
+assert.equal(profile.primary_concept, "Pocket Aether Node / AN-1", "Explicit Pocket Aether Node / AN-1 title did not outrank conflicting registry, anchor, or umbrella Aether associations.");
 assert.equal(profile.likely_relationships.find((item) => item.target_name === "Aether")?.relationship_type, "part_of", "Aether was not retained as parent/integration context.");
+
+const headingIdentity = createProvisionalConceptProfile({
+  text: "# Aurora Resonance Controller\n\nThis document describes a dedicated resonant control device associated with Aether.",
+  headings: ["# Aurora Resonance Controller"],
+  registry: [{ project_id: "project_aether", canonical_name: "Aether", aliases: ["Aurora Resonance Controller"], former_names: [], parent_project_id: null }],
+  projectMatches: [{ project_id: "project_aether", canonical_name: "Aether", confidence: 0.97 }]
+});
+assert.equal(headingIdentity.primary_concept, "Aurora Resonance Controller", "An explicit document heading was replaced by a stronger registry association.");
+assert.equal(headingIdentity.likely_relationships.find((item) => item.target_name === "Aether")?.relationship_type, "related_to", "The displaced registry match was not retained as relationship context.");
 
 const chunks = [
   { chunk_id: "chunk_0000", sequence: 0, file_version_id: "version_pocket", complete_text: `${pocketText}\nOpen Questions`, provisional_concept_profile: profile },
@@ -36,5 +47,5 @@ for (const generic of ["The", "This", "Internally", "Which", "Best", "Final", "C
 assert.ok(entities.includes("Pocket Aether Node") && entities.includes("Aether"), "Substantive entities were removed with generic title fragments.");
 
 console.log("Pocket Review Pack Regression Check");
-console.log(JSON.stringify({ explicitTitlePriority: true, aetherAsParentContext: true, tinyContinuationLinked: true, inheritedProfileReducedConfidence: true, docxBoundariesPreserved: true, genericEntitiesFiltered: true }, null, 2));
+console.log(JSON.stringify({ explicitTitlePriority: true, explicitHeadingPriority: true, registryMatchesBecomeRelationships: true, aetherAsParentContext: true, tinyContinuationLinked: true, inheritedProfileReducedConfidence: true, docxBoundariesPreserved: true, genericEntitiesFiltered: true }, null, 2));
 console.log("Pocket review pack regressions: ok");

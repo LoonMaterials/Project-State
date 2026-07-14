@@ -1298,3 +1298,20 @@ Status: implemented and regression-checked 2026-07-12; not repackaged in this ch
 - Installer signature status: `NotSigned`. This is a local/offline full-test build, not a public distribution build.
 - Uninstall configuration preserves user data, and the runtime rejects any storage root inside the application/install directory.
 - Packaged artifact inspection found no bundled user data or secrets and confirmed the local Qwen/Ollama provider connection remains available for AI Work Orders.
+
+## 37. Project State 0.2.4 Broad-Source Offline Test Release Candidate
+
+- Release rebuilt July 14, 2026 with the broad-source and multi-concept provisional-profile corrections.
+- Broad thread summaries, archives, and multi-project overviews are detected before primary-concept selection. A single registry match no longer forces a project identity when the source materially covers several concepts.
+- Explicit project titles continue to outrank umbrella concepts for genuinely single-project documents.
+- Project dominance is measured before a registry project becomes the primary concept; balanced project matches remain secondary concepts or relationships under an umbrella source identity.
+- Distinct-concept counts now represent coherent topic/project groups rather than aliases, applications, repeated mentions, or headings.
+- Likely relationships are deduplicated by normalized target identity, preferring valid registry-backed relationships over unresolved local anchors.
+- Regression coverage passed for titled single-project documents, broad multi-project summaries, umbrella organizations with children, dominant projects with minor context, balanced registry matches, and duplicate relationship targets.
+- Universal Review, local-AI/candidate-map, flow/wiring, language, backup/restore, release-contract, storage-root-safety, and Electron/SQLite runtime gates passed before packaging.
+- Release version: `0.2.4`.
+- Installer: `release/Project-State-Setup-0.2.4-x64.exe`.
+- Exact installer size and SHA-256 are recorded in `release/release-candidate-manifest.json`.
+- Installer signature status: `NotSigned`; this remains a local/offline test build and is not public-distribution ready.
+- Packaged-code inspection confirmed the broad-source assessment, dominance, relationship-deduplication, source-context aggregation, and provisional-profile emission logic inside `app.asar`.
+- Remaining release gate: real-time desktop testing, including install/uninstall/reinstall, chosen-location backup/restore, and representative single-project and broad-summary review-pack runs.
