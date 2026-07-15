@@ -14,9 +14,6 @@ for (const required of [
   "function openDeleteArchivedAiWorkOrderModal",
   "function openDeleteAllArchivedAiWorkOrdersModal",
   "Next step:",
-  "function projectCorrectionForFlag",
-  'action === "correct-project-warning"',
-  "function runProjectCorrectiveAction",
   "Details and provenance",
   "data-final-review",
   "renderFinalReviewSummary",
@@ -24,6 +21,8 @@ for (const required of [
   "setFlowGuideStep(modal, 4)",
   'requiresFinalReview = resolvedFlowStep < 4'
 ]) assert(app.includes(required), `Flow hardening implementation missing: ${required}`);
+assert(!app.includes('id: `project-completeness-${project.id}`'), "Advisory project completeness must not create a global Needs Attention item.");
+assert(!app.includes('category: t("openQuestionNeedsAction")'), "Open questions must remain project history instead of creating a global Needs Attention item.");
 for (const required of [
   'data-action="delete-all-archived-ai-work-orders"',
   'data-action="delete-archived-ai-work-order"',
@@ -44,5 +43,5 @@ assert(app.includes('if (!validateAuditFields(form, data)) return;'), "Final rev
 assert(app.includes("const returnToEditableForm = () =>") && app.includes("if (reviewing) returnToEditableForm();"), "A failed final confirmation must return to editable fields.");
 
 console.log("Flow Hardening Check");
-console.log(JSON.stringify({ contextualNextStep: true, directWarningCorrection: true, progressiveDisclosure: true, finalReview: true, approvalBoundaryPreserved: true, auditValidationPreserved: true }, null, 2));
+console.log(JSON.stringify({ contextualNextStep: true, advisoryCompletenessKeptInsideProject: true, progressiveDisclosure: true, finalReview: true, approvalBoundaryPreserved: true, auditValidationPreserved: true }, null, 2));
 console.log("Flow hardening: ok");

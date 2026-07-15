@@ -1315,3 +1315,46 @@ Status: implemented and regression-checked 2026-07-12; not repackaged in this ch
 - Installer signature status: `NotSigned`; this remains a local/offline test build and is not public-distribution ready.
 - Packaged-code inspection confirmed the broad-source assessment, dominance, relationship-deduplication, source-context aggregation, and provisional-profile emission logic inside `app.asar`.
 - Remaining release gate: real-time desktop testing, including install/uninstall/reinstall, chosen-location backup/restore, and representative single-project and broad-summary review-pack runs.
+
+## 38. Human Review Queue and Return-Flow Hardening
+
+Status: implemented and regression-checked July 15, 2026; opened for fresh-data desktop testing and not yet repackaged.
+
+- Once a Human Review decision is recorded, it immediately leaves the active long-source decision list. The immutable decision and human action remain available under a collapsed **Completed human decisions** history, without a second active review button.
+- Human Review now shows explicit pending/completed counts so long-file progress is visible and duplicate handling is easier to spot.
+- Internal classifications were replaced in the working UI with destination language: propose a new project, add supporting evidence to an existing project, keep unassigned source/reference material, keep personal context, mark assistant formatting/noise, or reject from active review.
+- Evidence-role labels now distinguish primary source material, background references, confirming evidence, validation/test evidence, risks/contradictions, patent/licensing/outreach support, cross-project sources, additional references, context-only material, and noise.
+- Unassigned useful material can be preserved as review history without creating a project or entering Core. Noise/rejections receive a recorded disposition and leave the active queue.
+- Imported Review Passes, source-file mapping, and the small set of fallback chunk excerpts are cached for the active session. Reopening a decision uses the loaded workspace rather than reloading the complete pass.
+- Fallback chunk-text reads are limited to decisions without an imported exact excerpt and capped at 40 chunks; complete evidence spans continue to display directly from the imported result.
+- External-review Intake items carry a resume marker. After the resulting project, source, or supporting change is approved into Core, Project State returns to that Work Order's remaining Human Review list instead of abandoning the prior task for the project dashboard.
+- New-project approvals are the deliberate exception: after Core creates the project, Project State opens that project's dashboard first. A prominent **Continue Human Review** control keeps the prior Work Order available while the owner verifies or edits the new project. The new project is then available as a destination for every remaining source/support decision. Existing-project evidence approvals continue directly back to Human Review.
+- Resume is conditional on actual unfinished decisions. When the last Human Review item has already been handled, approving its Intake/Core change stays on the receiving project instead of reopening an empty **Imported External AI Reviews** window.
+- A manual clipboard bridge avoids another routing layer: every Human Review item exposes **Copy title** and **Copy full material**, including source/chunk provenance; project records expose **Copy**; and decision, fact, conflict, source, open-question, and next-action forms expose visible clipboard-paste controls. The owner chooses the destination manually, edits the result, and still records it through the normal project approval/history controls.
+- Project-completeness suggestions and open questions no longer create global **Needs Attention** entries. They remain visible inside the project as working guidance and immutable history. **Needs Attention** remains reserved for actionable conditions such as Intake review, unresolved conflicts, blocked/at-risk health, overdue actions, missing or changed source files, active AI Work Orders, and integrity warnings.
+- A focused `check:human-review-flow` regression covers this clipboard bridge alongside the queue and return-flow behavior; the full wiring, flow-hardening, Universal Review, provisional-profile, and language/integrity suites remain the broader verification gate.
+
+## 39. AI Work Order Completion and Audit History
+
+Status: implemented July 15, 2026; source testing required before the next installer build.
+
+- The AI Work Orders page now separates active work from a collapsed **Completed / archived Work Order history**. Finished receipts no longer occupy the active working list.
+- Source digestion reaching its end is not sufficient to archive a Work Order. Automatic archival requires full source analysis, a valid imported review pass, zero unaccounted chunks, every mandatory final self-check passing, a final human disposition for every decision, and no pending Intake item from that Work Order.
+- **Needs revision** and incomplete dispositions remain active. Failed validation, partial coverage, unfinished Human Review, and unfinished Intake routing also remain active.
+- When every gate is satisfied, Project State automatically archives the Work Order and writes a compact receipt containing the Discovery case, source/chunk totals, analysis-run count, review-pass IDs, final pass, human reviewers, disposition count, destination project IDs, rejected count, and transmission status.
+- Destination projects receive a normal history entry recording that the linked AI Work Order completed and archived. The archived Work Order references stored evidence and project records rather than duplicating their contents.
+- Archived receipts retain controls for AI results, imported-review audit history, comments, and owner-authorized deletion. Manual archival remains available for an owner who deliberately closes work outside the automatic lifecycle.
+- The focused `ai-work-order-lifecycle-regression-check` is included in both the Human Review and flow-hardening verification chains.
+
+## 40. Intake Airlock Completion History
+
+Status: implemented July 15, 2026; included in the next offline installer verification.
+
+- The active Intake Airlock now contains only pending, non-archived proposals. Approved, rejected, and deliberately archived items move out of the working list automatically.
+- Successful Core approval automatically closes the Intake item and creates a compact receipt containing the outcome, approving human, reason, destination project, resulting object type and stable ID, source label, Discovery case, originating Work Order, External Review Pass, and external decision ID where available.
+- Rejection also closes the Intake item automatically and preserves the reviewer and rejection reason. A pending item may still be deliberately archived without a Core change, with that outcome stated explicitly in its receipt.
+- Completed items appear under a collapsed **Completed Intake history** section. They retain audit provenance and a direct project link but no redundant Archive step or active approval controls.
+- Legacy approved/rejected Intake items remain visible in completed history even when they predate the new receipt fields; their existing approval/review records are used as the fallback receipt.
+- Intake completion now unblocks the linked AI Work Order lifecycle. If it was the final outstanding Intake route and all other Work Order gates pass, the Work Order can automatically move into its own completed/archive history.
+- Offline installer rebuilt after the Intake and AI Work Order lifecycle changes: `release/Project-State-Setup-0.2.4-x64.exe`, 101,865,756 bytes, SHA-256 `2cac34503002d6399a22974d697e2acafd8c23c0864ae4c13466d039f6dbec8a`.
+- Packaged-artifact inspection confirmed no bundled user data or secrets, working Electron/Node/SQLite runtime, and a connected local Ollama/Qwen provider path. The installer is `NotSigned`, remains test-only, and still requires the requested real-time offline install/uninstall/reinstall and backup/restore testing.

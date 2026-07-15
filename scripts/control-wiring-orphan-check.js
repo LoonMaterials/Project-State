@@ -7,7 +7,7 @@ function unique(regex) { return [...new Set([...source.matchAll(regex)].map((mat
 
 const declaredActions = unique(/data-action="([a-z0-9-]+)"/g);
 const handledActions = unique(/action === "([a-z0-9-]+)"/g);
-const dynamicActions = new Set(["view-image", "open-search-result", "correct-project-warning"]);
+const dynamicActions = new Set(["view-image", "open-search-result"]);
 const missingActionHandlers = declaredActions.filter((action) => !handledActions.includes(action) && !dynamicActions.has(action));
 const orphanActionHandlers = handledActions.filter((action) => !declaredActions.includes(action) && !dynamicActions.has(action));
 assert(!missingActionHandlers.length, "Rendered data-action controls are missing handlers.", { missingActionHandlers });

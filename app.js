@@ -249,7 +249,6 @@ const LANGUAGES = {
     missingSource: "Missing Source",
     integrityWarning: "Integrity Warning",
     draftWaiting: "Draft Waiting",
-    openQuestionNeedsAction: "Question Needs Action",
     goToProject: "Go to Project",
     goToIntake: "Go to Intake",
     goToSettings: "Go to Settings",
@@ -997,7 +996,6 @@ const LANGUAGES = {
     missingSource: "Source manquante",
     integrityWarning: "Avertissement d’intégrité",
     draftWaiting: "Brouillon en attente",
-    openQuestionNeedsAction: "Question sans action",
     goToProject: "Aller au projet",
     goToIntake: "Aller à l’entrée",
     goToSettings: "Aller aux paramètres",
@@ -1745,7 +1743,6 @@ const LANGUAGES = {
     missingSource: "Fehlende Quelle",
     integrityWarning: "Integritätswarnung",
     draftWaiting: "Entwurf wartet",
-    openQuestionNeedsAction: "Frage ohne Aktion",
     goToProject: "Zum Projekt",
     goToIntake: "Zum Eingang",
     goToSettings: "Zu Einstellungen",
@@ -2493,7 +2490,6 @@ const LANGUAGES = {
     missingSource: "Fuente faltante",
     integrityWarning: "Advertencia de integridad",
     draftWaiting: "Borrador en espera",
-    openQuestionNeedsAction: "Pregunta sin acción",
     goToProject: "Ir al proyecto",
     goToIntake: "Ir a entrada",
     goToSettings: "Ir a ajustes",
@@ -3330,6 +3326,8 @@ let activeChangesSinceDate = defaultChangesSinceDate();
 let activeObjectDetail = null;
 let postModalAction = null;
 let pendingFlowReturnContext = null;
+let pendingWorkflowResumeContext = null;
+const externalReviewWorkspaceCache = new Map();
 const flowDrafts = new Map();
 let fileImportDialogInProgress = false;
 let fileImportFlowState = { status: "idle", kind: "", message: "", updatedAt: "" };
@@ -4970,6 +4968,10 @@ function normalizeAiWorkOrder(workOrder, context) {
     lastAutomaticReviewPackageId: String(workOrder.lastAutomaticReviewPackageId || ""),
     lastAutomaticReviewPackPath: String(workOrder.lastAutomaticReviewPackPath || ""),
     externalReviewActions: Array.isArray(workOrder.externalReviewActions) ? workOrder.externalReviewActions.map((action) => cloneRecord(action)) : [],
+    completedAt: String(workOrder.completedAt || ""),
+    archivedAt: String(workOrder.archivedAt || ""),
+    archiveReason: String(workOrder.archiveReason || ""),
+    completionReceipt: workOrder.completionReceipt && typeof workOrder.completionReceipt === "object" ? cloneRecord(workOrder.completionReceipt) : null,
     comments: normalizeComments(workOrder.comments, context)
   };
 }
@@ -5143,6 +5145,8 @@ function normalizeIntakeItem(item, context) {
     proposedProjectName: item.proposedProjectName || (item.destination === "proposed_new_project" ? String(item.originalName || "").replace(/\.[^.]+$/, "") : ""),
     evidence: item.evidence || {},
     approval: item.approval || null,
+    completedAt: String(item.completedAt || ""),
+    completionReceipt: item.completionReceipt && typeof item.completionReceipt === "object" ? cloneRecord(item.completionReceipt) : null,
     archived: Boolean(item.archived)
   };
 }
@@ -5175,6 +5179,8 @@ function createIntakeItem(input = {}) {
     destination: input.destination || (input.projectId ? "existing_project" : ""),
     proposedProjectName: input.proposedProjectName || "",
     approval: null,
+    completedAt: "",
+    completionReceipt: null,
     assignments: [],
     comments: [],
     archived: false
@@ -5203,6 +5209,22 @@ function approveIntakeItem(intakeId, actor, reason, applyApprovedChange) {
   if (!result) return null;
   intake.status = "approved";
   intake.approval = approval;
+  intake.archived = true;
+  intake.completedAt = approval.approvedAt;
+  intake.completionReceipt = {
+    outcome: "approved",
+    completedAt: approval.approvedAt,
+    reviewedBy: actor.id,
+    reason: approval.reason,
+    projectId: intake.projectId || "",
+    resultingObjectType: intake.proposedObjectType || "",
+    resultingObjectId: result.id || (intake.projectId || ""),
+    sourceLabel: intake.sourceLabel || "",
+    discoveryCaseId: intake.discoveryCaseId || intake.evidence?.discoveryCaseId || "",
+    workOrderId: intake.evidence?.resumeWork?.workOrderId || "",
+    externalReviewPassId: intake.evidence?.externalReviewPassId || "",
+    externalDecisionId: intake.evidence?.externalDecisionId || ""
+  };
   saveStore();
   return result;
 }
@@ -6202,14 +6224,14 @@ function workInboxCount() {
 }
 
 function activeAiWorkOrderCount() {
-  return (store.aiWorkOrders || []).filter((order) => !["completed", "archived"].includes(order.status)).length;
+  return (store.aiWorkOrders || []).filter((order) => order.status !== "archived").length;
 }
 
 function renderAiWorkOrders() {
   const orders = sortNewest(store.aiWorkOrders || [], "createdAt");
-  const activeOrders = orders.filter((order) => !["completed", "archived"].includes(order.status)).length;
-  const archivedOrders = orders.filter((order) => order.status === "archived").length;
-  const completedOrders = orders.filter((order) => order.status === "completed").length;
+  const activeOrders = orders.filter((order) => order.status !== "archived");
+  const archivedOrders = orders.filter((order) => order.status === "archived");
+  const sourceCompleteOrders = activeOrders.filter((order) => order.status === "completed").length;
   shell(`
     <section class="view-head">
       <div>
@@ -6219,26 +6241,43 @@ function renderAiWorkOrders() {
       <div class="button-row">
         <button class="btn" data-action="create-ai-work-order">${escapeHtml(t("createAiWorkOrder"))}</button>
         <button class="btn secondary" data-action="import-reviewed-evidence">Import Reviewed Evidence</button>
-        ${archivedOrders ? `<button class="btn danger" data-action="delete-all-archived-ai-work-orders">Delete archived AI Work Orders</button>` : ""}
+        ${archivedOrders.length ? `<button class="btn danger" data-action="delete-all-archived-ai-work-orders">Delete archived AI Work Orders</button>` : ""}
       </div>
     </section>
     <article class="panel">
       <div class="meta-grid">
-        ${renderInboxStat("Active", activeOrders)}
-        ${renderInboxStat("Completed", completedOrders)}
-        ${renderInboxStat("Archived", archivedOrders)}
+        ${renderInboxStat("Active", activeOrders.length)}
+        ${renderInboxStat("Source complete — review pending", sourceCompleteOrders)}
+        ${renderInboxStat("Completed history", archivedOrders.length)}
         ${renderInboxStat("Total", orders.length)}
       </div>
       <p class="notice">Huge-file and unknown-folder AI follow-up should appear here first. Nothing in this list is Core truth until a later human-reviewed Intake proposal is approved.</p>
     </article>
-    ${orders.length ? `<section class="list">${orders.map(renderAiWorkOrderItem).join("")}</section>` : `
+    ${activeOrders.length ? `<section class="list">${activeOrders.map(renderAiWorkOrderItem).join("")}</section>` : `
       <section class="empty-state">
-        <h2>${escapeHtml(t("noAiWorkOrders"))}</h2>
-        <p>${escapeHtml(t("aiWorkOrderNotice"))}</p>
+        <h2>No active AI Work Orders</h2>
+        <p>Completed work moves into the audit history below after every result has a disposition and every linked Intake item is finished.</p>
         <button class="btn" data-action="create-ai-work-order">${escapeHtml(t("createAiWorkOrder"))}</button>
       </section>
     `}
+    ${archivedOrders.length ? `<details class="panel technical-details"><summary>Completed / archived Work Order history (${archivedOrders.length})</summary><section class="list">${archivedOrders.map(renderAiWorkOrderReceipt).join("")}</section></details>` : ""}
   `);
+}
+
+function renderAiWorkOrderReceipt(order) {
+  const receipt = order.completionReceipt || {};
+  const destinationNames = (receipt.destinationProjectIds || []).map((id) => projectNameById(id) || id);
+  return `<article class="item">
+    <p class="item-title">${escapeDisplay(order.title, DISPLAY_META_LIMIT)}</p>
+    <p class="item-meta">Completed ${escapeHtml(formatDate(receipt.completedAt || order.archivedAt || order.completedAt || order.createdAt))} · ${Number(receipt.sourceChunkCount || order.lastAnalysis?.totalDetectedChunks || 0).toLocaleString()} source chunk${Number(receipt.sourceChunkCount || order.lastAnalysis?.totalDetectedChunks || 0) === 1 ? "" : "s"} · ${Number(receipt.reviewPassCount || 0).toLocaleString()} review pass${Number(receipt.reviewPassCount || 0) === 1 ? "" : "es"} · ${Number(receipt.humanDecisionCount || 0).toLocaleString()} human disposition${Number(receipt.humanDecisionCount || 0) === 1 ? "" : "s"}</p>
+    ${destinationNames.length ? `<p class="item-meta">Destinations: ${escapeDisplay(destinationNames.join(", "), DISPLAY_TEXT_LIMIT)}</p>` : ""}
+    <p class="item-meta">Source: ${escapeDisplay(receipt.discoveryCaseId || order.source?.discoveryCaseId || "Not recorded", DISPLAY_META_LIMIT)} · Work Order ID: ${escapeDisplay(order.id, DISPLAY_META_LIMIT)}</p>
+    <div class="item-actions">
+      ${order.source?.discoveryCaseId ? `<button class="btn secondary compact" data-action="view-ai-work-order-results" data-work-order-id="${escapeHtml(order.id)}">View AI results</button><button class="btn secondary compact" data-action="view-external-ai-reviews" data-work-order-id="${escapeHtml(order.id)}">Review audit history</button>` : ""}
+      <button class="btn secondary compact" data-action="comment-ai-work-order" data-work-order-id="${escapeHtml(order.id)}">${escapeHtml(t("reviewThread"))}</button>
+      <button class="btn danger compact" data-action="delete-archived-ai-work-order" data-work-order-id="${escapeHtml(order.id)}">Delete archived</button>
+    </div>
+  </article>`;
 }
 
 function renderCandidateMapStats(candidateMap = null) {
@@ -6394,23 +6433,6 @@ function buildWorkInboxItems() {
 
   for (const project of store.projects || []) {
     if (project.archived) continue;
-    const incompleteFlags = projectCompletenessFlags(project).filter((flag) => !flag.passed && !["sourceFilesClear", "healthNotBlocked"].includes(flag.key));
-    if (incompleteFlags.length) {
-      const correction = projectCorrectionForFlag(incompleteFlags[0].key);
-      push({
-        id: `project-completeness-${project.id}`,
-        level: "warning",
-        category: t("projectCompleteness"),
-        title: project.name,
-        body: incompleteFlags.map((flag) => flag.label).join(", "),
-        meta: `${t("lastUpdated")}: ${formatDate(project.updatedAt)}`,
-        projectId: project.id,
-        action: "correct-project-warning",
-        correctiveAction: correction.action,
-        actionLabel: correction.label,
-        sortAt: project.updatedAt
-      });
-    }
     for (const conflict of project.conflicts || []) {
       if (!["unresolved", "under_review"].includes(conflict.status)) continue;
       push({
@@ -6488,24 +6510,6 @@ function buildWorkInboxItems() {
         actionLabel: t("goToProject"),
         sortAt: action.dueDate
       });
-    }
-
-    const openActions = (project.nextActions || []).filter((action) => getActionStatus(action) === "open");
-    if (!openActions.length) {
-      for (const question of project.openQuestions || []) {
-        if (question.status !== "open") continue;
-        push({
-          id: `question-${question.id}`,
-          level: "warning",
-          category: t("openQuestionNeedsAction"),
-          title: question.question,
-          body: question.context || "",
-          meta: `${t("project")}: ${project.name} · ${t("created")}: ${formatDate(question.createdAt)}`,
-          projectId: project.id,
-          actionLabel: t("goToProject"),
-          sortAt: question.createdAt
-        });
-      }
     }
 
     for (const source of project.sources || []) {
@@ -6703,14 +6707,6 @@ function shell(inner) {
     <main class="main">${workflowBreadcrumbHtml()}${inner}</main>
   `;
   applyRoleAwareControls();
-}
-
-function projectCorrectionForFlag(flagKey = "") {
-  if (["hasCurrentStatus", "hasCurrentSummary", "healthNotBlocked"].includes(flagKey)) return { action: "edit-status", label: "Complete current state" };
-  if (flagKey === "hasNextAction") return { action: "add-action", label: "Add next action" };
-  if (flagKey === "hasRecentDecision") return { action: "add-decision", label: "Record decision" };
-  if (["hasSourceReference", "sourceFilesClear"].includes(flagKey)) return { action: flagKey === "sourceFilesClear" ? "verify-all-source-files" : "add-source", label: flagKey === "sourceFilesClear" ? "Verify source files" : "Add source" };
-  return { action: "edit-status", label: "Open and correct" };
 }
 
 function projectNextStep(project) {
@@ -7951,7 +7947,7 @@ function visibleIntakeItems(intakeItems = []) {
 }
 
 function intakeItemsForAirlock(intakeItems = []) {
-  return visibleIntakeItems(intakeItems).filter((item) => !item.archived);
+  return visibleIntakeItems(intakeItems);
 }
 
 function removeIntakeRecordsForDeletedArchives(projects = [], { includeAllArchivedIntake = false } = {}) {
@@ -8009,7 +8005,7 @@ function approvalQueueStats(intakeItems = []) {
     pending: pending.length,
     ready: pending.filter((item) => item.queueState === "ready").length,
     blocked: pending.filter((item) => item.queueState === "blocked").length,
-    reviewed: visible.filter((item) => item.status !== "pending" && !item.archived).length,
+    reviewed: visible.filter((item) => item.status !== "pending" || item.archived).length,
     archived: visible.filter((item) => item.archived).length
   };
 }
@@ -8019,8 +8015,7 @@ function renderApprovalQueueSummary(stats) {
     [t("pendingReview"), stats.pending],
     [t("queueReady"), stats.ready],
     [t("queueBlocked"), stats.blocked],
-    [t("reviewedIntake"), stats.reviewed],
-    [t("archived"), stats.archived]
+    ["Completed history", stats.reviewed]
   ];
   return `
     <section class="meta-grid">
@@ -9177,9 +9172,9 @@ function openDiscoveryReviewModal({ discoveryCaseId, analysis, extractions = [],
 function renderIntakeQueue() {
   const intakeItems = sortNewest(intakeItemsForAirlock(store.intakeItems || []), "createdAt");
   const pending = intakeItems
-    .filter((item) => item.status === "pending")
+    .filter((item) => item.status === "pending" && !item.archived)
     .sort((a, b) => intakeQueueStateRank(a.queueState) - intakeQueueStateRank(b.queueState) || Date.parse(b.createdAt || "") - Date.parse(a.createdAt || ""));
-  const reviewed = intakeItems.filter((item) => item.status !== "pending");
+  const reviewed = intakeItems.filter((item) => item.status !== "pending" || item.archived);
   const stats = approvalQueueStats(store.intakeItems || []);
 
   shell(`
@@ -9200,25 +9195,33 @@ function renderIntakeQueue() {
       ${renderApprovalQueueSummary(stats)}
     </article>
 
-    <section class="dashboard-grid">
-      <div class="stack">
-        <article class="panel strong">
-          <div class="panel-head">
-            <h2 class="panel-title">${escapeHtml(t("pendingReview"))}</h2>
-          </div>
-          ${pending.length ? `<div class="list">${pending.map(renderIntakeItem).join("")}</div>` : emptyText(t("noPendingIntake"))}
-        </article>
-      </div>
-      <aside class="stack">
-        <article class="panel">
-          <div class="panel-head">
-            <h2 class="panel-title">${escapeHtml(t("reviewedIntake"))}</h2>
-          </div>
-          ${reviewed.length ? `<div class="list">${reviewed.map(renderIntakeItem).join("")}</div>` : emptyText(t("noReviewedIntake"))}
-        </article>
-      </aside>
-    </section>
+    <article class="panel strong">
+      <div class="panel-head"><h2 class="panel-title">${escapeHtml(t("pendingReview"))}</h2></div>
+      ${pending.length ? `<div class="list">${pending.map(renderIntakeItem).join("")}</div>` : emptyText(t("noPendingIntake"))}
+    </article>
+    ${reviewed.length ? `<details class="panel technical-details"><summary>Completed Intake history (${reviewed.length})</summary><div class="list">${reviewed.map(renderIntakeReceipt).join("")}</div></details>` : ""}
   `);
+}
+
+function renderIntakeReceipt(item) {
+  const receipt = item.completionReceipt || {};
+  const projectId = receipt.projectId || item.projectId || "";
+  const projectName = projectId ? projectNameById(projectId) || t("missingProject") : t("noTargetProject");
+  const outcome = receipt.outcome || (item.status === "approved" ? "approved" : item.status === "rejected" ? "rejected" : "archived");
+  const reviewerId = receipt.reviewedBy || item.approval?.approvedBy || item.review?.actorId || "";
+  const completedAt = receipt.completedAt || item.completedAt || item.approval?.approvedAt || item.review?.reviewedAt || item.createdAt;
+  return `<article class="item">
+    <p class="item-title">${escapeDisplay(item.title, DISPLAY_META_LIMIT)}</p>
+    <p class="item-meta">${escapeHtml(outcome.replaceAll("_", " "))} · ${escapeHtml(formatDate(completedAt))} · ${escapeHtml(actorDisplay(reviewerId, item.review?.actorName))}</p>
+    <p class="item-meta">Destination: ${escapeDisplay(projectName, DISPLAY_META_LIMIT)} · Result: ${escapeDisplay(receipt.resultingObjectType || item.proposedObjectType || "Record", DISPLAY_META_LIMIT)} ${receipt.resultingObjectId ? `(${escapeDisplay(receipt.resultingObjectId, DISPLAY_META_LIMIT)})` : ""}</p>
+    ${receipt.reason || item.approval?.reason || item.review?.reason ? `<p class="item-body">${escapeDisplay(receipt.reason || item.approval?.reason || item.review?.reason, DISPLAY_TEXT_LIMIT)}</p>` : ""}
+    <details class="technical-details"><summary>Receipt and provenance</summary>
+      <p class="item-meta">Intake ID: ${escapeDisplay(item.id, DISPLAY_META_LIMIT)}${receipt.workOrderId ? ` · Work Order: ${escapeDisplay(receipt.workOrderId, DISPLAY_META_LIMIT)}` : ""}${receipt.externalReviewPassId ? ` · Review Pass: ${escapeDisplay(receipt.externalReviewPassId, DISPLAY_META_LIMIT)}` : ""}${receipt.externalDecisionId ? ` · Decision: ${escapeDisplay(receipt.externalDecisionId, DISPLAY_META_LIMIT)}` : ""}</p>
+      ${receipt.sourceLabel || item.sourceLabel ? `<p class="item-meta">Source: ${escapeDisplay(receipt.sourceLabel || item.sourceLabel, DISPLAY_TEXT_LIMIT)}</p>` : ""}
+      ${receipt.discoveryCaseId || item.discoveryCaseId ? `<p class="item-meta">Discovery Case: ${escapeDisplay(receipt.discoveryCaseId || item.discoveryCaseId, DISPLAY_META_LIMIT)}</p>` : ""}
+    </details>
+    ${projectId && getProject(projectId) ? `<div class="item-actions"><button class="btn secondary compact" data-action="open-project" data-project-id="${escapeHtml(projectId)}">${escapeHtml(t("goToProject"))}</button></div>` : ""}
+  </article>`;
 }
 
 function renderIntakeItem(item) {
@@ -9266,7 +9269,7 @@ function renderIntakeItem(item) {
         ${isPending ? `<button class="btn secondary compact" data-action="review-intake-queue" data-intake-id="${item.id}">Edit proposal</button>` : ""}
         ${isPending ? `<button class="btn secondary compact" data-action="approve-intake" data-intake-id="${item.id}" ${airlockReady ? "" : "disabled"} title="${airlockReady ? "" : escapeHtml(t("airlockIncompleteNotice"))}">${escapeHtml(t("approve"))}</button>` : ""}
         ${isPending ? `<button class="btn secondary compact" data-action="reject-intake" data-intake-id="${item.id}">${escapeHtml(t("reject"))}</button>` : ""}
-        ${!item.archived ? `<button class="btn secondary compact" data-action="archive-intake" data-intake-id="${item.id}">${escapeHtml(t("archive"))}</button>` : ""}
+        ${isPending ? `<button class="btn secondary compact" data-action="archive-intake" data-intake-id="${item.id}">${escapeHtml(t("archive"))}</button>` : ""}
       </div>
     </div>
   `;
@@ -9458,7 +9461,20 @@ function renderProject(project) {
   const completenessFlags = projectCompletenessFlags(project);
   const nextStep = projectNextStep(project);
 
+  const reviewResume = pendingWorkflowResumeContext?.type === "external_review"
+    && pendingWorkflowResumeContext.projectId === project.id
+    && (store.aiWorkOrders || []).some((order) => order.id === pendingWorkflowResumeContext.workOrderId)
+      ? pendingWorkflowResumeContext
+      : null;
   const dashboard = `
+    ${reviewResume ? `<article class="panel strong next-step-panel">
+      <div>
+        <p class="meta-label">New project created from Human Review</p>
+        <h2 class="panel-title">Check this project before routing the remaining material</h2>
+        <p class="item-meta">This project is now available in the Human Review project list. Add or correct its initial records here, then continue reviewing the remaining source material.</p>
+      </div>
+      <div class="item-actions"><button class="btn" data-action="continue-external-review" data-work-order-id="${escapeHtml(reviewResume.workOrderId)}">Continue Human Review</button></div>
+    </article>` : ""}
     <article class="panel strong next-step-panel">
       <div>
         <p class="meta-label">Next step</p>
@@ -10325,6 +10341,7 @@ function renderObjectActions(objectType, objectId, archived = false) {
   return `
     <div class="item-actions">
       <button class="btn secondary compact" data-action="open-object-detail" data-object-type="${objectType}" data-object-id="${objectId}">${escapeHtml(t("viewDetails"))}</button>
+      <button class="btn secondary compact" data-action="copy-project-object" data-object-type="${objectType}" data-object-id="${objectId}">Copy</button>
       <button class="btn secondary compact" data-action="edit-object" data-object-type="${objectType}" data-object-id="${objectId}">${escapeHtml(t("edit"))}</button>
       <details class="action-menu">
         <summary class="btn secondary compact">${escapeHtml(t("moreActions"))}</summary>
@@ -11577,8 +11594,26 @@ function showModal({ title, body, submitText, onSubmit, draftKey = "", flowStep 
     render();
   };
 
-  modal.addEventListener("click", (event) => {
+  modal.addEventListener("click", async (event) => {
     if (submitting) return;
+    const pasteControl = event.target.closest("[data-paste-clipboard-field]");
+    if (pasteControl) {
+      const field = form.elements.namedItem(pasteControl.dataset.pasteClipboardField || "");
+      if (!field || !(field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement)) return;
+      try {
+        const pasted = await navigator.clipboard.readText();
+        const start = field.selectionStart ?? field.value.length;
+        const end = field.selectionEnd ?? start;
+        field.setRangeText(pasted, start, end, "end");
+        field.dispatchEvent(new Event("input", { bubbles: true }));
+        field.focus();
+        if (draftStatus) draftStatus.textContent = "Clipboard material pasted. Review and edit it before approval.";
+      } catch {
+        if (draftStatus) draftStatus.textContent = "Windows did not allow clipboard reading. Right-click or press Ctrl+V in the selected field.";
+        field.focus();
+      }
+      return;
+    }
     if (event.target.closest("[data-discard-restored-draft]")) {
       flowDrafts.delete(resolvedDraftKey);
       restoreFlowDraft(form, initialFormValues);
@@ -11611,6 +11646,37 @@ function showModal({ title, body, submitText, onSubmit, draftKey = "", flowStep 
   wireDraggableModal(modal.querySelector(".modal"));
   modal.querySelector("input, textarea, select")?.focus();
   return modal;
+}
+
+function pasteClipboardButton(fieldName, label = "Paste from clipboard") {
+  return `<button class="btn secondary compact" type="button" data-paste-clipboard-field="${escapeHtml(fieldName)}">${escapeHtml(label)}</button>`;
+}
+
+async function writeProjectStateClipboard(text = "") {
+  const value = String(text || "");
+  if (!value.trim()) throw new Error("There is no material to copy.");
+  try { await navigator.clipboard.writeText(value); }
+  catch {
+    const helper = document.createElement("textarea");
+    helper.value = value;
+    helper.setAttribute("readonly", "");
+    helper.style.position = "fixed";
+    helper.style.opacity = "0";
+    document.body.appendChild(helper);
+    helper.select();
+    if (!document.execCommand("copy")) { helper.remove(); throw new Error("Windows did not allow clipboard copying."); }
+    helper.remove();
+  }
+}
+
+function showClipboardSuccess(button) {
+  const original = button.textContent;
+  button.textContent = "Copied";
+  button.disabled = true;
+  window.setTimeout(() => {
+    button.textContent = original;
+    button.disabled = false;
+  }, 1400);
 }
 
 function wireDraggableModal(dialog) {
@@ -11746,6 +11812,47 @@ function renderFinalReviewSummary(form, data, title, submitText) {
     </div>
     <p class="item-meta">Technical provenance and immutable history remain attached after confirmation.</p>
   `;
+}
+
+function projectObjectClipboardText(project, objectType, objectId) {
+  const object = getProjectObject(project, objectType, objectId);
+  if (!object) return "";
+  const lines = [`${objectType}: ${objectLabel(objectType, object)}`, `Project: ${project.name}`];
+  const add = (label, value) => {
+    const text = Array.isArray(value) ? value.filter(Boolean).join(", ") : String(value || "").trim();
+    if (text) lines.push(`${label}: ${text}`);
+  };
+  if (objectType === "Decision") {
+    add("Decision", object.text);
+    add("Reason", object.reason);
+    add("Confidence", object.confidence);
+  } else if (objectType === "Fact") {
+    add("Fact", object.statement);
+    add("Source", object.source);
+    add("Confidence", object.confidence);
+  } else if (objectType === "Conflict") {
+    add("Title", object.title);
+    add("Description", object.description);
+    add("Linked material", object.linkedItems);
+    add("Resolution", object.resolution);
+  } else if (objectType === "Source") {
+    add("Title", object.title);
+    add("Summary", object.summary);
+    add("Location", object.location);
+    add("Tags", object.tags);
+  } else if (objectType === "OpenQuestion") {
+    add("Open question", object.question);
+    add("Context", object.context);
+  } else if (objectType === "NextAction") {
+    add("Next action", object.action);
+    add("Owner", object.owner);
+    add("Due", object.dueDate);
+  } else if (objectType === "Relationship") {
+    add("Relationship", object.relationshipType);
+    add("Notes", object.notes);
+  }
+  add("Record ID", object.id);
+  return lines.join("\n");
 }
 
 function queuePostModalAction(callback) {
@@ -14011,7 +14118,7 @@ async function openExternalReviewImportModal() {
           : `External Review Pass ${imported.externalReviewPass.versionNumber} imported.\n\nSaved as:\n${imported.savedPath}\n\nNo Core or local evidence records were changed.`);
         const matchedWorkOrder = (store.aiWorkOrders || []).find((order) => order.id === imported.workOrderId);
         postModalAction = matchedWorkOrder
-          ? () => openExternalReviewPassesModal(imported.workOrderId)
+          ? () => openExternalReviewPassesModal(imported.workOrderId, { refresh: true })
           : () => window.alert(`The review was imported and matched to Work Order ${imported.workOrderId}, but that Work Order is not present in the current UI store. Restore/reload the matching Work Order to review its decisions.`);
         return true;
       } catch (error) {
@@ -14087,18 +14194,141 @@ async function openExternalReviewImportModal() {
 
 function externalReviewClassificationLabel(value = "") {
   return {
-    existing_project_support: "Existing Project Support",
-    project_candidate: "Proposed New Projects",
-    cross_project_evidence: "Cross-Project Evidence",
-    reference_note: "Reference Material",
-    personal_context_note: "Personal context",
-    assistant_scaffolding_noise: "Assistant Scaffolding / Noise",
-    rejected_noise: "Rejected Material"
+    existing_project_support: "Add supporting evidence to an existing project",
+    project_candidate: "Propose a new project",
+    cross_project_evidence: "Add evidence to more than one existing project",
+    reference_note: "Keep as unassigned source or reference material",
+    personal_context_note: "Keep as personal context (not a project)",
+    assistant_scaffolding_noise: "Mark as assistant formatting or noise",
+    rejected_noise: "Reject from active review"
   }[value] || String(value || "Unclassified").replaceAll("_", " ");
+}
+
+function externalReviewClassificationHelp(value = "") {
+  return {
+    existing_project_support: "Attach this material to one known project as evidence; it is not a new project.",
+    project_candidate: "Keep this as a distinct proposed project for later Intake and Core approval.",
+    cross_project_evidence: "The same material supports several known projects without becoming a separate project.",
+    reference_note: "Preserve useful material that has no reliable project destination. It remains review history and does not enter Core.",
+    personal_context_note: "Preserve user-life or continuity context separately from commercial project records.",
+    assistant_scaffolding_noise: "Preserve the review disposition, but do not promote headings, transitions, or assistant structure.",
+    rejected_noise: "Record the rejection and remove this item from the active Human Review queue."
+  }[value] || "Choose the real destination of the underlying material.";
+}
+
+function externalReviewEvidenceRoleLabel(value = "") {
+  return {
+    primary_evidence: "Primary source material",
+    background_reference: "Background source or reference",
+    duplicate_or_confirming_reference: "Duplicate or confirming evidence",
+    validation_or_test_support: "Validation or test evidence",
+    risk_or_contradiction: "Risk, contradiction, or limiting evidence",
+    patent_licensing_or_outreach_support: "Patent, licensing, or outreach support",
+    cross_project_reference: "Cross-project source material",
+    additional_project_reference: "Additional supporting reference",
+    context_only: "Context only",
+    noise: "Non-substantive material"
+  }[value] || String(value || "Unspecified evidence role").replaceAll("_", " ");
 }
 
 function externalReviewActionFor(pass, decisionId) {
   return [...(pass.humanActions || [])].reverse().find((action) => action.decisionId === decisionId) || null;
+}
+
+function pendingExternalReviewDecisionCount(passes = []) {
+  return passes.reduce((count, pass) => count + (pass.result?.decisions || [])
+    .filter((decision) => !externalReviewActionFor(pass, decision.decision_id)).length, 0);
+}
+
+async function externalReviewHasPendingDecisions(workOrderId) {
+  const cached = externalReviewWorkspaceCache.get(workOrderId);
+  if (cached) return pendingExternalReviewDecisionCount(cached.passes) > 0;
+  const response = await platformAdapter.reviewExchange.listExternalReviews({ workOrderId });
+  return pendingExternalReviewDecisionCount(response.externalReviewPasses || []) > 0;
+}
+
+function pendingIntakeForWorkOrder(workOrderId) {
+  return visibleIntakeItems(store.intakeItems || []).filter((item) => item.status === "pending" && !item.archived && item.evidence?.resumeWork?.workOrderId === workOrderId);
+}
+
+function countUnaccountedReviewChunks(coverage = {}) {
+  const value = coverage.unaccounted_chunks;
+  return Array.isArray(value) ? value.length : Math.max(0, Number(value || 0));
+}
+
+function externalReviewSelfCheckPassed(result = {}) {
+  const checks = result.final_self_check;
+  return checks && typeof checks === "object" && Object.keys(checks).length > 0 && Object.values(checks).every((value) => value === true);
+}
+
+async function reconcileAiWorkOrderLifecycle(workOrderId, { save = true } = {}) {
+  const workOrder = (store.aiWorkOrders || []).find((order) => order.id === workOrderId);
+  if (!workOrder || workOrder.status === "archived" || !platformAdapter.reviewExchange?.available) return workOrder?.status === "archived";
+  if (workOrder.lastAnalysis?.sourceFullyAnalyzed !== true) return false;
+  const response = await platformAdapter.reviewExchange.listExternalReviews({ workOrderId });
+  const passes = (response.externalReviewPasses || []).slice().sort((a, b) => Number(a.versionNumber || 0) - Number(b.versionNumber || 0));
+  const pass = passes.at(-1);
+  if (!pass) return false;
+  const decisions = pass.result?.decisions || [];
+  const actions = decisions.map((decision) => externalReviewActionFor(pass, decision.decision_id));
+  const allDecisionsFinal = actions.every((action) => action && !["needs_revision", "incomplete"].includes(action.finalDisposition || action.disposition));
+  const coverageComplete = countUnaccountedReviewChunks(pass.result?.coverage_summary || {}) === 0
+    && pass.result?.final_self_check?.all_chunks_accounted_for === true;
+  const selfCheckComplete = externalReviewSelfCheckPassed(pass.result || {});
+  if (!allDecisionsFinal || !coverageComplete || !selfCheckComplete || pendingIntakeForWorkOrder(workOrderId).length) return false;
+
+  const destinationProjectIds = [...new Set(actions.flatMap((action) => [action?.primaryProjectId, ...(action?.additionalProjectIds || [])]).filter((id) => getProject(id)))];
+  const reviewerIds = [...new Set(actions.map((action) => action?.recordedBy || action?.actorId).filter(Boolean))];
+  const completedAt = nowIso();
+  workOrder.status = "archived";
+  workOrder.completedAt = workOrder.lastAnalysis?.completedAt || completedAt;
+  workOrder.archivedAt = completedAt;
+  workOrder.archiveReason = "Automatically archived after complete source coverage, complete Human Review, and finished Intake routing.";
+  workOrder.completionReceipt = {
+    completedAt,
+    discoveryCaseId: workOrder.source?.discoveryCaseId || "",
+    sourceFileCount: (workOrder.source?.sourceFiles || []).length,
+    sourceChunkCount: Number(workOrder.lastAnalysis?.totalDetectedChunks || workOrder.lastAnalysis?.analyzedUniqueChunks || 0),
+    analysisRunCount: (workOrder.analysisRunIds || []).length,
+    reviewPassCount: passes.length,
+    reviewPassIds: passes.map((item) => item.id),
+    finalReviewPassId: pass.id,
+    humanDecisionCount: actions.filter(Boolean).length,
+    humanReviewerIds: reviewerIds,
+    destinationProjectIds,
+    rejectedCount: actions.filter((action) => (action?.finalDisposition || action?.disposition) === "rejected").length,
+    externalTransmissionStatus: pass.externalTransmissionStatus || pass.result?.external_transmission_status || "unknown"
+  };
+  const historyActor = getActor(reviewerIds.at(-1)) || currentActor();
+  for (const projectId of destinationProjectIds) {
+    const project = getProject(projectId);
+    if (!project || !historyActor) continue;
+    recordChange(project, historyActor, workOrder.archiveReason, "AI work order completed and archived", {
+      objectType: "Project",
+      objectId: project.id,
+      objectText: project.name,
+      fields: {
+        workOrderId: workOrder.id,
+        title: workOrder.title,
+        reviewPassId: pass.id,
+        humanDecisionCount: workOrder.completionReceipt.humanDecisionCount,
+        sourceChunkCount: workOrder.completionReceipt.sourceChunkCount
+      }
+    });
+  }
+  if (save) await saveStore({ allowWithoutCoreApproval: true, reason: "ai-work-order-auto-archived" });
+  return true;
+}
+
+async function reconcileAllAiWorkOrderLifecycles() {
+  let changed = false;
+  for (const workOrder of store.aiWorkOrders || []) {
+    if (workOrder.status === "archived" || workOrder.lastAnalysis?.sourceFullyAnalyzed !== true) continue;
+    try { changed = await reconcileAiWorkOrderLifecycle(workOrder.id, { save: false }) || changed; }
+    catch (error) { console.error("AI Work Order lifecycle check failed.", workOrder.id, error); }
+  }
+  if (changed) await saveStore({ allowWithoutCoreApproval: true, reason: "ai-work-order-lifecycle-refresh" });
+  return changed;
 }
 
 function renderExternalReviewDecision(workOrder, pass, decision, chunkTextById = new Map(), chunkSourceById = new Map()) {
@@ -14113,7 +14343,8 @@ function renderExternalReviewDecision(workOrder, pass, decision, chunkTextById =
   const localDisagreement = localMatch && (nameKey(localMatch.title || localMatch.conceptTitle) !== nameKey(decision.concept_title) || (localClassification && localClassification !== decision.classification));
   return `<article class="item">
     <p class="item-title">${escapeDisplay(decision.concept_title || "Untitled decision", DISPLAY_META_LIMIT)}</p>
-    <p class="item-meta">${escapeHtml(externalReviewClassificationLabel(decision.classification))} · cluster ${escapeDisplay(decision.cluster_id || "missing", DISPLAY_META_LIMIT)} · confidence ${Math.round(Number(decision.confidence || 0) * 100)}% · evidence role: ${escapeHtml(String(decision.evidence_role || "").replaceAll("_", " "))}</p>
+    <p class="item-meta">${escapeHtml(externalReviewClassificationLabel(decision.classification))} · cluster ${escapeDisplay(decision.cluster_id || "missing", DISPLAY_META_LIMIT)} · confidence ${Math.round(Number(decision.confidence || 0) * 100)}% · material role: ${escapeHtml(externalReviewEvidenceRoleLabel(decision.evidence_role))}</p>
+    <p class="item-meta">${escapeHtml(externalReviewClassificationHelp(decision.classification))}</p>
     <p class="item-meta">Primary project: ${escapeDisplay(primaryName, DISPLAY_META_LIMIT)}${additional ? ` · Additional projects: ${escapeDisplay(additional, DISPLAY_META_LIMIT)}` : ""}</p>
     ${decision.proposed_new_project ? `<p class="notice"><strong>Proposed new project:</strong> ${escapeDisplay(decision.proposed_new_project.suggested_name, DISPLAY_META_LIMIT)} · confidence ${Math.round(Number(decision.proposed_new_project.confidence || 0) * 100)}%${decision.proposed_new_project.proposed_parent_project_id ? ` · proposed parent ${escapeDisplay(decision.proposed_new_project.proposed_parent_project_id, DISPLAY_META_LIMIT)}` : ""}<br>${escapeDisplay(decision.proposed_new_project.reason_distinct_from_existing_projects || "", DISPLAY_TEXT_LIMIT)}</p>` : ""}
     ${sourceFiles.length ? `<p class="item-meta">Source files: ${escapeDisplay(sourceFiles.join(", "), DISPLAY_TEXT_LIMIT)}</p>` : ""}
@@ -14127,49 +14358,91 @@ function renderExternalReviewDecision(workOrder, pass, decision, chunkTextById =
       ${decision.reasoning_summary ? `<p class="item-body"><strong>Reviewer reasoning:</strong> ${escapeDisplay(decision.reasoning_summary, DISPLAY_TEXT_LIMIT)}</p>` : ""}
       <p class="item-meta">Personal Aether support: ${decision.personal_aether_support ? "Yes" : "No"} · Commercial default allowed: ${decision.commercial_default_allowed ? "Yes" : "No"} · Separate design review: ${decision.requires_separate_design_review ? "Required" : "No"}</p>
     </details>
-    <div class="item-actions"><button class="btn compact" type="button" data-action="review-external-ai-decision" data-work-order-id="${escapeHtml(workOrder.id)}" data-review-pass-id="${escapeHtml(pass.id)}" data-decision-id="${escapeHtml(decision.decision_id)}">Human review</button></div>
+    <div class="item-actions">
+      <button class="btn secondary compact" type="button" data-action="copy-external-review-material" data-work-order-id="${escapeHtml(workOrder.id)}" data-review-pass-id="${escapeHtml(pass.id)}" data-decision-id="${escapeHtml(decision.decision_id)}" data-copy-mode="title">Copy title</button>
+      <button class="btn secondary compact" type="button" data-action="copy-external-review-material" data-work-order-id="${escapeHtml(workOrder.id)}" data-review-pass-id="${escapeHtml(pass.id)}" data-decision-id="${escapeHtml(decision.decision_id)}" data-copy-mode="full">Copy full material</button>
+      ${action ? "" : `<button class="btn compact" type="button" data-action="review-external-ai-decision" data-work-order-id="${escapeHtml(workOrder.id)}" data-review-pass-id="${escapeHtml(pass.id)}" data-decision-id="${escapeHtml(decision.decision_id)}">Review this material</button>`}
+    </div>
   </article>`;
 }
 
-async function openExternalReviewPassesModal(workOrderId) {
+function externalReviewDecisionClipboardText(workOrderId, passId, decisionId, mode = "full") {
+  const workspace = externalReviewWorkspaceCache.get(workOrderId);
+  const pass = workspace?.passes?.find((item) => item.id === passId);
+  const decision = pass?.result?.decisions?.find((item) => item.decision_id === decisionId);
+  if (!decision) return "";
+  const title = String(decision.concept_title || "Untitled material").trim();
+  if (mode === "title") return title;
+  const sourceFiles = [...new Set((decision.supporting_chunk_ids || []).map((id) => workspace.chunkSourceById?.get(id)).filter(Boolean))];
+  const evidence = (decision.evidence_spans || []).map((span) => {
+    const sourceText = workspace.chunkTextById?.get(span.chunk_id) || "";
+    const excerpt = String(span.excerpt || sourceText.slice(Number.isInteger(span.start) ? span.start : 0, Number.isInteger(span.end) ? span.end : 700)).trim();
+    return excerpt ? `Evidence (${span.chunk_id}): ${excerpt}` : "";
+  }).filter(Boolean);
+  return [
+    title,
+    `Suggested use: ${externalReviewClassificationLabel(decision.classification)}`,
+    `Material role: ${externalReviewEvidenceRoleLabel(decision.evidence_role)}`,
+    decision.summary ? `Summary: ${decision.summary}` : "",
+    decision.reasoning_summary ? `Reasoning: ${decision.reasoning_summary}` : "",
+    sourceFiles.length ? `Source files: ${sourceFiles.join(", ")}` : "",
+    ...evidence,
+    `Provenance: External Review Pass ${pass.versionNumber || pass.id}; decision ${decision.decision_id}; chunks ${(decision.supporting_chunk_ids || []).join(", ") || "not listed"}`
+  ].filter(Boolean).join("\n\n");
+}
+
+async function loadExternalReviewWorkspace(workOrder, { refresh = false } = {}) {
+  if (!refresh && externalReviewWorkspaceCache.has(workOrder.id)) return externalReviewWorkspaceCache.get(workOrder.id);
+  const response = await platformAdapter.reviewExchange.listExternalReviews({ workOrderId: workOrder.id });
+  const passes = response.externalReviewPasses || [];
+  const caseView = await platformAdapter.discovery.getCase({ discoveryCaseId: workOrder.source.discoveryCaseId });
+  const extractionById = new Map((caseView.extractions || []).map((item) => [item.id, item]));
+  const versionById = new Map((caseView.fileVersions || []).map((item) => [item.id, item]));
+  const chunkSourceById = new Map((caseView.chunks || []).map((chunk) => {
+    const extraction = extractionById.get(chunk.discoveryExtractionId) || {};
+    return [chunk.id, versionById.get(extraction.fileVersionId)?.originalName || ""];
+  }));
+  const chunkIds = [...new Set(passes.flatMap((pass) => (pass.result.decisions || [])
+    .filter((decision) => !(decision.evidence_spans || []).some((span) => String(span.excerpt || "").trim()))
+    .flatMap((decision) => decision.supporting_chunk_ids || [])))].slice(0, 40);
+  const chunkTextById = new Map();
+  await Promise.all(chunkIds.map(async (chunkId) => {
+    try { const read = await platformAdapter.discovery.readChunkText({ discoveryChunkId: chunkId }); chunkTextById.set(chunkId, read.text || ""); } catch {}
+  }));
+  const workspace = { passes, chunkSourceById, chunkTextById, loadedAt: nowIso() };
+  externalReviewWorkspaceCache.set(workOrder.id, workspace);
+  return workspace;
+}
+
+async function openExternalReviewPassesModal(workOrderId, { refresh = false } = {}) {
   const workOrder = (store.aiWorkOrders || []).find((order) => order.id === workOrderId);
   if (!workOrder?.source?.discoveryCaseId || !platformAdapter.reviewExchange?.available) return;
   try {
-    const response = await platformAdapter.reviewExchange.listExternalReviews({ workOrderId });
-    const passes = response.externalReviewPasses || [];
-    const caseView = await platformAdapter.discovery.getCase({ discoveryCaseId: workOrder.source.discoveryCaseId });
-    const extractionById = new Map((caseView.extractions || []).map((item) => [item.id, item]));
-    const versionById = new Map((caseView.fileVersions || []).map((item) => [item.id, item]));
-    const chunkSourceById = new Map((caseView.chunks || []).map((chunk) => {
-      const extraction = extractionById.get(chunk.discoveryExtractionId) || {};
-      return [chunk.id, versionById.get(extraction.fileVersionId)?.originalName || ""];
-    }));
-    const chunkIds = [...new Set(passes.flatMap((pass) => (pass.result.decisions || []).flatMap((decision) => decision.supporting_chunk_ids || [])))].slice(0, 300);
-    const chunkTextById = new Map();
-    await Promise.all(chunkIds.map(async (chunkId) => {
-      try { const read = await platformAdapter.discovery.readChunkText({ discoveryChunkId: chunkId }); chunkTextById.set(chunkId, read.text || ""); } catch {}
-    }));
+    const { passes, chunkSourceById, chunkTextById } = await loadExternalReviewWorkspace(workOrder, { refresh });
     showModal({
       title: "Imported External AI Reviews",
       submitText: t("close"),
       flowStep: 4,
       body: passes.length ? passes.slice().reverse().map((pass) => {
+        const pendingDecisions = (pass.result.decisions || []).filter((decision) => !externalReviewActionFor(pass, decision.decision_id));
+        const completedDecisions = (pass.result.decisions || []).filter((decision) => externalReviewActionFor(pass, decision.decision_id));
         const reviewGroup = (decision) => decision.classification === "project_candidate"
           ? "project_candidate"
           : decision.classification === "existing_project_support" && (decision.additional_projects || []).length
             ? "cross_project_evidence"
             : decision.classification;
-        const groups = Object.groupBy ? Object.groupBy(pass.result.decisions || [], reviewGroup) : (pass.result.decisions || []).reduce((all, decision) => ((all[reviewGroup(decision)] ||= []).push(decision), all), {});
+        const groups = Object.groupBy ? Object.groupBy(pendingDecisions, reviewGroup) : pendingDecisions.reduce((all, decision) => ((all[reviewGroup(decision)] ||= []).push(decision), all), {});
         const unaccountedChunks = pass.result.coverage_summary?.unaccounted_chunks || [];
         const failedSelfChecks = Object.entries(pass.result.final_self_check || {}).filter(([, value]) => value !== true).map(([field]) => field);
         return `<section class="item">
           <p class="item-title">External Review Pass ${Number(pass.versionNumber).toLocaleString()}</p>
           <p class="item-meta">Imported ${escapeHtml(formatDate(pass.importedAt))} · ${escapeDisplay(pass.reviewer?.provider || pass.reviewer?.model || pass.reviewer?.reviewer_type || "Unspecified reviewer", DISPLAY_META_LIMIT)} · ${pass.sourceComplete ? "source complete" : "partial source review"} · immutable import hash ${escapeDisplay(String(pass.importHash || "").slice(0, 16), 20)}…</p>
-          <p class="notice">This pass is non-authoritative. Every decision below requires a separate human action before anything can enter Intake.</p>
+          <p class="notice"><strong>${pendingDecisions.length.toLocaleString()} left to review · ${completedDecisions.length.toLocaleString()} completed.</strong> Completed choices leave the active list immediately so long-source decisions cannot be handled twice.</p>
           <p class="${unaccountedChunks.length ? "notice health-blocked" : "item-meta"}"><strong>Consolidation coverage:</strong> ${Number(pass.result.coverage_summary?.accounted_chunk_count || 0).toLocaleString()} of ${Number(pass.result.coverage_summary?.exported_chunk_count || 0).toLocaleString()} chunks accounted for.${unaccountedChunks.length ? ` Final approval is blocked. Unaccounted: ${escapeDisplay(unaccountedChunks.join(", "), DISPLAY_TEXT_LIMIT)}` : " Complete; cluster-linked decisions may proceed to human review."}</p>
           <p class="${failedSelfChecks.length ? "notice health-blocked" : "item-meta"}"><strong>Final self-check:</strong> ${failedSelfChecks.length ? `Incomplete. Approval and project creation are blocked. False/missing checks: ${escapeDisplay(failedSelfChecks.join(", "), DISPLAY_TEXT_LIMIT)}` : "All mandatory reviewer confirmations are true."}</p>
           ${(pass.result.concept_clusters || []).length ? `<details class="technical-details"><summary>Concept clusters (${pass.result.concept_clusters.length})</summary>${pass.result.concept_clusters.map((cluster) => `<p class="item-body"><strong>${escapeDisplay(cluster.concept_title, DISPLAY_META_LIMIT)}</strong> · ${escapeHtml(String(cluster.hierarchy_type).replaceAll("_", " "))} · ${escapeHtml(cluster.maturity)} · cluster ${escapeDisplay(cluster.cluster_id, DISPLAY_META_LIMIT)}<br>${escapeDisplay(cluster.summary, DISPLAY_TEXT_LIMIT)}<br><span class="item-meta">Primary: ${escapeDisplay((cluster.primary_chunk_ids || []).join(", "), DISPLAY_TEXT_LIMIT)}${(cluster.duplicate_chunk_ids || []).length ? ` · duplicates: ${escapeDisplay(cluster.duplicate_chunk_ids.join(", "), DISPLAY_TEXT_LIMIT)}` : ""}${(cluster.contradictory_chunk_ids || []).length ? ` · contradictions: ${escapeDisplay(cluster.contradictory_chunk_ids.join(", "), DISPLAY_TEXT_LIMIT)}` : ""}</span></p>`).join("")}</details>` : ""}
-          ${Object.entries(groups).map(([classification, decisions]) => `<h3 class="section-title">${escapeHtml(externalReviewClassificationLabel(classification))} (${decisions.length})</h3>${decisions.map((decision) => renderExternalReviewDecision(workOrder, pass, decision, chunkTextById, chunkSourceById)).join("")}`).join("")}
+          ${pendingDecisions.length ? Object.entries(groups).map(([classification, decisions]) => `<h3 class="section-title">${escapeHtml(externalReviewClassificationLabel(classification))} (${decisions.length})</h3>${decisions.map((decision) => renderExternalReviewDecision(workOrder, pass, decision, chunkTextById, chunkSourceById)).join("")}`).join("") : `<p class="empty">Human Review is complete for this imported pass.</p>`}
+          ${completedDecisions.length ? `<details class="technical-details"><summary>Completed human decisions (${completedDecisions.length})</summary>${completedDecisions.map((decision) => renderExternalReviewDecision(workOrder, pass, decision, chunkTextById, chunkSourceById)).join("")}</details>` : ""}
           ${(pass.result.relationships || []).length ? `<details class="technical-details"><summary>Relationships (${pass.result.relationships.length})</summary><pre class="code-block">${escapeHtml(JSON.stringify(pass.result.relationships, null, 2))}</pre></details>` : ""}
           ${(pass.result.human_questions || []).length ? `<details class="technical-details"><summary>Questions for human review (${pass.result.human_questions.length})</summary>${pass.result.human_questions.map((question) => `<p class="item-body">${escapeDisplay(question.question || question.text || JSON.stringify(question), DISPLAY_TEXT_LIMIT)}</p>`).join("")}</details>` : ""}
           ${(pass.result.rejected_material || []).length ? `<details class="technical-details"><summary>Rejected material (${pass.result.rejected_material.length})</summary>${pass.result.rejected_material.map((item) => `<p class="item-body">${escapeDisplay(item.summary || item.reason || item.title || JSON.stringify(item), DISPLAY_TEXT_LIMIT)}</p>`).join("")}</details>` : ""}
@@ -14186,15 +14459,19 @@ async function openExternalReviewPassesModal(workOrderId) {
 function openExternalDecisionReviewModal(workOrderId, passId, decisionId) {
   const workOrder = (store.aiWorkOrders || []).find((order) => order.id === workOrderId);
   if (!workOrder) return;
-  showModal({
-    title: "Loading human review",
-    submitText: t("cancel"),
-    flowStep: 4,
-    forceReplace: true,
-    body: `<p class="notice" aria-live="polite">Loading the imported decision, current projects, and immutable review history…</p>`,
-    onSubmit() { return true; }
-  });
-  platformAdapter.reviewExchange.listExternalReviews({ workOrderId }).then((response) => {
+  const cachedWorkspace = externalReviewWorkspaceCache.get(workOrderId);
+  if (!cachedWorkspace) showModal({
+      title: "Loading human review",
+      submitText: t("cancel"),
+      flowStep: 4,
+      forceReplace: true,
+      body: `<p class="notice" aria-live="polite">Loading the imported decision, current projects, and immutable review history…</p>`,
+      onSubmit() { return true; }
+    });
+  const reviewResponse = cachedWorkspace
+    ? Promise.resolve({ externalReviewPasses: cachedWorkspace.passes })
+    : platformAdapter.reviewExchange.listExternalReviews({ workOrderId });
+  reviewResponse.then((response) => {
     const pass = (response.externalReviewPasses || []).find((item) => item.id === passId);
     const decision = pass?.result?.decisions?.find((item) => item.decision_id === decisionId);
     if (!pass || !decision) return;
@@ -14209,9 +14486,10 @@ function openExternalDecisionReviewModal(workOrderId, passId, decisionId) {
       forceReplace: true,
       body: `
         <p class="notice">You are reviewing a proposal from External Review Pass ${Number(pass.versionNumber).toLocaleString()}. Editing it records a new human action; the imported pass remains unchanged.</p>
+        <p class="item-meta"><strong>Material role:</strong> ${escapeHtml(externalReviewEvidenceRoleLabel(decision.evidence_role))}. ${escapeHtml(externalReviewClassificationHelp(decision.classification))}</p>
         <div class="field"><label for="reviewOperation">Review operation</label><select id="reviewOperation" name="reviewOperation"><option value="standard">Review this decision</option><option value="split">Split into two human-reviewed concepts</option></select></div>
         <div class="field"><label for="disposition">Human decision</label><select id="disposition" name="disposition" required><option value="approved">Approve for use</option><option value="needs_revision">Keep for revision</option><option value="rejected">Reject</option></select></div>
-        <div class="field"><label for="classification">Classification</label><select id="classification" name="classification" required>${classificationOptions}</select></div>
+        <div class="field"><label for="classification">What should happen to this material?</label><select id="classification" name="classification" required>${classificationOptions}</select><p class="field-help">Choose a project destination only for project evidence. Unassigned source/reference material is preserved in review history without creating a project or changing Core.</p></div>
         <div class="field"><label for="conceptTitle">Concept title</label><input id="conceptTitle" name="conceptTitle" required value="${escapeHtml(decision.concept_title || "")}"></div>
         <div class="field"><label for="summary">Summary</label><textarea id="summary" name="summary">${escapeHtml(decision.summary || "")}</textarea></div>
         <div class="field"><label for="targetProjectId">Known project destination</label><select id="targetProjectId" name="targetProjectId"><option value="">No known project — keep the selected classification</option>${projectOptions(initialTargetProjectId)}</select><p class="field-help">Choosing one project is the complete routing choice. An approved decision is placed in that project's pending Intake review automatically; there is no second routing checkbox.</p></div>
@@ -14248,7 +14526,15 @@ function openExternalDecisionReviewModal(workOrderId, passId, decisionId) {
             projectId: targetProjectId, destination: proposedNew ? "proposed_new_project" : "existing_project",
             proposedProjectName: proposedNew ? data.proposedProjectName.trim() : "", proposedObjectType: "Source",
             proposedChange: { text: data.conceptTitle.trim(), summary: data.summary.trim() || decision.reasoning_summary || "" },
-            evidence: { externalReviewPassId: passId, externalDecisionId: decisionId, supportingChunkIds: decision.supporting_chunk_ids || [], humanReviewActionId: action.id, proposedParentProjectId: data.proposedParentProjectId || "", projectFamily: data.projectFamily.trim() },
+            evidence: {
+              externalReviewPassId: passId,
+              externalDecisionId: decisionId,
+              supportingChunkIds: decision.supporting_chunk_ids || [],
+              humanReviewActionId: action.id,
+              proposedParentProjectId: data.proposedParentProjectId || "",
+              projectFamily: data.projectFamily.trim(),
+              resumeWork: { type: "external_review", workOrderId, passId }
+            },
             save: false
           });
           action.routedIntakeId = intake.id;
@@ -14262,8 +14548,17 @@ function openExternalDecisionReviewModal(workOrderId, passId, decisionId) {
             reason: data.reason.trim(), routedIntakeId: "", operation: "split_secondary", mergedDecisionIds: [], proposedNewProject: action.proposedNewProject
           });
         }
+        const workspace = externalReviewWorkspaceCache.get(workOrderId);
+        const cachedPass = workspace?.passes?.find((item) => item.id === passId);
+        if (cachedPass) {
+          cachedPass.humanActions = Array.isArray(cachedPass.humanActions) ? cachedPass.humanActions : [];
+          cachedPass.humanActions.push({ ...action, finalDisposition: action.disposition, recordedBy: actor.id });
+        }
         if (action.routedIntakeId) await saveStore({ allowWithoutCoreApproval: true, reason: "external-review-human-decision" });
-        postModalAction = () => openExternalReviewPassesModal(workOrderId);
+        const automaticallyArchived = action.routedIntakeId ? false : await reconcileAiWorkOrderLifecycle(workOrderId);
+        postModalAction = automaticallyArchived
+          ? () => { activeRootView = "work-orders"; activeProjectId = null; render(); }
+          : () => openExternalReviewPassesModal(workOrderId);
         return true;
       }
     });
@@ -14324,6 +14619,24 @@ function archiveAiWorkOrder(workOrderId) {
     onSubmit(data) {
       const actor = getOrCreateActor(data.actorName, "Human");
       workOrder.status = "archived";
+      workOrder.archivedAt = nowIso();
+      workOrder.archiveReason = data.reason.trim();
+      workOrder.completionReceipt = workOrder.completionReceipt || {
+        completedAt: workOrder.archivedAt,
+        discoveryCaseId: workOrder.source?.discoveryCaseId || "",
+        sourceFileCount: (workOrder.source?.sourceFiles || []).length,
+        sourceChunkCount: Number(workOrder.lastAnalysis?.totalDetectedChunks || workOrder.lastAnalysis?.analyzedUniqueChunks || 0),
+        analysisRunCount: (workOrder.analysisRunIds || []).length,
+        reviewPassCount: 0,
+        reviewPassIds: [],
+        finalReviewPassId: "",
+        humanDecisionCount: 0,
+        humanReviewerIds: [actor.id],
+        destinationProjectIds: workOrder.projectId ? [workOrder.projectId] : [],
+        rejectedCount: 0,
+        externalTransmissionStatus: "unknown",
+        manualArchive: true
+      };
       const project = getProject(workOrder.projectId);
       if (project) {
         recordChange(project, actor, data.reason, "AI work order archived", {
@@ -14480,7 +14793,7 @@ function openCreateIntakeModal() {
         </div>
       </div>
     `,
-    onSubmit(data) {
+    async onSubmit(data) {
       const lane = String(data.intakeLane || "needs_review");
       const projectId = lane === "existing_project" ? String(data.projectId || "").trim() : "";
       const proposedProjectName = lane === "new_project" ? String(data.proposedProjectName || data.title || "").trim() : "";
@@ -14637,15 +14950,36 @@ function openApproveIntakeModal(intakeId) {
       </div>
       ${auditFields()}
     `,
-    onSubmit(data, form) {
+    async onSubmit(data, form) {
       const actor = getOrCreateActor(data.actorName, "Human");
       if (!validateActorPermission(actor, "approve", intakePermissionProject(intake))) return false;
+      const createsNewProject = intake.destination === "proposed_new_project" && !getProject(intake.projectId);
       const result = approveIntakeItem(intake.id, actor, data.reason, (item, approval) => applyApprovedIntakeToCore(item, actor, data.reason, approval));
       if (result) {
-        if (intake.projectId && getProject(intake.projectId)) queuePostModalAction(() => {
-          openProjectNow(intake.projectId, "dashboard");
-          render();
-        });
+        const resumeWork = intake.evidence?.resumeWork || {};
+        const resumableReview = resumeWork.type === "external_review"
+          && (store.aiWorkOrders || []).some((order) => order.id === resumeWork.workOrderId);
+        let reviewWorkRemains = false;
+        if (resumableReview) {
+          try { reviewWorkRemains = await externalReviewHasPendingDecisions(resumeWork.workOrderId); }
+          catch (error) { console.error("Could not check remaining Human Review decisions.", error); }
+        }
+        if (resumableReview && !reviewWorkRemains) {
+          try { await reconcileAiWorkOrderLifecycle(resumeWork.workOrderId); }
+          catch (error) { console.error("Could not complete AI Work Order lifecycle.", error); }
+        }
+        if (resumableReview && createsNewProject && intake.projectId && getProject(intake.projectId)) {
+          pendingWorkflowResumeContext = reviewWorkRemains ? { ...resumeWork, projectId: intake.projectId } : null;
+          queuePostModalAction(() => {
+            openProjectNow(intake.projectId, "dashboard");
+            render();
+          });
+        }
+        else if (resumableReview && reviewWorkRemains) queuePostModalAction(() => openExternalReviewPassesModal(resumeWork.workOrderId));
+        else if (intake.projectId && getProject(intake.projectId)) queuePostModalAction(() => {
+            openProjectNow(intake.projectId, "dashboard");
+            render();
+          });
       }
       return Boolean(result);
     }
@@ -14877,16 +15211,33 @@ function openRejectIntakeModal(intakeId) {
         "Reject for later manual review"
       ] })}
     `,
-    onSubmit(data) {
+    async onSubmit(data) {
       const actor = getOrCreateActor(data.actorName, "Human");
       intake.status = "rejected";
+      intake.archived = true;
+      intake.completedAt = nowIso();
       intake.review = {
-        reviewedAt: nowIso(),
+        reviewedAt: intake.completedAt,
         actorId: actor.id,
         actorName: actor.name,
         reason: data.reason.trim()
       };
-      saveStore({ allowWithoutCoreApproval: true, reason: "intake-rejected" });
+      intake.completionReceipt = {
+        outcome: "rejected",
+        completedAt: intake.completedAt,
+        reviewedBy: actor.id,
+        reason: data.reason.trim(),
+        projectId: intake.projectId || "",
+        resultingObjectType: "",
+        resultingObjectId: "",
+        sourceLabel: intake.sourceLabel || "",
+        discoveryCaseId: intake.discoveryCaseId || intake.evidence?.discoveryCaseId || "",
+        workOrderId: intake.evidence?.resumeWork?.workOrderId || "",
+        externalReviewPassId: intake.evidence?.externalReviewPassId || "",
+        externalDecisionId: intake.evidence?.externalDecisionId || ""
+      };
+      await saveStore({ allowWithoutCoreApproval: true, reason: "intake-rejected" });
+      if (intake.completionReceipt.workOrderId) await reconcileAiWorkOrderLifecycle(intake.completionReceipt.workOrderId);
       return true;
     }
   });
@@ -14908,16 +15259,32 @@ function openArchiveIntakeModal(intakeId) {
         "Archive for later manual review"
       ] })}
     `,
-    onSubmit(data) {
+    async onSubmit(data) {
       const actor = getOrCreateActor(data.actorName, "Human");
       intake.archived = true;
+      intake.completedAt = nowIso();
       intake.review = {
-        reviewedAt: nowIso(),
+        reviewedAt: intake.completedAt,
         actorId: actor.id,
         actorName: actor.name,
         reason: data.reason.trim()
       };
-      saveStore({ allowWithoutCoreApproval: true, reason: "intake-archived" });
+      intake.completionReceipt = intake.completionReceipt || {
+        outcome: "archived_without_core_change",
+        completedAt: intake.completedAt,
+        reviewedBy: actor.id,
+        reason: data.reason.trim(),
+        projectId: intake.projectId || "",
+        resultingObjectType: "",
+        resultingObjectId: "",
+        sourceLabel: intake.sourceLabel || "",
+        discoveryCaseId: intake.discoveryCaseId || intake.evidence?.discoveryCaseId || "",
+        workOrderId: intake.evidence?.resumeWork?.workOrderId || "",
+        externalReviewPassId: intake.evidence?.externalReviewPassId || "",
+        externalDecisionId: intake.evidence?.externalDecisionId || ""
+      };
+      await saveStore({ allowWithoutCoreApproval: true, reason: "intake-archived" });
+      if (intake.completionReceipt.workOrderId) await reconcileAiWorkOrderLifecycle(intake.completionReceipt.workOrderId);
       return true;
     }
   });
@@ -15690,6 +16057,7 @@ function openEditDecisionModal(project, decision) {
       <div class="field">
         <label for="decision">${escapeHtml(t("decision"))}</label>
         <textarea id="decision" name="decision" required>${escapeHtml(decision.text)}</textarea>
+        ${pasteClipboardButton("decision")}
       </div>
       <div class="field">
         <label for="confidence">${escapeHtml(t("confidence"))}</label>
@@ -15744,6 +16112,7 @@ function openEditFactModal(project, fact) {
       <div class="field">
         <label for="statement">${escapeHtml(t("fact"))}</label>
         <textarea id="statement" name="statement" required>${escapeHtml(fact.statement)}</textarea>
+        ${pasteClipboardButton("statement")}
       </div>
       <div class="field">
         <label for="source">${escapeHtml(t("source"))}</label>
@@ -15794,6 +16163,7 @@ function openEditConflictModal(project, conflict) {
       <div class="field">
         <label for="title">${escapeHtml(t("conflictTitle"))}</label>
         <input id="title" name="title" value="${escapeHtml(conflict.title || "")}" required>
+        ${pasteClipboardButton("title", "Paste title")}
       </div>
       <div class="field">
         <label for="status">${escapeHtml(t("conflictStatus"))}</label>
@@ -15802,6 +16172,7 @@ function openEditConflictModal(project, conflict) {
       <div class="field">
         <label for="description">${escapeHtml(t("conflictDescription"))}</label>
         <textarea id="description" name="description" required>${escapeHtml(conflict.description || "")}</textarea>
+        ${pasteClipboardButton("description", "Paste description")}
       </div>
       <div class="field">
         <label for="linkedItems">${escapeHtml(t("linkedItems"))}</label>
@@ -15860,6 +16231,7 @@ function openEditSourceModal(project, source) {
       <div class="field">
         <label for="title">${escapeHtml(t("title"))}</label>
         <input id="title" name="title" value="${escapeHtml(source.title)}" required>
+        ${pasteClipboardButton("title", "Paste title")}
       </div>
       <div class="two-col">
         <div class="field">
@@ -15894,6 +16266,7 @@ function openEditSourceModal(project, source) {
       <div class="field">
         <label for="summary">${escapeHtml(t("summary"))}</label>
         <textarea id="summary" name="summary">${escapeHtml(source.summary || "")}</textarea>
+        ${pasteClipboardButton("summary", "Paste summary")}
       </div>
       <div class="field">
         <label for="tags">${escapeHtml(t("tags"))}</label>
@@ -16344,10 +16717,12 @@ function openEditQuestionModal(project, question) {
       <div class="field">
         <label for="question">${escapeHtml(t("openQuestion"))}</label>
         <textarea id="question" name="question" required>${escapeHtml(question.question)}</textarea>
+        ${pasteClipboardButton("question", "Paste question")}
       </div>
       <div class="field">
         <label for="context">${escapeHtml(t("context"))}</label>
         <textarea id="context" name="context">${escapeHtml(question.context || "")}</textarea>
+        ${pasteClipboardButton("context", "Paste context")}
       </div>
       ${auditFields()}
     `,
@@ -16384,6 +16759,7 @@ function openEditActionModal(project, action) {
       <div class="field">
         <label for="action">${escapeHtml(t("nextAction"))}</label>
         <textarea id="action" name="action" required>${escapeHtml(action.action)}</textarea>
+        ${pasteClipboardButton("action")}
       </div>
       <div class="two-col">
         <div class="field">
@@ -16986,6 +17362,7 @@ function openDecisionModal() {
       <div class="field">
         <label for="decision">${escapeHtml(t("decision"))}</label>
         <textarea id="decision" name="decision" required></textarea>
+        ${pasteClipboardButton("decision")}
       </div>
       <div class="field">
         <label for="confidence">${escapeHtml(t("confidence"))}</label>
@@ -17039,6 +17416,7 @@ function openFactModal() {
       <div class="field">
         <label for="statement">${escapeHtml(t("fact"))}</label>
         <textarea id="statement" name="statement" required></textarea>
+        ${pasteClipboardButton("statement")}
       </div>
       <div class="field">
         <label for="source">${escapeHtml(t("source"))}</label>
@@ -17092,6 +17470,7 @@ function openConflictModal() {
       <div class="field">
         <label for="title">${escapeHtml(t("conflictTitle"))}</label>
         <input id="title" name="title" required>
+        ${pasteClipboardButton("title", "Paste title")}
       </div>
       <div class="field">
         <label for="status">${escapeHtml(t("conflictStatus"))}</label>
@@ -17100,6 +17479,7 @@ function openConflictModal() {
       <div class="field">
         <label for="description">${escapeHtml(t("conflictDescription"))}</label>
         <textarea id="description" name="description" required></textarea>
+        ${pasteClipboardButton("description", "Paste description")}
       </div>
       <div class="field">
         <label for="linkedItems">${escapeHtml(t("linkedItems"))}</label>
@@ -17155,6 +17535,7 @@ function openSourceModal() {
       <div class="field">
         <label for="title">${escapeHtml(t("title"))}</label>
         <input id="title" name="title" required>
+        ${pasteClipboardButton("title", "Paste title")}
       </div>
       <div class="two-col">
         <div class="field">
@@ -17189,6 +17570,7 @@ function openSourceModal() {
       <div class="field">
         <label for="summary">${escapeHtml(t("summary"))}</label>
         <textarea id="summary" name="summary"></textarea>
+        ${pasteClipboardButton("summary", "Paste summary")}
       </div>
       <div class="field">
         <label for="tags">${escapeHtml(t("tags"))}</label>
@@ -17470,10 +17852,12 @@ function openQuestionModal() {
       <div class="field">
         <label for="question">${escapeHtml(t("openQuestion"))}</label>
         <textarea id="question" name="question" required></textarea>
+        ${pasteClipboardButton("question", "Paste question")}
       </div>
       <div class="field">
         <label for="context">${escapeHtml(t("context"))}</label>
         <textarea id="context" name="context"></textarea>
+        ${pasteClipboardButton("context", "Paste context")}
       </div>
       ${auditFields()}
     `,
@@ -17508,6 +17892,7 @@ function openActionModal() {
       <div class="field">
         <label for="action">${escapeHtml(t("nextAction"))}</label>
         <textarea id="action" name="action" required></textarea>
+        ${pasteClipboardButton("action")}
       </div>
       <div class="two-col">
         <div class="field">
@@ -17786,7 +18171,7 @@ function openArmTransportTokenModal(token) {
   });
 }
 
-app.addEventListener("click", (event) => {
+app.addEventListener("click", async (event) => {
   const openedSummary = event.target.closest("details.action-menu > summary");
   if (!openedSummary) return;
   const activeMenu = openedSummary.closest("details.action-menu");
@@ -17803,7 +18188,7 @@ app.addEventListener("keydown", (event) => {
   card.click();
 });
 
-app.addEventListener("click", (event) => {
+app.addEventListener("click", async (event) => {
   const button = event.target.closest("[data-action]");
   if (!button) return;
   if (button.classList?.contains("project-card") && event.target.closest("button, details, summary, input, select, textarea, a")) return;
@@ -17813,7 +18198,7 @@ app.addEventListener("click", (event) => {
   if (button.closest(".object-detail-panel") && activeObjectDetail && action !== "close-object-detail") {
     pendingFlowReturnContext = { ...activeObjectDetail };
     activeObjectDetail = null;
-  } else if (activeProjectId && button.dataset.objectType && button.dataset.objectId && !["open-object-detail", "view-object-history"].includes(action)) {
+  } else if (activeProjectId && button.dataset.objectType && button.dataset.objectId && !["open-object-detail", "view-object-history", "copy-project-object"].includes(action)) {
     pendingFlowReturnContext = { projectId: activeProjectId, objectType: button.dataset.objectType, objectId: button.dataset.objectId };
   }
   if (action === "export-failed-data") {
@@ -17837,21 +18222,15 @@ app.addEventListener("click", (event) => {
     return;
   }
 
-  if (action === "correct-project-warning") {
-    const projectId = button.dataset.projectId || "";
-    const correctiveAction = button.dataset.correctiveAction || "edit-status";
-    const project = getProject(projectId);
-    if (!project) {
-      window.alert(t("missingProject"));
-      return;
+  if (action === "copy-project-object") {
+    try {
+      const project = getProject(button.dataset.projectId || activeProjectId);
+      const text = project && projectObjectClipboardText(project, button.dataset.objectType, button.dataset.objectId);
+      await writeProjectStateClipboard(text);
+      showClipboardSuccess(button);
+    } catch (error) {
+      window.alert(error.message || "The project material could not be copied.");
     }
-    openProjectNow(projectId, "dashboard");
-    render();
-    if (!actionAllowedForCurrentActor(correctiveAction, project)) {
-      window.alert(t("permissionDenied"));
-      return;
-    }
-    setTimeout(() => runProjectCorrectiveAction(correctiveAction), 0);
     return;
   }
 
@@ -17875,6 +18254,9 @@ app.addEventListener("click", (event) => {
     activeRootView = "work-orders";
     activeProjectId = null;
     render();
+    reconcileAllAiWorkOrderLifecycles().then((changed) => {
+      if (changed && activeRootView === "work-orders") render();
+    });
   }
   if (action === "show-files") {
     activeRootView = "files";
@@ -17989,6 +18371,11 @@ app.addEventListener("click", (event) => {
   if (action === "import-reviewed-evidence") openExternalReviewImportModal();
   if (action === "view-external-ai-reviews") openExternalReviewPassesModal(button.dataset.workOrderId);
   if (action === "review-external-ai-decision") openExternalDecisionReviewModal(button.dataset.workOrderId, button.dataset.reviewPassId, button.dataset.decisionId);
+  if (action === "continue-external-review") {
+    const workOrderId = button.dataset.workOrderId || pendingWorkflowResumeContext?.workOrderId || "";
+    pendingWorkflowResumeContext = null;
+    if (workOrderId) openExternalReviewPassesModal(workOrderId);
+  }
   if (action === "comment-ai-work-order") openAiWorkOrderCommentsModal(button.dataset.workOrderId);
   if (action === "archive-ai-work-order") archiveAiWorkOrder(button.dataset.workOrderId);
   if (action === "delete-archived-ai-work-order") openDeleteArchivedAiWorkOrderModal(button.dataset.workOrderId);
@@ -18160,18 +18547,6 @@ app.addEventListener("click", (event) => {
   if (action === "add-action") openActionModal();
 });
 
-function runProjectCorrectiveAction(action = "") {
-  if (action === "edit-status") openEditStatusModal();
-  else if (action === "add-action") openActionModal();
-  else if (action === "add-decision") openDecisionModal();
-  else if (action === "add-source") openSourceModal();
-  else if (action === "verify-all-source-files") openVerifySourceFileModal();
-  else {
-    activeView = "dashboard";
-    render();
-  }
-}
-
 app.addEventListener("submit", (event) => {
   const form = event.target.closest("[data-first-run-setup]");
   if (form) {
@@ -18305,11 +18680,21 @@ document.addEventListener("change", (event) => {
   applyContextPresetToForm(presetField.closest("form"), presetField.value);
 });
 
-document.addEventListener("click", (event) => {
+document.addEventListener("click", async (event) => {
   const button = event.target.closest?.(".modal [data-action]");
   if (!button) return;
   const action = button.dataset.action;
   if (!actionAllowedForCurrentActor(action)) { window.alert(t("permissionDenied")); return; }
+  if (action === "copy-external-review-material") {
+    try {
+      const text = externalReviewDecisionClipboardText(button.dataset.workOrderId, button.dataset.reviewPassId, button.dataset.decisionId, button.dataset.copyMode);
+      await writeProjectStateClipboard(text);
+      showClipboardSuccess(button);
+    } catch (error) {
+      window.alert(error.message || "The review material could not be copied.");
+    }
+    return;
+  }
   if (action === "export-universal-review-pack") exportUniversalReviewPack(button.dataset.workOrderId);
   if (action === "import-reviewed-evidence") openExternalReviewImportModal();
   if (action === "view-external-ai-reviews") openExternalReviewPassesModal(button.dataset.workOrderId);

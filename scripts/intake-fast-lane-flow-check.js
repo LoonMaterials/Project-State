@@ -70,6 +70,10 @@ async function main() {
     assert(appSource.includes('if (route === "rejected") {') && appSource.includes('intake.status = "rejected";'), "Queue review rejection must remove the item from pending Needs Attention.");
     assert(appSource.includes("Reject duplicate intra-folder project suggestion"), "Queue review needs rejection reason presets for Discovery cleanup.");
     assert(!appSource.includes("queuePostModalAction(() => openApproveIntakeModal(next.id))"), "Core approval must not auto-open the next approval item.");
+    assert(appSource.includes('intake.archived = true;') && appSource.includes('outcome: "approved"'), "Approved Intake must automatically leave the active Airlock with a completion receipt.");
+    assert(appSource.includes('outcome: "rejected"') && appSource.includes('Completed Intake history'), "Rejected Intake must move into collapsed completion history.");
+    assert(appSource.includes("function renderIntakeReceipt") && appSource.includes("Receipt and provenance"), "Completed Intake history must render a compact audit receipt.");
+    assert(appSource.includes('filter((item) => item.status === "pending" && !item.archived)'), "Only unfinished Intake proposals should remain in the active Airlock.");
 
     console.log("Intake Fast Lane Flow Check");
     console.log(JSON.stringify({
@@ -81,7 +85,10 @@ async function main() {
       duplicateManualAddHidden: true,
       queueReviewRejectsPendingItem: true,
       rejectionReasonPresets: true,
-      coreApprovalStopsAfterOneItem: true
+      coreApprovalStopsAfterOneItem: true,
+      approvedAndRejectedAutoComplete: true,
+      completedHistoryCollapsed: true,
+      compactReceiptPreserved: true
     }, null, 2));
     console.log("Intake fast lane flow: ok");
   } finally {
