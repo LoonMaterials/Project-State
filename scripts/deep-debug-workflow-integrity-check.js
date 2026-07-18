@@ -55,13 +55,16 @@ function workflowChecks() {
   const batchStart = app.indexOf("function openBatchTriageModal");
   const batchEnd = app.indexOf("function openRejectIntakeModal", batchStart);
   const batch = app.slice(batchStart, batchEnd);
-  assert(!batch.includes("approveIntakeItem"), "Batch triage contains an approval path.");
+  assert(batch.includes('value="bulk_approve"') && batch.includes("approveIntakeItem"), "Batch triage is missing governed bulk approval.");
+  assert(batch.includes('confirmationField("confirmProposalReviewed"') && batch.includes('confirmationField("confirmApprovalWritesCore"') && batch.includes('confirmationField("confirmInputsNotAuthority"'), "Bulk approval bypasses the human approval checklist.");
+  assert(batch.includes("beforeBulkApproval = cloneRecord(store)") && batch.includes("{ save: false }") && batch.includes("intake-bulk-approved"), "Bulk approval is missing per-item application, rollback, or durable save boundaries.");
   assert(batch.includes("intake-batch-triage"), "Batch triage is not persisted through the approved intake-only path.");
   assert(!app.includes("queuePostModalAction(() => openApproveIntakeModal(next.id))"), "Core approval auto-opens the next approval item.");
+  const singleApproval = app.slice(app.indexOf("function openApproveIntakeModal"), app.indexOf("function openReviewIntakeQueueModal"));
+  assert(singleApproval.includes('activeRootView = "intake"') && !singleApproval.includes("openProjectNow("), "Single Intake approval does not return to the Intake Airlock.");
 
-  return { requiredIntegrations: required.length, correctionAirlock: true, batchApprovalBlocked: true, approvalAutoAdvanceBlocked: true };
+  return { requiredIntegrations: required.length, correctionAirlock: true, batchApprovalGoverned: true, approvalReturnsToIntake: true, approvalAutoAdvanceBlocked: true };
 }
-
 function uiStateChecks() {
   const normalizeUiState = new Function(
     "RECENT_PROJECT_LIMIT",

@@ -190,7 +190,7 @@ All persisted objects use stable unique IDs. Existing records without IDs are mi
 - Intake queue automatically advances after review.
 - Intake queue automatically advances to the next ready item after approval.
 - Batch triage can change queue state and notes for selected Intake items.
-- Batch approval is deliberately unavailable; every approval remains individual.
+- Batch Triage supports governed bulk approval for selected Ready proposals only. One human actor, reason, and explicit Core-write checklist cover the batch, while every item still receives its own Core change, Change History entry, completion receipt, and linked Work Order reconciliation.
 - Empty states guide users toward the next valid action.
 - Saved/unsaved indicator reports persistence state.
 - Duplicate modal submission is blocked while an action is processing.
@@ -268,6 +268,8 @@ Airlock safeguards:
 - Actor and reason required.
 - Approval produces Core data and Change History together.
 - Rejection and archive preserve the Intake record.
+- Rejecting during routing and using the dedicated Reject action share one completion path: both close the Intake item, preserve the same compact provenance receipt, and reconcile any linked AI Work Order.
+- Single and bulk Core approvals return to the Intake Airlock; batch approval is restricted to selected Ready items and preserves per-item audit records.
 
 API Arm Contract v0.1 and desktop adapter:
 
@@ -1356,5 +1358,5 @@ Status: implemented July 15, 2026; included in the next offline installer verifi
 - Completed items appear under a collapsed **Completed Intake history** section. They retain audit provenance and a direct project link but no redundant Archive step or active approval controls.
 - Legacy approved/rejected Intake items remain visible in completed history even when they predate the new receipt fields; their existing approval/review records are used as the fallback receipt.
 - Intake completion now unblocks the linked AI Work Order lifecycle. If it was the final outstanding Intake route and all other Work Order gates pass, the Work Order can automatically move into its own completed/archive history.
-- Offline installer rebuilt after the Intake and AI Work Order lifecycle changes: `release/Project-State-Setup-0.2.4-x64.exe`, 101,865,756 bytes, SHA-256 `2cac34503002d6399a22974d697e2acafd8c23c0864ae4c13466d039f6dbec8a`.
+- Offline installer rebuilt after the Intake return-flow and governed bulk-approval changes: `release/Project-State-Setup-0.2.4-x64.exe`, 101,865,902 bytes, SHA-256 `a807e848265bf41c202296cf81ce161856276c85bac629ec79a78a529cf3d60a`.
 - Packaged-artifact inspection confirmed no bundled user data or secrets, working Electron/Node/SQLite runtime, and a connected local Ollama/Qwen provider path. The installer is `NotSigned`, remains test-only, and still requires the requested real-time offline install/uninstall/reinstall and backup/restore testing.

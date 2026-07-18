@@ -30,23 +30,20 @@ const checks = {
     && app.includes(".slice(0, 40)"),
   resumeMarkerCarriedThroughIntake:
     app.includes('resumeWork: { type: "external_review", workOrderId, passId }')
-    && app.includes('resumeWork.type === "external_review"')
-    && app.includes("openExternalReviewPassesModal(resumeWork.workOrderId)"),
-  newProjectStopsAtProjectWindow:
-    app.includes('const createsNewProject = intake.destination === "proposed_new_project"')
-    && app.includes("pendingWorkflowResumeContext = reviewWorkRemains ? { ...resumeWork, projectId: intake.projectId } : null")
-    && app.includes('openProjectNow(intake.projectId, "dashboard")'),
-  projectOffersReviewResume:
+    && app.includes("function linkedAiWorkOrderIdForIntake")
+    && app.includes("await reconcileAiWorkOrderLifecycle(linkedWorkOrderId, { save: false })"),
+  intakeApprovalReturnsToAirlock:
+    app.includes('activeRootView = "intake"')
+    && app.includes("pendingWorkflowResumeContext = null")
+    && app.includes("function openApproveIntakeModal"),  projectOffersReviewResume:
     app.includes("New project created from Human Review")
     && app.includes("This project is now available in the Human Review project list")
     && app.includes('data-action="continue-external-review"')
     && app.includes('if (action === "continue-external-review")'),
   completedReviewDoesNotReopen:
     app.includes("function pendingExternalReviewDecisionCount")
-    && app.includes("externalReviewHasPendingDecisions(resumeWork.workOrderId)")
-    && app.includes("resumableReview && reviewWorkRemains")
-    && app.includes("pendingWorkflowResumeContext = reviewWorkRemains"),
-  refreshedAfterImport:
+    && app.includes("await reconcileAiWorkOrderLifecycle(linkedWorkOrderId, { save: false })")
+    && app.includes("pendingWorkflowResumeContext = null"),  refreshedAfterImport:
     app.includes("openExternalReviewPassesModal(imported.workOrderId, { refresh: true })"),
   manualClipboardBridge:
     app.includes('data-action="copy-external-review-material"')

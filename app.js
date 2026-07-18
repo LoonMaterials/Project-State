@@ -329,7 +329,12 @@ const LANGUAGES = {
     recentProjects: "Recent Projects",
     noRecentProjects: "No recently opened projects.",
     batchTriage: "Batch Triage",
-    batchTriageNotice: "Triage changes queue state only. Each approval still requires its own human review, confirmation, actor, and reason.",
+    batchTriageNotice: "Update review state, or approve several ready proposals to Core with one governed human confirmation.",
+    batchOperation: "Batch action",
+    updateQueueState: "Update review state",
+    approveSelectedToCore: "Approve selected ready items to Core",
+    bulkApprovalReadyOnly: "Bulk approval is available only for proposals already marked Ready with every Airlock requirement complete.",
+    applyBatchAction: "Apply selected action",
     selectIntakeItems: "Select Intake Items",
     applyTriage: "Apply Triage",
     proposeCorrection: "Propose Correction",
@@ -1076,7 +1081,12 @@ const LANGUAGES = {
     recentProjects: "Projets récents",
     noRecentProjects: "Aucun projet ouvert récemment.",
     batchTriage: "Triage groupé",
-    batchTriageNotice: "Le triage modifie uniquement l’état de la file. Chaque approbation exige toujours sa propre révision humaine, confirmation, acteur et raison.",
+    batchTriageNotice: "Mettez à jour l’état de révision ou approuvez plusieurs propositions prêtes vers le Core avec une confirmation humaine gouvernée.",
+    batchOperation: "Action groupée",
+    updateQueueState: "Mettre à jour l’état de révision",
+    approveSelectedToCore: "Approuver les éléments prêts sélectionnés vers le Core",
+    bulkApprovalReadyOnly: "L’approbation groupée est réservée aux propositions déjà marquées Prêtes et dont toutes les exigences Airlock sont remplies.",
+    applyBatchAction: "Appliquer l’action sélectionnée",
     selectIntakeItems: "Sélectionner les entrées",
     applyTriage: "Appliquer le triage",
     proposeCorrection: "Proposer une correction",
@@ -1823,7 +1833,12 @@ const LANGUAGES = {
     recentProjects: "Letzte Projekte",
     noRecentProjects: "Keine kürzlich geöffneten Projekte.",
     batchTriage: "Sammeltriage",
-    batchTriageNotice: "Die Triage ändert nur den Warteschlangenstatus. Jede Genehmigung erfordert weiterhin eine eigene menschliche Prüfung, Bestätigung, Person und Begründung.",
+    batchTriageNotice: "Aktualisieren Sie den Prüfstatus oder genehmigen Sie mehrere bereite Vorschläge mit einer geregelten menschlichen Bestätigung für den Core.",
+    batchOperation: "Sammelaktion",
+    updateQueueState: "Prüfstatus aktualisieren",
+    approveSelectedToCore: "Ausgewählte bereite Elemente für den Core genehmigen",
+    bulkApprovalReadyOnly: "Die Sammelgenehmigung ist nur für Vorschläge verfügbar, die bereits als Bereit markiert sind und alle Airlock-Anforderungen erfüllen.",
+    applyBatchAction: "Ausgewählte Aktion anwenden",
     selectIntakeItems: "Eingänge auswählen",
     applyTriage: "Triage anwenden",
     proposeCorrection: "Korrektur vorschlagen",
@@ -2570,7 +2585,12 @@ const LANGUAGES = {
     recentProjects: "Proyectos recientes",
     noRecentProjects: "No hay proyectos abiertos recientemente.",
     batchTriage: "Clasificación por lote",
-    batchTriageNotice: "La clasificación solo cambia el estado de la cola. Cada aprobación aún requiere su propia revisión humana, confirmación, actor y razón.",
+    batchTriageNotice: "Actualice el estado de revisión o apruebe varias propuestas listas hacia Core con una confirmación humana controlada.",
+    batchOperation: "Acción por lote",
+    updateQueueState: "Actualizar estado de revisión",
+    approveSelectedToCore: "Aprobar elementos listos seleccionados hacia Core",
+    bulkApprovalReadyOnly: "La aprobación por lote solo está disponible para propuestas marcadas como Listas y con todos los requisitos de Airlock completos.",
+    applyBatchAction: "Aplicar acción seleccionada",
     selectIntakeItems: "Seleccionar entradas",
     applyTriage: "Aplicar clasificación",
     proposeCorrection: "Proponer corrección",
@@ -5192,7 +5212,7 @@ function createIntakeItem(input = {}) {
   return item;
 }
 
-function approveIntakeItem(intakeId, actor, reason, applyApprovedChange) {
+function approveIntakeItem(intakeId, actor, reason, applyApprovedChange, { save = true } = {}) {
   const intake = store.intakeItems?.find((item) => item.id === intakeId);
   requireHumanApproval(actor, reason, { origin: "intake" });
   if (!actorHasPermission(actor, "approve", intakePermissionProject(intake))) {
@@ -5221,11 +5241,11 @@ function approveIntakeItem(intakeId, actor, reason, applyApprovedChange) {
     resultingObjectId: result.id || (intake.projectId || ""),
     sourceLabel: intake.sourceLabel || "",
     discoveryCaseId: intake.discoveryCaseId || intake.evidence?.discoveryCaseId || "",
-    workOrderId: intake.evidence?.resumeWork?.workOrderId || "",
+    workOrderId: linkedAiWorkOrderIdForIntake(intake),
     externalReviewPassId: intake.evidence?.externalReviewPassId || "",
     externalDecisionId: intake.evidence?.externalDecisionId || ""
   };
-  saveStore();
+  if (save) saveStore();
   return result;
 }
 
@@ -14248,7 +14268,7 @@ async function externalReviewHasPendingDecisions(workOrderId) {
 }
 
 function pendingIntakeForWorkOrder(workOrderId) {
-  return visibleIntakeItems(store.intakeItems || []).filter((item) => item.status === "pending" && !item.archived && item.evidence?.resumeWork?.workOrderId === workOrderId);
+  return visibleIntakeItems(store.intakeItems || []).filter((item) => item.status === "pending" && !item.archived && linkedAiWorkOrderIdForIntake(item) === workOrderId);
 }
 
 function countUnaccountedReviewChunks(coverage = {}) {
@@ -14950,42 +14970,29 @@ function openApproveIntakeModal(intakeId) {
       </div>
       ${auditFields()}
     `,
-    async onSubmit(data, form) {
+    async onSubmit(data) {
       const actor = getOrCreateActor(data.actorName, "Human");
       if (!validateActorPermission(actor, "approve", intakePermissionProject(intake))) return false;
-      const createsNewProject = intake.destination === "proposed_new_project" && !getProject(intake.projectId);
-      const result = approveIntakeItem(intake.id, actor, data.reason, (item, approval) => applyApprovedIntakeToCore(item, actor, data.reason, approval));
-      if (result) {
-        const resumeWork = intake.evidence?.resumeWork || {};
-        const resumableReview = resumeWork.type === "external_review"
-          && (store.aiWorkOrders || []).some((order) => order.id === resumeWork.workOrderId);
-        let reviewWorkRemains = false;
-        if (resumableReview) {
-          try { reviewWorkRemains = await externalReviewHasPendingDecisions(resumeWork.workOrderId); }
-          catch (error) { console.error("Could not check remaining Human Review decisions.", error); }
-        }
-        if (resumableReview && !reviewWorkRemains) {
-          try { await reconcileAiWorkOrderLifecycle(resumeWork.workOrderId); }
-          catch (error) { console.error("Could not complete AI Work Order lifecycle.", error); }
-        }
-        if (resumableReview && createsNewProject && intake.projectId && getProject(intake.projectId)) {
-          pendingWorkflowResumeContext = reviewWorkRemains ? { ...resumeWork, projectId: intake.projectId } : null;
-          queuePostModalAction(() => {
-            openProjectNow(intake.projectId, "dashboard");
-            render();
-          });
-        }
-        else if (resumableReview && reviewWorkRemains) queuePostModalAction(() => openExternalReviewPassesModal(resumeWork.workOrderId));
-        else if (intake.projectId && getProject(intake.projectId)) queuePostModalAction(() => {
-            openProjectNow(intake.projectId, "dashboard");
-            render();
-          });
+      const result = approveIntakeItem(intake.id, actor, data.reason, (item, approval) => applyApprovedIntakeToCore(item, actor, data.reason, approval), { save: false });
+      if (!result) return false;
+      const linkedWorkOrderId = linkedAiWorkOrderIdForIntake(intake);
+      if (linkedWorkOrderId) {
+        try { await reconcileAiWorkOrderLifecycle(linkedWorkOrderId, { save: false }); }
+        catch (error) { console.error("Could not complete AI Work Order lifecycle.", error); }
       }
-      return Boolean(result);
+      await saveStore({ reason: "intake-approved" });
+      pendingWorkflowResumeContext = null;
+      activeRootView = "intake";
+      activeProjectId = null;
+      queuePostModalAction(() => {
+        activeRootView = "intake";
+        activeProjectId = null;
+        render();
+      });
+      return true;
     }
   });
 }
-
 function openReviewIntakeQueueModal(intakeId) {
   const intake = findIntakeItem(intakeId);
   if (!intake || intake.status !== "pending" || intake.archived) return;
@@ -15075,7 +15082,7 @@ function openReviewIntakeQueueModal(intakeId) {
         "Archive or defer for later manual review"
       ] })}
     `,
-    onSubmit(data) {
+    async onSubmit(data) {
       const actor = getOrCreateActor(data.actorName, "Human");
       const route = String(data.intakeRoute || "needs_review");
       intake.title = String(data.intakeTitle || "").trim();
@@ -15102,16 +15109,10 @@ function openReviewIntakeQueueModal(intakeId) {
       intake.queueReviewedAt = nowIso();
       intake.queueReviewedBy = actor.id;
       intake.queueReviewReason = data.reason.trim();
-      if (route === "rejected") {
-        intake.status = "rejected";
-        intake.review = {
-          reviewedAt: intake.queueReviewedAt,
-          actorId: actor.id,
-          actorName: actor.name,
-          reason: data.reason.trim()
-        };
-      }
-      saveStore({ allowWithoutCoreApproval: true, reason: "intake-queue-reviewed" });
+      if (route === "rejected") completeRejectedIntake(intake, actor, data.reason);
+      await saveStore({ allowWithoutCoreApproval: true, reason: route === "rejected" ? "intake-rejected-during-routing" : "intake-queue-reviewed" });
+      const linkedWorkOrderId = linkedAiWorkOrderIdForIntake(intake);
+      if (route === "rejected" && linkedWorkOrderId) await reconcileAiWorkOrderLifecycle(linkedWorkOrderId);
       const next = route === "rejected" ? null : nextPendingIntake(intake.id);
       if (next) queuePostModalAction(() => openReviewIntakeQueueModal(next.id));
       return true;
@@ -15154,46 +15155,119 @@ function openBatchTriageModal() {
   if (!pending.length) return;
   showModal({
     title: t("batchTriage"),
-    submitText: t("applyTriage"),
+    submitText: t("applyBatchAction"),
     body: `
       <p class="notice">${escapeHtml(t("batchTriageNotice"))}</p>
       <div class="field">
-        <label>${escapeHtml(t("selectIntakeItems"))}</label>
-        <div class="check-list">
-          ${pending.map((item) => `<label class="check-field"><input type="checkbox" name="intakeIds" value="${escapeHtml(item.id)}"><span>${escapeDisplay(item.title, DISPLAY_META_LIMIT)} · ${escapeHtml(intakeQueueStateLabel(item.queueState))}</span></label>`).join("")}
-        </div>
-      </div>
-      <div class="field">
-        <label for="queueState">${escapeHtml(t("queueState"))}</label>
-        <select id="queueState" name="queueState" required>
-          ${INTAKE_QUEUE_STATES.map((state) => `<option value="${escapeHtml(state)}">${escapeHtml(intakeQueueStateLabel(state))}</option>`).join("")}
+        <label for="batchOperation">${escapeHtml(t("batchOperation"))}</label>
+        <select id="batchOperation" name="batchOperation">
+          <option value="triage">${escapeHtml(t("updateQueueState"))}</option>
+          <option value="bulk_approve">${escapeHtml(t("approveSelectedToCore"))}</option>
         </select>
       </div>
       <div class="field">
-        <label for="queueNotes">${escapeHtml(t("queueReviewNotes"))}</label>
-        <textarea id="queueNotes" name="queueNotes"></textarea>
+        <label>${escapeHtml(t("selectIntakeItems"))}</label>
+        <div class="check-list">
+          ${pending.map((item) => {
+            const readyForCore = item.queueState === "ready" && allRequiredFlagsPass(intakeAirlockChecks(item));
+            return `<label class="check-field"><input type="checkbox" name="intakeIds" value="${escapeHtml(item.id)}" data-bulk-ready="${readyForCore ? "true" : "false"}"><span>${escapeDisplay(item.title, DISPLAY_META_LIMIT)} · ${escapeHtml(intakeQueueStateLabel(item.queueState))} · ${readyForCore ? "Ready for Core" : "Needs triage"}</span></label>`;
+          }).join("")}
+        </div>
+      </div>
+      <div data-batch-triage-options>
+        <div class="field">
+          <label for="queueState">${escapeHtml(t("queueState"))}</label>
+          <select id="queueState" name="queueState" required>
+            ${INTAKE_QUEUE_STATES.map((state) => `<option value="${escapeHtml(state)}">${escapeHtml(intakeQueueStateLabel(state))}</option>`).join("")}
+          </select>
+        </div>
+        <div class="field">
+          <label for="queueNotes">${escapeHtml(t("queueReviewNotes"))}</label>
+          <textarea id="queueNotes" name="queueNotes"></textarea>
+        </div>
+      </div>
+      <div class="field" data-bulk-approval-options hidden>
+        <p class="notice">${escapeHtml(t("bulkApprovalReadyOnly"))}</p>
+        <label>${escapeHtml(t("approvalChecklist"))}</label>
+        ${confirmationField("confirmProposalReviewed", t("confirmProposalReviewed"))}
+        ${confirmationField("confirmApprovalWritesCore", t("confirmApprovalWritesCore"))}
+        ${confirmationField("confirmInputsNotAuthority", t("confirmInputsNotAuthority"))}
       </div>
       ${auditFields({ actorLabel: t("reviewedBy"), reasonLabel: t("reason") })}
     `,
-    onSubmit(data, form) {
+    async onSubmit(data, form) {
       const selectedIds = [...form.querySelectorAll('[name="intakeIds"]:checked')].map((field) => field.value);
-      if (!selectedIds.length) return false;
+      if (!selectedIds.length) { window.alert("Select at least one Intake item."); return false; }
+      const selected = pending.filter((item) => selectedIds.includes(item.id));
       const actor = getOrCreateActor(data.actorName, "Human");
+      if (data.batchOperation === "bulk_approve") {
+        const notReady = selected.filter((item) => item.queueState !== "ready" || !allRequiredFlagsPass(intakeAirlockChecks(item)));
+        if (notReady.length) {
+          window.alert(`Bulk approval stopped. Finish triage for: ${notReady.map((item) => item.title).join(", ")}`);
+          return false;
+        }
+        const forbidden = selected.filter((item) => !actorHasPermission(actor, "approve", intakePermissionProject(item)));
+        if (forbidden.length) { window.alert(t("permissionDenied")); return false; }
+        const beforeBulkApproval = cloneRecord(store);
+        const linkedWorkOrderIds = [...new Set(selected.map(linkedAiWorkOrderIdForIntake).filter(Boolean))];
+        try {
+          for (const item of selected) {
+            const result = approveIntakeItem(
+              item.id,
+              actor,
+              data.reason,
+              (candidate, approval) => applyApprovedIntakeToCore(candidate, actor, data.reason, approval),
+              { save: false }
+            );
+            if (!result) throw new Error(`Could not approve ${item.title}. No selected items were saved.`);
+          }
+          for (const workOrderId of linkedWorkOrderIds) {
+            try { await reconcileAiWorkOrderLifecycle(workOrderId, { save: false }); }
+            catch (error) { console.error("Could not complete AI Work Order lifecycle.", error); }
+          }
+          await saveStore({ reason: "intake-bulk-approved" });
+        } catch (error) {
+          store = beforeBulkApproval;
+          window.alert(error.message || "Bulk approval could not be completed.");
+          return false;
+        }
+        pendingWorkflowResumeContext = null;
+        activeRootView = "intake";
+        activeProjectId = null;
+        return true;
+      }
       const timestamp = nowIso();
-      for (const item of pending) {
-        if (!selectedIds.includes(item.id)) continue;
+      for (const item of selected) {
         item.queueState = normalizeIntakeQueueState(data.queueState);
         item.queueNotes = String(data.queueNotes || "").trim();
         item.queueReviewedAt = timestamp;
         item.queueReviewedBy = actor.id;
         item.queueReviewReason = data.reason.trim();
       }
-      saveStore({ allowWithoutCoreApproval: true, reason: "intake-batch-triage" });
+      await saveStore({ allowWithoutCoreApproval: true, reason: "intake-batch-triage" });
       return true;
     }
   });
+  const modal = document.querySelector(".modal");
+  const operationField = modal?.querySelector("#batchOperation");
+  const triageOptions = modal?.querySelector("[data-batch-triage-options]");
+  const approvalOptions = modal?.querySelector("[data-bulk-approval-options]");
+  const itemFields = [...(modal?.querySelectorAll('[name="intakeIds"]') || [])];
+  const syncBatchOperation = () => {
+    const bulkApproval = operationField?.value === "bulk_approve";
+    if (triageOptions) triageOptions.hidden = bulkApproval;
+    triageOptions?.querySelectorAll("select, textarea, input").forEach((field) => { field.disabled = bulkApproval; });
+    if (approvalOptions) approvalOptions.hidden = !bulkApproval;
+    approvalOptions?.querySelectorAll("input").forEach((field) => { field.disabled = !bulkApproval; });
+    for (const field of itemFields) {
+      const unavailable = bulkApproval && field.dataset.bulkReady !== "true";
+      field.disabled = unavailable;
+      if (unavailable) field.checked = false;
+    }
+  };
+  operationField?.addEventListener("change", syncBatchOperation);
+  syncBatchOperation();
 }
-
 function openRejectIntakeModal(intakeId) {
   const intake = findIntakeItem(intakeId);
   if (!intake || intake.status !== "pending" || intake.archived) return;
@@ -15213,29 +15287,7 @@ function openRejectIntakeModal(intakeId) {
     `,
     async onSubmit(data) {
       const actor = getOrCreateActor(data.actorName, "Human");
-      intake.status = "rejected";
-      intake.archived = true;
-      intake.completedAt = nowIso();
-      intake.review = {
-        reviewedAt: intake.completedAt,
-        actorId: actor.id,
-        actorName: actor.name,
-        reason: data.reason.trim()
-      };
-      intake.completionReceipt = {
-        outcome: "rejected",
-        completedAt: intake.completedAt,
-        reviewedBy: actor.id,
-        reason: data.reason.trim(),
-        projectId: intake.projectId || "",
-        resultingObjectType: "",
-        resultingObjectId: "",
-        sourceLabel: intake.sourceLabel || "",
-        discoveryCaseId: intake.discoveryCaseId || intake.evidence?.discoveryCaseId || "",
-        workOrderId: intake.evidence?.resumeWork?.workOrderId || "",
-        externalReviewPassId: intake.evidence?.externalReviewPassId || "",
-        externalDecisionId: intake.evidence?.externalDecisionId || ""
-      };
+      completeRejectedIntake(intake, actor, data.reason);
       await saveStore({ allowWithoutCoreApproval: true, reason: "intake-rejected" });
       if (intake.completionReceipt.workOrderId) await reconcileAiWorkOrderLifecycle(intake.completionReceipt.workOrderId);
       return true;
@@ -15279,7 +15331,7 @@ function openArchiveIntakeModal(intakeId) {
         resultingObjectId: "",
         sourceLabel: intake.sourceLabel || "",
         discoveryCaseId: intake.discoveryCaseId || intake.evidence?.discoveryCaseId || "",
-        workOrderId: intake.evidence?.resumeWork?.workOrderId || "",
+        workOrderId: linkedAiWorkOrderIdForIntake(intake),
         externalReviewPassId: intake.evidence?.externalReviewPassId || "",
         externalDecisionId: intake.evidence?.externalDecisionId || ""
       };
@@ -15290,12 +15342,46 @@ function openArchiveIntakeModal(intakeId) {
   });
 }
 
+function linkedAiWorkOrderIdForIntake(intake = {}) {
+  return String(intake.evidence?.resumeWork?.workOrderId || intake.evidence?.workOrderId || intake.workOrderId || "").trim();
+}
+
+function completeRejectedIntake(intake, actor, reason) {
+  const completedAt = nowIso();
+  const reviewReason = String(reason || "").trim();
+  intake.status = "rejected";
+  intake.archived = true;
+  intake.completedAt = completedAt;
+  intake.review = {
+    reviewedAt: completedAt,
+    actorId: actor.id,
+    actorName: actor.name,
+    reason: reviewReason
+  };
+  intake.completionReceipt = {
+    outcome: "rejected",
+    completedAt,
+    reviewedBy: actor.id,
+    reason: reviewReason,
+    projectId: intake.projectId || "",
+    resultingObjectType: "",
+    resultingObjectId: "",
+    sourceLabel: intake.sourceLabel || "",
+    discoveryCaseId: intake.discoveryCaseId || intake.evidence?.discoveryCaseId || "",
+    workOrderId: linkedAiWorkOrderIdForIntake(intake),
+    externalReviewPassId: intake.evidence?.externalReviewPassId || "",
+    externalDecisionId: intake.evidence?.externalDecisionId || ""
+  };
+  return intake;
+}
+
 function findIntakeItem(intakeId) {
   return (store.intakeItems || []).find((item) => item.id === intakeId) || null;
 }
 
 function renderIntakeApprovalPreview(intake) {
   const proposed = intake.proposedChange || {};
+
   return `
     <div class="inline-empty">
       <p><strong>${escapeDisplay(proposedObjectTypeLabel(intake.proposedObjectType), DISPLAY_META_LIMIT)}:</strong> ${escapeDisplay(intake.title, DISPLAY_META_LIMIT)}</p>

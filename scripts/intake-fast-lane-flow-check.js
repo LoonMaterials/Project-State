@@ -67,9 +67,17 @@ async function main() {
     assert(appSource.includes("Known project material") && appSource.includes("Discovery scan"), "The Add Intake launcher should separate known project material from Discovery scanning.");
     assert(appSource.includes("data-existing-target"), "Review form should hide/show existing-target fields conditionally.");
     assert(appSource.includes("data-new-target"), "Review form should hide/show proposed-new-project fields conditionally.");
-    assert(appSource.includes('if (route === "rejected") {') && appSource.includes('intake.status = "rejected";'), "Queue review rejection must remove the item from pending Needs Attention.");
+    assert(appSource.includes('if (route === "rejected") completeRejectedIntake(intake, actor, data.reason);'), "Queue review rejection must use the governed completion path.");
+    assert(appSource.includes('reason: route === "rejected" ? "intake-rejected-during-routing" : "intake-queue-reviewed"'), "Queue review rejection must be persisted as a completed rejection.");
+    assert(appSource.includes('if (route === "rejected" && linkedWorkOrderId) await reconcileAiWorkOrderLifecycle(linkedWorkOrderId);'), "Queue review rejection must reconcile its linked AI Work Order.");
     assert(appSource.includes("Reject duplicate intra-folder project suggestion"), "Queue review needs rejection reason presets for Discovery cleanup.");
     assert(!appSource.includes("queuePostModalAction(() => openApproveIntakeModal(next.id))"), "Core approval must not auto-open the next approval item.");
+    const singleApproval = appSource.slice(appSource.indexOf("function openApproveIntakeModal"), appSource.indexOf("function openReviewIntakeQueueModal"));
+    const batchApproval = appSource.slice(appSource.indexOf("function openBatchTriageModal"), appSource.indexOf("function openRejectIntakeModal"));
+    assert(singleApproval.includes('activeRootView = "intake"') && !singleApproval.includes("openProjectNow("), "Single Intake approval must return to the Intake Airlock.");
+    assert(batchApproval.includes('value="bulk_approve"') && batchApproval.includes('data-bulk-ready'), "Batch Triage must expose bulk approval only for ready Intake items.");
+    assert(batchApproval.includes('confirmationField("confirmProposalReviewed"') && batchApproval.includes('confirmationField("confirmApprovalWritesCore"') && batchApproval.includes('confirmationField("confirmInputsNotAuthority"'), "Bulk approval must preserve the human Core-write confirmations.");
+    assert(batchApproval.includes("approveIntakeItem(") && batchApproval.includes("{ save: false }") && batchApproval.includes("beforeBulkApproval = cloneRecord(store)"), "Bulk approval must create per-item receipts and retain an atomic rollback boundary.");
     assert(appSource.includes('intake.archived = true;') && appSource.includes('outcome: "approved"'), "Approved Intake must automatically leave the active Airlock with a completion receipt.");
     assert(appSource.includes('outcome: "rejected"') && appSource.includes('Completed Intake history'), "Rejected Intake must move into collapsed completion history.");
     assert(appSource.includes("function renderIntakeReceipt") && appSource.includes("Receipt and provenance"), "Completed Intake history must render a compact audit receipt.");
@@ -84,8 +92,13 @@ async function main() {
       addIntakeUsesFileLauncher: true,
       duplicateManualAddHidden: true,
       queueReviewRejectsPendingItem: true,
+      queueReviewRejectionUsesCompletionReceipt: true,
+      queueReviewRejectionReconcilesWorkOrder: true,
       rejectionReasonPresets: true,
-      coreApprovalStopsAfterOneItem: true,
+      singleApprovalReturnsToIntake: true,
+      bulkApprovalReadyOnly: true,
+      bulkApprovalPerItemReceipts: true,
+      bulkApprovalAtomicRollback: true,
       approvedAndRejectedAutoComplete: true,
       completedHistoryCollapsed: true,
       compactReceiptPreserved: true
