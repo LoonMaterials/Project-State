@@ -9,7 +9,7 @@ function main() {
   const app = fs.readFileSync(path.join(__dirname, "..", "app.js"), "utf8");
   assert(app.includes("let fileImportDialogInProgress = false;"), "File import dialog guard is missing.");
   assert(app.includes("if (fileImportDialogInProgress)") && app.includes("File picker is already waiting for Windows to respond."), "File import can be reopened while a native dialog is still pending.");
-  assert(app.includes("finally {\n    fileImportDialogInProgress = false;"), "File import guard is not reset in a finally block.");
+  assert(/finally \{\r?\n    fileImportDialogInProgress = false;/.test(app), "File import guard is not reset in a finally block.");
   assert(app.includes("forceReplace: true"), "Add-to-Discovery modal does not force-replace stale modal shells.");
   assert(app.includes("pendingFileImportReviewSelection"), "File import selection is not preserved when the review modal handoff fails.");
   assert(app.includes("reopen-pending-file-import-review"), "File import flow has no fallback button for reopening a pending review.");

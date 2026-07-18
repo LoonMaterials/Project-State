@@ -1360,3 +1360,20 @@ Status: implemented July 15, 2026; included in the next offline installer verifi
 - Intake completion now unblocks the linked AI Work Order lifecycle. If it was the final outstanding Intake route and all other Work Order gates pass, the Work Order can automatically move into its own completed/archive history.
 - Offline installer rebuilt after the Intake return-flow and governed bulk-approval changes: `release/Project-State-Setup-0.2.4-x64.exe`, 101,865,902 bytes, SHA-256 `a807e848265bf41c202296cf81ce161856276c85bac629ec79a78a529cf3d60a`.
 - Packaged-artifact inspection confirmed no bundled user data or secrets, working Electron/Node/SQLite runtime, and a connected local Ollama/Qwen provider path. The installer is `NotSigned`, remains test-only, and still requires the requested real-time offline install/uninstall/reinstall and backup/restore testing.
+
+## 41. Offline Intake Usability, Scan Visibility, and Readable Project Material
+
+Status: implemented and regression-checked July 18, 2026; offline installer rebuilt below for fresh-data testing.
+
+- Storage-size warnings now begin at 250 MB instead of 3 MB; the danger level is 375 MB. An acknowledged override with a recorded reason suppresses the size banner and size-only integrity warning while leaving unrelated structural storage warnings visible.
+- Completing a local AI digestion pass now opens the saved AI Work Order results immediately. The renderer no longer requires an application restart to reach the post-analysis result state.
+- Selecting multiple individual files now defaults to one independent Discovery case and AI Work Order per file. Deliberate combined modes remain available for material that genuinely belongs in one AI pass.
+- Work Orders, source-file rows, Discovery records, and the Files screen now show explicit **Not scanned**, **Partially scanned**, or **Fully scanned** coverage. The Files screen includes a collapsed per-file scan-status library with direct result access.
+- AI Work Orders now provide governed bulk archive. Selected active Work Orders move into archived audit history while source files, AI results, comments, and receipts remain preserved; the action is not a destructive data reset.
+- Each project dashboard now contains a non-authoritative **Readable project material** view. It recombines approved Source summaries and linked Candidate Map results, collapses high-overlap repeated descriptions across threads/files, and keeps Work Order/source provenance visible.
+- Local AI analysis for a Work Order already assigned to a project receives the other linked Work Orders' Candidate Map summaries as duplicate/continuation context. Semantic repeats are directed toward supporting evidence or merge suggestions instead of duplicate project ideas.
+- Focused regression coverage is in `scripts/offline-intake-usability-regression-check.js`. Existing flow, file-import, Candidate Map, and enrichment checks were updated to require the new defaults and to accept Windows CRLF source files.
+- Verification passed: app syntax and whitespace checks, focused offline Intake usability, AI Work Order lifecycle, folder Discovery, complete flow-hardening, and complete AI-analysis foundation suites.
+- Offline installer: `release/Project-State-Setup-0.2.4-x64.exe`.
+- Rebuilt installer receipt: `release/Project-State-Setup-0.2.4-x64.exe`, 101,868,201 bytes, SHA-256 `fd6bddf696d13386e5a08373da7e6e6474a9fc9546bd56cb22baace5bf4627c8`.
+- Signature status remains `NotSigned`; this is for local/offline testing only and is not public-distribution ready.

@@ -8,6 +8,8 @@ const STORAGE_META_MAIN_RECORD = "store";
 const STORAGE_LEGACY_BACKUP_RECORD = "legacy-json-backup";
 const STORAGE_SPINE_VERSION = "0.2.0-phase3";
 const STORAGE_LAYOUT_VERSION = "split-stores-v1-audited";
+const STORAGE_WARNING_BYTES = 250 * 1024 * 1024;
+const STORAGE_DANGER_BYTES = 375 * 1024 * 1024;
 const STORAGE_SPLIT_STORES = ["meta", "projects", "history", "sources", "extracts", "attachments", "drafts", "recovery"];
 const DISPLAY_TEXT_LIMIT = 1200;
 const DISPLAY_META_LIMIT = 240;
@@ -4431,8 +4433,8 @@ function buildStorageSpineManifest(nextStore = emptyStore(), snapshot = "") {
 
   const snapshotBytes = textByteSize(snapshot || JSON.stringify(nextStore));
   const warnings = [];
-  if (snapshotBytes >= 4.5 * 1024 * 1024) warnings.push("storage-size-danger");
-  else if (snapshotBytes >= 3 * 1024 * 1024) warnings.push("storage-size-warning");
+  if (snapshotBytes >= STORAGE_DANGER_BYTES) warnings.push("storage-size-danger");
+  else if (snapshotBytes >= STORAGE_WARNING_BYTES) warnings.push("storage-size-warning");
   if (largeContent.attachmentDataCharacters > snapshotBytes * 0.5) warnings.push("attachments-dominate-main-record");
   if (largeContent.extractTextCharacters > snapshotBytes * 0.25) warnings.push("extracts-growing-in-main-record");
 
@@ -5346,8 +5348,8 @@ function storageSizeInfo(raw = storageSnapshotText || platformAdapter.storage.ge
   const bytes = textByteSize(raw);
   const mb = bytes / 1024 / 1024;
   let level = "ok";
-  if (mb >= 4.5) level = "danger";
-  else if (mb >= 3) level = "warning";
+  if (bytes >= STORAGE_DANGER_BYTES) level = "danger";
+  else if (bytes >= STORAGE_WARNING_BYTES) level = "warning";
   return {
     bytes,
     mb,
@@ -5379,6 +5381,7 @@ function runtimeWarningHtml() {
 
 function storageWarningHtml(raw) {
   if (arguments.length === 0 && store.settings?.recoveryWarnings === false) return "";
+  if (arguments.length === 0 && store.settings?.storageOverrideAcknowledged && String(store.settings?.storageOverrideReason || "").trim()) return "";
   const info = storageSizeInfo(raw);
   if (info.level === "ok") return "";
   const message = info.level === "danger"
@@ -5814,7 +5817,7 @@ function currentActorCan(permission, project = getProject()) {
 
 function actionPermission(action = "") {
   if (["create-project", "add-decision", "add-fact", "add-conflict", "add-source", "add-relationship", "add-question", "add-action", "add-extract", "read-file-extract", "suggest-extract", "create-draft-project", "import-files", "import-folder", "import-project-files", "import-project-folder"].includes(action)) return "create";
-  if (["edit-status", "edit-object", "rename-project", "assign-object", "mark-complete", "attach-source", "attach-image", "archive-object", "unarchive-project", "manage-project-roles", "review-source-freshness", "verify-source-file", "verify-all-source-files", "archive-ai-work-order", "start-local-ai-work-order", "import-reviewed-evidence", "review-external-ai-decision", "edit-file-source", "archive-file-source"].includes(action)) return "edit";
+  if (["edit-status", "edit-object", "rename-project", "assign-object", "mark-complete", "attach-source", "attach-image", "archive-object", "unarchive-project", "manage-project-roles", "review-source-freshness", "verify-source-file", "verify-all-source-files", "archive-ai-work-order", "bulk-archive-ai-work-orders", "start-local-ai-work-order", "import-reviewed-evidence", "review-external-ai-decision", "edit-file-source", "archive-file-source"].includes(action)) return "edit";
   if (["approve-intake", "approve-extract", "approve-draft-project"].includes(action)) return "approve";
   if (["export-project", "export-handoff", "context-pack", "view-object-history", "show-history", "view-history", "show-changes-since", "history-file-source", "view-ai-work-order-results", "export-universal-review-pack", "view-external-ai-reviews", "refresh-storage", "refresh-local-ai-setup"].includes(action)) return "audit";
   if (["show-settings", "backup-storage", "restore-storage", "reset-local-data", "export-current-raw-data", "enable-arm-transport", "disable-arm-transport", "rotate-arm-transport-token", "revoke-arm-transport"].includes(action)) return "admin";
@@ -6261,6 +6264,7 @@ function renderAiWorkOrders() {
       <div class="button-row">
         <button class="btn" data-action="create-ai-work-order">${escapeHtml(t("createAiWorkOrder"))}</button>
         <button class="btn secondary" data-action="import-reviewed-evidence">Import Reviewed Evidence</button>
+        ${activeOrders.length ? `<button class="btn secondary" data-action="bulk-archive-ai-work-orders">Bulk archive active (${activeOrders.length})</button>` : ""}
         ${archivedOrders.length ? `<button class="btn danger" data-action="delete-all-archived-ai-work-orders">Delete archived AI Work Orders</button>` : ""}
       </div>
     </section>
@@ -6380,6 +6384,7 @@ function renderAiWorkOrderItem(order) {
   const canExportUniversalReview = Boolean(source.discoveryCaseId) && (!corpus?.recommended || lastAnalysis?.sourceFullyAnalyzed === true);
   const noCandidatesFound = lastAnalysis && Number(lastAnalysis.candidateCount || 0) === 0;
   const moreSourceRemaining = lastAnalysis && lastAnalysis.sourceFullyAnalyzed !== true;
+  const scanState = aiWorkOrderScanState(order);
   return `
     <article class="item">
       <p class="item-title">${escapeDisplay(order.title, DISPLAY_META_LIMIT)}</p>
@@ -6387,12 +6392,13 @@ function renderAiWorkOrderItem(order) {
       <p class="item-meta">${escapeHtml(t("contextPackPreset"))}: ${escapeHtml(contextPackPresetLabel(order.contextPreset))} · ${escapeHtml(t("outputType"))}: ${escapeDisplay(order.outputType || t("notRecorded"), DISPLAY_META_LIMIT)}</p>
       ${sourceMeta ? `<p class="item-meta">${escapeDisplay(sourceMeta, DISPLAY_META_LIMIT)}</p>` : ""}
       ${largeFileMeta ? `<p class="notice"><strong>Large-file follow-up:</strong> ${escapeDisplay(largeFileMeta, DISPLAY_META_LIMIT)}. Keep this parked here until a local/cloud AI arm is ready to digest it.</p>` : ""}
+      <p class="notice"><strong>Scan state:</strong> ${escapeHtml(scanState.label)} · ${escapeDisplay(scanState.detail, DISPLAY_META_LIMIT)}</p>
       ${lastAnalysis ? `<p class="notice"><strong>Last local AI run:</strong> ${escapeDisplay(lastAnalysis.providerLabel || lastAnalysis.providerId || "Local AI", DISPLAY_META_LIMIT)} · ${Number(lastAnalysis.candidateCount || 0).toLocaleString()} candidate${Number(lastAnalysis.candidateCount || 0) === 1 ? "" : "s"} · ${Number(lastAnalysis.analyzedChunks || 0).toLocaleString()} chunk${Number(lastAnalysis.analyzedChunks || 0) === 1 ? "" : "s"} in last pass · ${Number(lastAnalysis.analyzedUniqueChunks || lastAnalysis.analyzedChunks || 0).toLocaleString()} total analyzed${lastAnalysis.totalDetectedChunks ? ` of ${Number(lastAnalysis.totalDetectedChunks).toLocaleString()} detected` : ""} · ${escapeHtml(formatDate(lastAnalysis.completedAt || order.createdAt))}</p>` : ""}
       ${renderCandidateMapStats(order.candidateMap)}
       ${order.digestContext?.passCount ? `<p class="item-meta">Rolling digest context: ${Number(order.digestContext.passCount).toLocaleString()} saved pass${Number(order.digestContext.passCount) === 1 ? "" : "es"} carried into future local AI windows.</p>` : ""}
       ${moreSourceRemaining ? `<p class="notice"><strong>More source remains.</strong> This Work Order stays active until Project State reaches the end of the file/folder evidence. Run local AI digestion again to continue with the next chunk window.</p>` : ""}
       ${noCandidatesFound ? `<p class="notice"><strong>No candidates found in the last pass.</strong> The AI job finished, but that only covers the last chunk window. Continue through the source before deciding archive/no-find.</p>` : ""}
-      ${sourceFiles.length ? `<details class="technical-details"><summary>Source files queued (${sourceFiles.length})</summary>${sourceFiles.map((file) => `<p class="item-meta">${escapeDisplay(file.originalName || "Discovery source", DISPLAY_META_LIMIT)} · ${escapeHtml(file.status || "stored")}${file.chunkCount ? ` · ${Number(file.chunkCount).toLocaleString()} chunks` : ""}${file.textBytes ? ` · ${escapeHtml(formatBytes(file.textBytes))} text` : ""}</p>`).join("")}</details>` : ""}
+      ${sourceFiles.length ? `<details class="technical-details"><summary>Source files queued (${sourceFiles.length})</summary>${sourceFiles.map((file) => `<p class="item-meta">${escapeDisplay(file.originalName || "Discovery source", DISPLAY_META_LIMIT)} · ${escapeHtml(file.status || "stored")} · ${escapeHtml(scanState.label)}${file.chunkCount ? ` · ${Number(file.chunkCount).toLocaleString()} chunks` : ""}${file.textBytes ? ` · ${escapeHtml(formatBytes(file.textBytes))} text` : ""}</p>`).join("")}</details>` : ""}
       <p class="item-body">${escapeDisplay(order.task, DISPLAY_TEXT_LIMIT)}</p>
       <p class="item-meta">${escapeHtml(t("created"))}: ${escapeHtml(formatDate(order.createdAt))} · ${escapeHtml(t("actor"))}: ${escapeHtml(actorDisplay(order.createdBy))}</p>
       ${order.canCreateIntake ? `<p class="notice">${escapeHtml(t("canCreateIntake"))}</p>` : ""}
@@ -6409,6 +6415,15 @@ function renderAiWorkOrderItem(order) {
       </div>
     </article>
   `;
+}
+
+function aiWorkOrderScanState(order = {}) {
+  const analysis = order.lastAnalysis || null;
+  if (!analysis) return { key: "not_scanned", label: "Not scanned", detail: "No completed AI pass is recorded." };
+  const analyzed = Number(analysis.analyzedUniqueChunks || analysis.analyzedChunks || 0);
+  const total = Number(analysis.totalDetectedChunks || analysis.totalChunks || 0);
+  if (analysis.sourceFullyAnalyzed === true) return { key: "fully_scanned", label: "Fully scanned", detail: `${analyzed.toLocaleString()}${total ? ` of ${total.toLocaleString()}` : ""} chunks analyzed.` };
+  return { key: "partially_scanned", label: "Partially scanned", detail: `${analyzed.toLocaleString()}${total ? ` of ${total.toLocaleString()}` : ""} chunks analyzed; more source remains.` };
 }
 
 function aiWorkOrderStatusLabel(status = "submitted") {
@@ -7636,11 +7651,13 @@ function buildIntegrityDashboard(diagnostics = settingsDiagnostics(), info = sto
 
 function integrityStorageIssues(manifest, info) {
   const issues = [];
+  const storageOverrideActive = Boolean(store.settings?.storageOverrideAcknowledged && String(store.settings?.storageOverrideReason || "").trim());
   if (!desktopRuntimeReady()) issues.push(integrityIssue("storage", "warning", t("browserRuntimeWarning")));
-  if (info.level === "danger") issues.push(integrityIssue("storage", "needs_attention", t("storageWarningStorageSizeDanger")));
-  else if (info.level === "warning") issues.push(integrityIssue("storage", "warning", t("storageWarningStorageSizeWarning")));
+  if (!storageOverrideActive && info.level === "danger") issues.push(integrityIssue("storage", "needs_attention", t("storageWarningStorageSizeDanger")));
+  else if (!storageOverrideActive && info.level === "warning") issues.push(integrityIssue("storage", "warning", t("storageWarningStorageSizeWarning")));
 
   for (const warning of manifest.warnings || []) {
+    if (storageOverrideActive && ["storage-size-danger", "storage-size-warning"].includes(warning)) continue;
     const key = storageWarningKey(warning);
     const level = warning === "storage-size-danger" ? "needs_attention" : "warning";
     if (!issues.some((issue) => issue.message === t(key))) issues.push(integrityIssue("storage", level, t(key)));
@@ -8097,6 +8114,14 @@ function renderDiscoveryProgressPanel() {
   `;
 }
 
+function renderAiSourceFileScanLibrary() {
+  const rows = (store.aiWorkOrders || []).flatMap((order) => (order.source?.sourceFiles || []).map((file) => ({ order, file, scanState: aiWorkOrderScanState(order) })));
+  if (!rows.length) return "";
+  const fullyScanned = rows.filter((row) => row.scanState.key === "fully_scanned").length;
+  const partiallyScanned = rows.filter((row) => row.scanState.key === "partially_scanned").length;
+  return `<details class="panel technical-details"><summary>AI source file scan status (${rows.length}) · ${fullyScanned} fully scanned · ${partiallyScanned} partial</summary><div class="list">${rows.map(({ order, file, scanState }) => `<article class="item"><p class="item-title">${escapeDisplay(file.originalName || order.title || "Discovery source", DISPLAY_META_LIMIT)}</p><p class="item-meta">${escapeHtml(scanState.label)} · ${escapeDisplay(order.title, DISPLAY_META_LIMIT)}${file.chunkCount ? ` · ${Number(file.chunkCount).toLocaleString()} chunks` : ""}</p><div class="item-actions">${order.source?.discoveryCaseId ? `<button class="btn secondary compact" data-action="view-ai-work-order-results" data-work-order-id="${escapeHtml(order.id)}">View AI results</button>` : ""}</div></article>`).join("")}</div></details>`;
+}
+
 function renderFilesLibrary() {
   const rememberedFolders = normalizeLastImportFolders(store.settings?.uiState?.lastImportFolders);
   const rememberedFolderText = Object.entries(rememberedFolders).map(([key, value]) => `${key.replaceAll("_", " ")}: ${value}`).join(" · ");
@@ -8132,6 +8157,7 @@ function renderFilesLibrary() {
       <p class="item-meta">Project State copies selected files, records exact checksums, and blocks reads if staged bytes change.</p>
     </section>
     ${renderDiscoveryProgressPanel()}
+    ${renderAiSourceFileScanLibrary()}
     <p class="notice">${escapeHtml(t("originalFilePreserved"))} ${escapeHtml(t("recursiveFolderImport"))}</p>
   `);
 }
@@ -8144,7 +8170,9 @@ function setFileImportFlowState(status, message, kind = fileImportFlowState.kind
 
 function renderDiscoveryCaseSummary(discoveryCase) {
   const routing = discoveryCase.confirmedRouting || {};
-  return `<article class="item"><p class="item-title">${escapeDisplay(discoveryCase.suggestedName || discoveryCase.title || "Discovery case", DISPLAY_META_LIMIT)}</p><p class="item-meta">${escapeHtml(discoveryCase.status || "created")} · ${escapeHtml(discoveryCase.stage || "stage")}${routing.destination ? ` · ${escapeHtml(routing.destination.replaceAll("_", " "))}` : ""}</p><details class="technical-details"><summary>Details and provenance</summary><p class="item-meta">Discovery Case: ${escapeDisplay(discoveryCase.id, DISPLAY_META_LIMIT)}</p>${discoveryCase.routingInteractionId ? `<p class="item-meta">Routing record: ${escapeDisplay(discoveryCase.routingInteractionId, DISPLAY_META_LIMIT)}</p>` : ""}${discoveryCase.promotedIntakeBatchId ? `<p class="item-meta">Intake batch: ${escapeDisplay(discoveryCase.promotedIntakeBatchId, DISPLAY_META_LIMIT)}</p>` : ""}</details></article>`;
+  const workOrder = (store.aiWorkOrders || []).find((order) => order.source?.discoveryCaseId === discoveryCase.id);
+  const scanState = workOrder ? aiWorkOrderScanState(workOrder) : null;
+  return `<article class="item"><p class="item-title">${escapeDisplay(discoveryCase.suggestedName || discoveryCase.title || "Discovery case", DISPLAY_META_LIMIT)}</p><p class="item-meta">${escapeHtml(discoveryCase.status || "created")} · ${escapeHtml(discoveryCase.stage || "stage")}${routing.destination ? ` · ${escapeHtml(routing.destination.replaceAll("_", " "))}` : ""} · ${escapeHtml(scanState?.label || "Not scanned")}</p><details class="technical-details"><summary>Details and provenance</summary><p class="item-meta">Discovery Case: ${escapeDisplay(discoveryCase.id, DISPLAY_META_LIMIT)}</p>${discoveryCase.routingInteractionId ? `<p class="item-meta">Routing record: ${escapeDisplay(discoveryCase.routingInteractionId, DISPLAY_META_LIMIT)}</p>` : ""}${discoveryCase.promotedIntakeBatchId ? `<p class="item-meta">Intake batch: ${escapeDisplay(discoveryCase.promotedIntakeBatchId, DISPLAY_META_LIMIT)}</p>` : ""}</details></article>`;
 }
 
 async function refreshDiscoveryWorkspace() {
@@ -8637,13 +8665,14 @@ function openProjectFileImportModal(selection) {
 
 function openFileImportReviewModal(selection) {
   const isFolderImport = selection.importKind === "folder";
+  const defaultFileReviewMode = selection.candidates.length > 1 ? "each_file" : "scan_for_ideas";
   const suggestedFolderGroups = isFolderImport ? partitionDiscoveryCandidates(selection.candidates, "folder_groups", selection.rootPath) : [];
   const updateImportReviewSelectionStatus = () => {
     const reviewModal = document.querySelector(".modal-backdrop");
     const selectedCount = reviewModal ? reviewModal.querySelectorAll("[data-import-path]:checked").length : selection.candidates.length;
     const groupingMode = isFolderImport
       ? reviewModal?.querySelector("#folderGroupingMode")?.selectedOptions?.[0]?.textContent || "folder groups"
-      : reviewModal?.querySelector("#fileReviewMode")?.selectedOptions?.[0]?.textContent || "scan together for ideas";
+      : reviewModal?.querySelector("#fileReviewMode")?.selectedOptions?.[0]?.textContent || (defaultFileReviewMode === "each_file" ? "one independent scan per file" : "scan this file for ideas");
     setFileImportFlowState(
       "review_modal_open",
       `Discovery review open: ${selectedCount} of ${selection.candidates.length} files selected · ${groupingMode}.`,
@@ -8669,7 +8698,7 @@ function openFileImportReviewModal(selection) {
         </div>
       </div>
       ${isFolderImport ? `<div class="field"><label for="folderGroupingMode">How should this unknown folder be reviewed?</label><select id="folderGroupingMode" name="folderGroupingMode"><option value="folder_groups" selected>Use unknown-folder flow: subfolders to AI follow-up, loose files through Discovery (${suggestedFolderGroups.length})</option><option value="each_file">Emergency: review every file separately</option></select><p class="item-meta">Recommended for unknown folders: catalog every selected file. Subfolders are packaged for AI follow-up. Loose files continue through Discovery so known/checked files can move to Intake and large files can become AI Work Orders.</p></div>` : ""}
-      ${!isFolderImport ? `<div class="field"><label for="fileReviewMode">How should these selected files be scanned?</label><select id="fileReviewMode" name="fileReviewMode"><option value="scan_for_ideas" selected>Scan the selection for multiple ideas with local AI</option><option value="one_item">Keep the selection together as one AI scan</option><option value="each_file">Create a separate AI scan for each file</option></select><p class="item-meta">Unknown selected files go to AI Work Orders before Intake. File size only changes whether Project State can use existing chunks or must index the source first; it does not decide whether AI scanning happens.</p></div>` : ""}
+      ${!isFolderImport ? `<div class="field"><label for="fileReviewMode">How should these selected files be scanned?</label><select id="fileReviewMode" name="fileReviewMode"><option value="each_file"${defaultFileReviewMode === "each_file" ? " selected" : ""}>One independent AI scan per file (recommended for multiple files)</option><option value="scan_for_ideas"${defaultFileReviewMode === "scan_for_ideas" ? " selected" : ""}>Scan this selection together for multiple ideas</option><option value="one_item">Combine the selection as one AI item</option></select><p class="item-meta">Multiple selected files default to separate Discovery cases and AI Work Orders. Choose a combined option only when the files intentionally belong in one AI pass.</p></div>` : ""}
       <div class="field"><label for="privacyClass">Privacy</label><select id="privacyClass" name="privacyClass"><option value="local_only">Keep local only</option><option value="personal">Personal</option><option value="confidential">Confidential</option><option value="restricted">Restricted</option><option value="provider_allowed">Configured provider allowed later</option></select></div>
       ${confirmationField("externalSecurityAcknowledged", "I understand Project State does not scan files. I trust these files and accept responsibility for checking them with my own security tools.")}
       ${selection.skipped?.length ? `<p class="notice">${escapeHtml(t("unsupportedFilesSkipped"))}: ${selection.skipped.length}</p>` : ""}
@@ -8679,7 +8708,7 @@ function openFileImportReviewModal(selection) {
       const candidates = selection.candidates.filter((file) => selectedPaths.includes(file.localPath));
       if (!candidates.length) return false;
       const actor = defaultUiActor();
-      const groupingMode = isFolderImport ? data.folderGroupingMode || "folder_groups" : data.fileReviewMode || "scan_for_ideas";
+      const groupingMode = isFolderImport ? data.folderGroupingMode || "folder_groups" : data.fileReviewMode || defaultFileReviewMode;
       const candidateGroups = partitionDiscoveryCandidates(candidates, groupingMode, selection.rootPath);
       const reviewReason = isFolderImport
         ? groupingMode === "one_project_folder"
@@ -9463,6 +9492,82 @@ function renderSearchResult(result) {
   `;
 }
 
+function readableMaterialWords(value = "") {
+  const stop = new Set(["about", "after", "again", "also", "because", "been", "before", "being", "between", "could", "does", "from", "have", "into", "more", "other", "should", "than", "that", "their", "there", "these", "they", "this", "through", "under", "using", "were", "what", "when", "where", "which", "with", "would"]);
+  return new Set(String(value || "").toLowerCase().replace(/[^a-z0-9 ]/g, " ").split(/\s+/).filter((word) => word.length > 3 && !stop.has(word)));
+}
+
+function readableMaterialSimilarity(left = "", right = "") {
+  const a = readableMaterialWords(left);
+  const b = readableMaterialWords(right);
+  if (!a.size || !b.size) return 0;
+  let shared = 0;
+  for (const word of a) if (b.has(word)) shared += 1;
+  return shared / Math.min(a.size, b.size);
+}
+
+function recombineReadableSummaries(summaries = []) {
+  const kept = [];
+  for (const sentence of summaries.flatMap((summary) => String(summary || "").split(/(?<=[.!?])\s+/)).map((item) => item.trim()).filter(Boolean)) {
+    if (kept.some((existing) => normalizeProjectMatchText(existing) === normalizeProjectMatchText(sentence) || readableMaterialSimilarity(existing, sentence) >= 0.88)) continue;
+    kept.push(sentence);
+    if (kept.length >= 8) break;
+  }
+  return limitText(kept.join(" "), 3600);
+}
+
+function buildProjectReadableMaterial(project) {
+  const linkedWorkOrderIds = new Set((store.intakeItems || [])
+    .filter((intake) => (intake.completionReceipt?.outcome === "approved" || intake.status === "approved") && (intake.completionReceipt?.projectId || intake.projectId) === project.id)
+    .map(linkedAiWorkOrderIdForIntake).filter(Boolean));
+  const relatedOrders = (store.aiWorkOrders || []).filter((order) => order.projectId === project.id
+    || linkedWorkOrderIds.has(order.id)
+    || (order.candidateMap?.entries || []).some((entry) => (entry.enrichmentTargetProjectIds || []).includes(project.id)));
+  const groups = [];
+  const addMaterial = ({ title, summary, sourceLabel, workOrderId = "", evidenceCount = 0, aiDerived = false }) => {
+    const safeTitle = displaySafeAiTitle(title || sourceLabel || "Project material", "Project material");
+    const safeSummary = displaySafeAiText(summary || "", 3600);
+    if (!safeSummary) return;
+    const comparable = `${safeTitle} ${safeSummary}`;
+    let group = groups.find((item) => normalizeProjectMatchText(item.title) === normalizeProjectMatchText(safeTitle));
+    if (!group) group = groups.find((item) => readableMaterialSimilarity(item.comparable, comparable) >= 0.72);
+    if (!group) {
+      group = { title: safeTitle, comparable, summaries: [], sourceLabels: new Set(), workOrderIds: new Set(), evidenceCount: 0, aiDerived: false };
+      groups.push(group);
+    }
+    group.summaries.push(safeSummary);
+    if (sourceLabel) group.sourceLabels.add(sourceLabel);
+    if (workOrderId) group.workOrderIds.add(workOrderId);
+    group.evidenceCount += Number(evidenceCount || 0);
+    group.aiDerived = group.aiDerived || aiDerived;
+  };
+  for (const source of project.sources || []) {
+    if (source.status === "archived") continue;
+    addMaterial({ title: source.title || source.name || source.localFile?.name || source.location || "Project source", summary: source.summary || source.description || "", sourceLabel: source.sourceLabel || source.localFile?.name || source.location || source.title || "Core source" });
+  }
+  for (const order of relatedOrders) for (const entry of normalizeCandidateMap(order).entries || []) {
+    if (["rejected", "archived"].includes(entry.status)) continue;
+    addMaterial({ title: entry.conceptTitle || entry.title, summary: entry.summary, sourceLabel: order.title, workOrderId: order.id, evidenceCount: entry.evidence?.length || 0, aiDerived: true });
+  }
+  return groups.map((group) => ({
+    title: group.title,
+    summary: recombineReadableSummaries(group.summaries),
+    sourceLabels: [...group.sourceLabels],
+    workOrderIds: [...group.workOrderIds],
+    evidenceCount: group.evidenceCount,
+    duplicateCount: Math.max(0, group.summaries.length - 1),
+    aiDerived: group.aiDerived
+  })).sort((a, b) => (b.sourceLabels.length + b.workOrderIds.length) - (a.sourceLabels.length + a.workOrderIds.length));
+}
+
+function renderProjectReadableMaterial(project) {
+  const material = buildProjectReadableMaterial(project);
+  return `<article class="panel strong">
+    <div class="panel-head"><div><h2 class="panel-title">Readable project material</h2><p class="item-meta">AI-organized reading view · derived from approved sources and linked AI results · does not change Core truth</p></div></div>
+    ${material.length ? `<div class="list">${material.map((item) => `<article class="item"><p class="item-title">${escapeDisplay(item.title, DISPLAY_META_LIMIT)}</p><p class="item-body">${escapeDisplay(item.summary, 3600)}</p><p class="item-meta">${item.sourceLabels.length.toLocaleString()} source label${item.sourceLabels.length === 1 ? "" : "s"} · ${item.workOrderIds.length.toLocaleString()} linked AI Work Order${item.workOrderIds.length === 1 ? "" : "s"} · ${item.evidenceCount.toLocaleString()} evidence link${item.evidenceCount === 1 ? "" : "s"}${item.duplicateCount ? ` · ${item.duplicateCount.toLocaleString()} repeated description${item.duplicateCount === 1 ? "" : "s"} recombined` : ""}</p><details class="technical-details"><summary>Sources and provenance</summary>${item.sourceLabels.map((label) => `<p class="item-meta">${escapeDisplay(label, DISPLAY_META_LIMIT)}</p>`).join("") || `<p class="item-meta">No source label recorded.</p>`}${item.workOrderIds.map((id) => `<p class="item-meta">AI Work Order: ${escapeDisplay(id, DISPLAY_META_LIMIT)}</p>`).join("")}</details></article>`).join("")}</div>` : emptyText("No readable AI summaries or approved source summaries are linked to this project yet.")}
+  </article>`;
+}
+
 function renderProject(project) {
   const updatedBy = actorDisplay(project.updatedBy);
   const questions = sortNewest(project.openQuestions.filter((question) => question.status === "open"));
@@ -9532,6 +9637,8 @@ function renderProject(project) {
       </div>
       ${renderFlagPills(completenessFlags)}
     </article>
+
+    ${renderProjectReadableMaterial(project)}
 
     <section class="dashboard-grid">
       <div class="stack">
@@ -12993,6 +13100,14 @@ function normalizeCandidateMap(workOrder = {}) {
   };
 }
 
+function buildRelatedProjectCandidateContext(workOrder = {}) {
+  if (!workOrder.projectId) return "";
+  const related = (store.aiWorkOrders || []).filter((order) => order.id !== workOrder.id && order.projectId === workOrder.projectId);
+  const entries = related.flatMap((order) => (normalizeCandidateMap(order).entries || []).map((entry) => ({ order, entry }))).slice(-40);
+  if (!entries.length) return "";
+  return limitText(["Related AI summaries already linked to this project. Treat semantic repeats as supporting evidence or merge suggestions instead of creating duplicate ideas.", ...entries.map(({ order, entry }) => `- ${entry.conceptTitle || entry.title}: ${limitText(entry.summary || "", 360)} [Work Order ${order.id}]`)].join("\n"), 6500);
+}
+
 function buildCandidateMapContext(workOrder = {}) {
   const map = normalizeCandidateMap(workOrder);
   if (!map.entries.length) return "Candidate Map: empty. Create entries for genuinely distinct ideas; otherwise update the map later with supporting evidence.";
@@ -13748,7 +13863,7 @@ async function executeAiWorkOrderLocalAnalysis(workOrder, actor, reason, { maxCh
       includeRelationships: true,
       includeClarificationQuestions: true,
       priorDigestContext,
-      candidateMapContext: [buildKnownProjectEnrichmentContext(), buildCandidateMapContext(workOrder)].filter(Boolean).join("\n\n")
+      candidateMapContext: [buildKnownProjectEnrichmentContext(), buildRelatedProjectCandidateContext(workOrder), buildCandidateMapContext(workOrder)].filter(Boolean).join("\n\n")
     },
     provenance: {
       projectStateContract: "ai-analysis-arm-v0.1",
@@ -13993,6 +14108,7 @@ async function openStartLocalAiWorkOrderModal(workOrderId) {
         });
         await new Promise((resolve) => setTimeout(resolve, 650));
         activeRootView = "work-orders";
+        postModalAction = () => openAiWorkOrderResultsModal(workOrder.id);
       } catch (error) {
         setProgress({
           stage: "failed",
@@ -14670,6 +14786,41 @@ function archiveAiWorkOrder(workOrderId) {
         });
       }
       saveStore({ allowWithoutCoreApproval: !project, reason: "ai-work-order-archived" });
+    }
+  });
+}
+
+function openBulkArchiveAiWorkOrdersModal() {
+  const activeOrders = sortNewest((store.aiWorkOrders || []).filter((order) => order.status !== "archived"), "createdAt");
+  if (!activeOrders.length) return;
+  showModal({
+    title: "Bulk archive AI Work Orders",
+    submitText: "Archive selected",
+    body: `
+      <p class="notice">Archiving clears these Work Orders from the active list while preserving their source files, AI results, comments, and audit receipts.</p>
+      <div class="field"><label>Work Orders (${activeOrders.length})</label><div class="list import-file-list">${activeOrders.map((order) => `<label class="check-field"><input type="checkbox" data-bulk-archive-work-order="${escapeHtml(order.id)}" checked><span><strong>${escapeDisplay(order.title, DISPLAY_META_LIMIT)}</strong><br>${escapeHtml(aiWorkOrderScanState(order).label)} · ${escapeHtml(aiWorkOrderStatusLabel(order.status))}</span></label>`).join("")}</div></div>
+      ${confirmationField("confirmBulkArchive", "I understand the selected Work Orders will move to archived history and their underlying files will remain preserved.")}
+      ${auditFields()}
+    `,
+    async onSubmit(data, form) {
+      const selectedIds = new Set([...form.querySelectorAll("[data-bulk-archive-work-order]:checked")].map((field) => field.dataset.bulkArchiveWorkOrder));
+      if (!selectedIds.size) return false;
+      const actor = getOrCreateActor(data.actorName, "Human");
+      const archivedAt = nowIso();
+      for (const order of activeOrders.filter((item) => selectedIds.has(item.id))) {
+        order.status = "archived";
+        order.archivedAt = archivedAt;
+        order.archiveReason = data.reason.trim();
+        order.completionReceipt = order.completionReceipt || {
+          completedAt: archivedAt, discoveryCaseId: order.source?.discoveryCaseId || "", sourceFileCount: (order.source?.sourceFiles || []).length,
+          sourceChunkCount: Number(order.lastAnalysis?.totalDetectedChunks || order.lastAnalysis?.analyzedUniqueChunks || 0), analysisRunCount: (order.analysisRunIds || []).length,
+          reviewPassCount: 0, reviewPassIds: [], finalReviewPassId: "", humanDecisionCount: 0, humanReviewerIds: [actor.id],
+          destinationProjectIds: order.projectId ? [order.projectId] : [], rejectedCount: 0,
+          externalTransmissionStatus: order.lastAnalysis?.externalTransmission === true ? "external" : "local_or_none", manualArchive: true, bulkArchive: true
+        };
+      }
+      await saveStore({ allowWithoutCoreApproval: true, reason: "ai-work-orders-bulk-archived" });
+      activeRootView = "work-orders";
     }
   });
 }
@@ -18464,6 +18615,7 @@ app.addEventListener("click", async (event) => {
   }
   if (action === "comment-ai-work-order") openAiWorkOrderCommentsModal(button.dataset.workOrderId);
   if (action === "archive-ai-work-order") archiveAiWorkOrder(button.dataset.workOrderId);
+  if (action === "bulk-archive-ai-work-orders") openBulkArchiveAiWorkOrdersModal();
   if (action === "delete-archived-ai-work-order") openDeleteArchivedAiWorkOrderModal(button.dataset.workOrderId);
   if (action === "delete-all-archived-ai-work-orders") openDeleteAllArchivedAiWorkOrdersModal();
   if (action === "export-project") exportProjectJson();

@@ -35,8 +35,8 @@ assert(app.includes('if (action === "rename-project")'), "Rename project action 
 
 assert(app.includes('candidates.length === 1 ? candidate.name || "Selected file" : "Selected file collection"'), "Single-file Discovery grouping still uses folder labeling.");
 assert(app.includes('name="fileReviewMode"'), "Selected-file Discovery is missing its review-mode choice.");
-assert(app.includes('value="scan_for_ideas" selected'), "Selected-file Discovery must default to scanning across content for ideas.");
-assert(app.includes('value="each_file"'), "Per-file Discovery review must remain an explicit option.");
+assert(app.includes('selection.candidates.length > 1 ? "each_file" : "scan_for_ideas"'), "Multi-file Discovery must default to one independent scan per file.");
+assert(app.includes('value="scan_for_ideas"${defaultFileReviewMode === "scan_for_ideas" ? " selected" : ""}'), "Deliberate combined Discovery scanning must remain available for a single file or explicit selection.");
 assert(app.includes('const unknownFileAiDefault = ["scan_for_ideas", "one_item", "each_file"].includes(reviewMode)'), "Unknown selected files do not default to the AI Work Order lane.");
 assert(app.includes('const defaultAiDestination = corpusIntake ? "large_ai_work_order" : "ai_work_order"'), "Small and large unknown files do not share the AI scanning route.");
 assert(app.includes("It does not create Intake unless you deliberately change the destination"), "Unknown-file AI scanning can still silently default into Intake.");

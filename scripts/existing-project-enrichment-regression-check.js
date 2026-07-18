@@ -23,7 +23,7 @@ try {
     "enrichmentTargetProjectIds",
     "projectEvidenceRole",
     "Existing project enrichment:",
-    "candidateMapContext: [buildKnownProjectEnrichmentContext(), buildCandidateMapContext(workOrder)]"
+    "candidateMapContext: [buildKnownProjectEnrichmentContext(), buildRelatedProjectCandidateContext(workOrder), buildCandidateMapContext(workOrder)]"
   ], "app existing-project enrichment");
 
   requireMarkers(providerSource, [

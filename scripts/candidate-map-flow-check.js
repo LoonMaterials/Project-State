@@ -28,7 +28,7 @@ function main() {
     "function mergeCandidateIntoMapEntry",
     "function renderCandidateMapStats",
     "function renderCandidateMapEntries",
-    "candidateMapContext: [buildKnownProjectEnrichmentContext(), buildCandidateMapContext(workOrder)]",
+    "candidateMapContext: [buildKnownProjectEnrichmentContext(), buildRelatedProjectCandidateContext(workOrder), buildCandidateMapContext(workOrder)]",
     "workOrder.candidateMap = map;",
     "events",
     "duplicateHints",
