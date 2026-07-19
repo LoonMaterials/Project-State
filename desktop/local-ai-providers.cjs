@@ -760,10 +760,61 @@ async function generateQwenIdeaCandidates({ validated, envelope, ideaContract, m
   });
 }
 
+async function reviewQwenCoreProject({ brief = {}, briefMarkdown = "" } = {}) {
+  const providers = await describeLocalAiProviders();
+  const provider = providers.find((item) => item.providerId === QWEN3_8B_PROVIDER_ID);
+  if (!provider?.available) throw localAiError("PROVIDER_UNAVAILABLE", provider?.lastError || "Qwen3 8B is not installed in Ollama.");
+  const boundedBrief = normalizeText(briefMarkdown || JSON.stringify(brief, null, 2), 90000);
+  const prompt = [
+    "You are performing a final advisory quality pass on one existing Project State Core project.",
+    "Do not rewrite Core, approve anything, invent facts, or create projects. Return findings for human review only.",
+    "Review the complete brief for: duplicate or repeated ideas; conflicting facts or decisions; missing or unanswered questions; missing evidence/provenance; stale or uncertain material; missing owners or next actions; unclear status; and material that may belong to another project.",
+    "Return strict JSON only with this shape:",
+    '{"executive_summary":"detailed plain-language project summary","completeness_assessment":"complete|mostly_complete|needs_work|insufficient_evidence","duplicate_findings":[{"records":["stable id or label"],"explanation":"why these overlap","recommendation":"human action"}],"missing_questions":["question"],"gaps":["missing element"],"contradictions":["contradiction"],"provenance_gaps":["unsupported or weakly sourced item"],"stale_or_uncertain":["item"],"recommendations":["ordered human action"],"human_review_required":true}',
+    "Be detailed but concise. Preserve uncertainty. Name stable record IDs when the brief provides them.",
+    "Project brief:",
+    boundedBrief
+  ].join("\n\n");
+  const first = await callOllamaGenerate(prompt);
+  let parsed;
+  let attempts = 1;
+  try {
+    parsed = parseQwenJsonResponse(first.response || "");
+  } catch (firstError) {
+    attempts = 2;
+    const retry = await callOllamaGenerate(["Return valid compact JSON only using the exact requested top-level fields. No markdown or commentary.", prompt].join("\n\n"));
+    try { parsed = parseQwenJsonResponse(retry.response || ""); }
+    catch (secondError) { throw localAiError("PROVIDER_RESPONSE_INVALID", `Qwen3 8B returned unreadable Core review JSON after retry: ${secondError.message}; first attempt: ${firstError.message}`); }
+  }
+  const strings = (value, limit = 40) => (Array.isArray(value) ? value : []).map((item) => normalizeText(typeof item === "string" ? item : JSON.stringify(item), 1200)).filter(Boolean).slice(0, limit);
+  const duplicates = (Array.isArray(parsed.duplicate_findings) ? parsed.duplicate_findings : []).slice(0, 40).map((item) => ({
+    records: strings(item?.records, 20),
+    explanation: normalizeText(item?.explanation || "", 1600),
+    recommendation: normalizeText(item?.recommendation || "", 1200)
+  }));
+  return {
+    executiveSummary: normalizeText(parsed.executive_summary || "", 12000),
+    completenessAssessment: ["complete", "mostly_complete", "needs_work", "insufficient_evidence"].includes(parsed.completeness_assessment) ? parsed.completeness_assessment : "needs_work",
+    duplicateFindings: duplicates,
+    missingQuestions: strings(parsed.missing_questions),
+    gaps: strings(parsed.gaps),
+    contradictions: strings(parsed.contradictions),
+    provenanceGaps: strings(parsed.provenance_gaps),
+    staleOrUncertain: strings(parsed.stale_or_uncertain),
+    recommendations: strings(parsed.recommendations),
+    humanReviewRequired: true,
+    providerId: QWEN3_8B_PROVIDER_ID,
+    modelId: QWEN3_8B_MODEL_ID,
+    attempts,
+    reviewedAt: new Date().toISOString()
+  };
+}
+
 module.exports = {
   QWEN3_8B_PROVIDER_ID,
   QWEN3_8B_ARM_ID,
   QWEN3_8B_MODEL_ID,
   describeLocalAiProviders,
-  generateQwenIdeaCandidates
+  generateQwenIdeaCandidates,
+  reviewQwenCoreProject
 };

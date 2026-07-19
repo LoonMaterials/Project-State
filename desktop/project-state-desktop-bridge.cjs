@@ -12,7 +12,8 @@ const {
   QWEN3_8B_ARM_ID,
   QWEN3_8B_MODEL_ID,
   describeLocalAiProviders,
-  generateQwenIdeaCandidates
+  generateQwenIdeaCandidates,
+  reviewQwenCoreProject
 } = require("./local-ai-providers.cjs");
 
 const ROOT = path.join(__dirname, "..");
@@ -333,11 +334,17 @@ function createProjectStateDesktopBridge(options = {}) {
       },
       async readState(payload = {}) {
         return readIdeaAnalysisState({ storageRoot, dbPath, payload });
+      },
+      async reviewCoreProject(payload = {}) {
+        return reviewQwenCoreProject(payload);
       }
     },
     reviewExchange: {
       async exportUniversalPack(payload = {}) {
         return createUniversalReviewPack({ storageRoot, dbPath, payload });
+      },
+      async exportProjectFinalReviewPack(payload = {}) {
+        return createProjectFinalReviewPack({ storageRoot, payload });
       },
       async importExternalReview(payload = {}) {
         return importExternalReviewPass({ storageRoot, dbPath, payload });
@@ -4492,7 +4499,7 @@ function crc32Buffer(buffer) {
   return (crc ^ 0xffffffff) >>> 0;
 }
 
-function createStoredZip(entries = []) {
+function createCompressedZip(entries = []) {
   const localParts = [];
   const centralParts = [];
   let offset = 0;
@@ -4500,15 +4507,16 @@ function createStoredZip(entries = []) {
     const name = Buffer.from(String(entry.name || "entry.txt").replaceAll("\\", "/"), "utf8");
     const data = Buffer.isBuffer(entry.data) ? entry.data : Buffer.from(String(entry.data || ""), "utf8");
     const crc = crc32Buffer(data);
+    const compressed = zlib.deflateRawSync(data, { level: 6 });
     const local = Buffer.alloc(30);
-    local.writeUInt32LE(0x04034b50, 0); local.writeUInt16LE(20, 4); local.writeUInt16LE(0, 6); local.writeUInt16LE(0, 8);
-    local.writeUInt32LE(crc, 14); local.writeUInt32LE(data.length, 18); local.writeUInt32LE(data.length, 22); local.writeUInt16LE(name.length, 26);
-    localParts.push(local, name, data);
+    local.writeUInt32LE(0x04034b50, 0); local.writeUInt16LE(20, 4); local.writeUInt16LE(0, 6); local.writeUInt16LE(8, 8);
+    local.writeUInt32LE(crc, 14); local.writeUInt32LE(compressed.length, 18); local.writeUInt32LE(data.length, 22); local.writeUInt16LE(name.length, 26);
+    localParts.push(local, name, compressed);
     const central = Buffer.alloc(46);
-    central.writeUInt32LE(0x02014b50, 0); central.writeUInt16LE(20, 4); central.writeUInt16LE(20, 6); central.writeUInt16LE(0, 8); central.writeUInt16LE(0, 10);
-    central.writeUInt32LE(crc, 16); central.writeUInt32LE(data.length, 20); central.writeUInt32LE(data.length, 24); central.writeUInt16LE(name.length, 28); central.writeUInt32LE(offset, 42);
+    central.writeUInt32LE(0x02014b50, 0); central.writeUInt16LE(20, 4); central.writeUInt16LE(20, 6); central.writeUInt16LE(0, 8); central.writeUInt16LE(8, 10);
+    central.writeUInt32LE(crc, 16); central.writeUInt32LE(compressed.length, 20); central.writeUInt32LE(data.length, 24); central.writeUInt16LE(name.length, 28); central.writeUInt32LE(offset, 42);
     centralParts.push(central, name);
-    offset += local.length + name.length + data.length;
+    offset += local.length + name.length + compressed.length;
   }
   const centralOffset = offset;
   const centralSize = centralParts.reduce((total, part) => total + part.length, 0);
@@ -4551,6 +4559,8 @@ function readNamedZipEntry(bytes, entry) {
 }
 
 async function createUniversalReviewPack({ storageRoot, dbPath, payload = {} }) {
+  const progress = (phase, completed, total, detail = "") => { try { payload.onProgress?.({ phase, completed, total, percent: total ? Math.round((completed / total) * 100) : 0, detail }); } catch {} };
+  progress("preparing", 0, 1, "Loading Discovery evidence");
   await ensureSpine(storageRoot);
   const workOrder = cloneJson(payload.workOrder || {});
   const workOrderId = requiredDiscoveryId(workOrder.id || payload.workOrderId, "Work Order ID");
@@ -4565,8 +4575,9 @@ async function createUniversalReviewPack({ storageRoot, dbPath, payload = {} }) 
   const extractionById = new Map(caseView.extractions.map((item) => [item.id, item]));
   const versionById = new Map(caseView.fileVersions.map((item) => [item.id, item]));
   let chunks = [];
-  for (const chunk of [...caseView.chunks].sort((a, b) => String(a.discoveryExtractionId).localeCompare(String(b.discoveryExtractionId)) || Number(a.chunkIndex) - Number(b.chunkIndex))) {
-    const read = await readDiscoveryChunkText({ storageRoot, dbPath, payload: { discoveryChunkId: chunk.id } });
+  const orderedChunks = [...caseView.chunks].sort((a, b) => String(a.discoveryExtractionId).localeCompare(String(b.discoveryExtractionId)) || Number(a.chunkIndex) - Number(b.chunkIndex));
+  let completedChunks = 0;
+  for (const chunk of orderedChunks) {    const read = await readDiscoveryChunkText({ storageRoot, dbPath, payload: { discoveryChunkId: chunk.id } });
     const extraction = extractionById.get(chunk.discoveryExtractionId) || {};
     const version = versionById.get(extraction.fileVersionId) || {};
     chunks.push({
@@ -4597,6 +4608,8 @@ async function createUniversalReviewPack({ storageRoot, dbPath, payload = {} }) 
         duplicate_repetition_increases_confidence: false
       }
     });
+    completedChunks += 1;
+    if (completedChunks === orderedChunks.length || completedChunks % 10 === 0) progress("reading", completedChunks, orderedChunks.length, `Reading evidence chunk ${completedChunks} of ${orderedChunks.length}`);
   }
   if (!chunks.length) throw new Error("Universal review export requires extracted or indexed Discovery chunks.");
   const sourceManifest = caseView.fileVersions.map((version) => {
@@ -4660,12 +4673,14 @@ async function createUniversalReviewPack({ storageRoot, dbPath, payload = {} }) 
   const outputDirectoryStat = await fsp.stat(outputDirectory).catch(() => null);
   if (!outputDirectoryStat?.isDirectory()) throw new Error("The selected Review Exchange output folder is unavailable.");
   const packPath = path.join(outputDirectory, packName);
-  const zip = createStoredZip([
+  progress("compressing", 0, 1, "Compressing the review package");
+  const zip = createCompressedZip([
     { name: "review_instructions.md", data: reviewPackInstructions(evidence) },
     { name: "evidence.json", data: JSON.stringify(evidence, null, 2) },
     { name: "evidence_readable.md", data: reviewPackReadableMarkdown(evidence) },
     { name: "schema/review_result.schema.json", data: resultSchema }
   ]);
+  progress("writing", 0, 1, "Writing the ZIP file");
   await fsp.writeFile(packPath, zip);
   const managedRelativePath = relativeManagedPath(storageRoot, packPath);
   const insideManagedStorage = managedRelativePath !== ".." && !managedRelativePath.startsWith(`..${path.sep}`) && !managedRelativePath.startsWith("../");
@@ -4674,7 +4689,56 @@ async function createUniversalReviewPack({ storageRoot, dbPath, payload = {} }) 
   try { insertStrict(packageDb, "review_export_packages", { id: packageId, work_order_id: workOrderId, discovery_case_id: discoveryCaseId, pack_revision: packRevision, evidence_sha256: evidenceSha256, created_at: createdAt, record_json: JSON.stringify(record) }); }
   catch (error) { await fsp.rm(packPath, { force: true }); throw error; }
   finally { packageDb.close(); }
+  progress("complete", 1, 1, "Review ZIP ready");
   return { ok: true, packageId, packRevision, evidenceSha256, format: evidence.format, formatVersion: evidence.format_version, workOrderId, discoveryCaseId, sourceComplete, path: packPath, fileName: packName, sha256: crypto.createHash("sha256").update(zip).digest("hex"), bytes: zip.length, chunkCount: chunks.length, sourceCount: sourceManifest.length };
+}
+
+function projectFinalReviewInstructions(target = "human") {
+  return [
+    "# Project State Core Final Review",
+    "",
+    `Reviewer route: **${target === "ai" ? "External AI" : "Human"}**`,
+    "",
+    "Read project_brief.md and project_brief.json completely. Produce a detailed advisory review; do not silently rewrite Core.",
+    "",
+    "Check specifically for:",
+    "- exact and near-duplicate statements, decisions, work, and source claims;",
+    "- contradictions or incompatible claims;",
+    "- missing, unanswered, or implied questions;",
+    "- missing facts, sources, provenance, owners, dates, or next actions;",
+    "- stale, uncertain, or weakly supported material;",
+    "- material that belongs in another project;",
+    "- unclear status, completion criteria, or dependencies.",
+    "",
+    "Return a concise executive summary, then findings grouped by category. For every finding include severity, evidence, and a recommended human action. Mark the result advisory and human_review_required=true."
+  ].join("\n");
+}
+
+async function createProjectFinalReviewPack({ storageRoot, payload = {} }) {
+  const progress = (phase, completed, total, detail = "") => { try { payload.onProgress?.({ phase, completed, total, percent: total ? Math.round((completed / total) * 100) : 0, detail }); } catch {} };
+  const brief = cloneJson(payload.brief || {});
+  if (!brief.project?.id && !brief.projectId) throw new Error("Core project review export requires a project brief.");
+  const projectName = brief.project?.name || brief.projectName || "Core Project";
+  const outputDirectory = path.resolve(String(payload.outputDirectory || "").trim() || path.join(storageRoot, "backups"));
+  const outputDirectoryStat = await fsp.stat(outputDirectory).catch(() => null);
+  if (!outputDirectoryStat?.isDirectory()) throw new Error("The selected final-review output folder is unavailable.");
+  progress("preparing", 0, 1, "Preparing the detailed Core project brief");
+  const markdown = String(payload.briefMarkdown || "").trim() || `# ${projectName}\n\n${brief.project?.summary || "No summary recorded."}` ;
+  const target = payload.reviewerTarget === "ai" ? "ai" : "human";
+  const responseTemplate = { advisory: true, human_review_required: true, executive_summary: "", completeness_assessment: "", duplicates: [], contradictions: [], missing_questions: [], gaps: [], provenance_gaps: [], stale_or_uncertain: [], recommendations: [] };
+  progress("compressing", 0, 1, "Compressing final-review package");
+  const zip = createCompressedZip([
+    { name: "REVIEW_INSTRUCTIONS.md", data: projectFinalReviewInstructions(target) },
+    { name: "project_brief.md", data: markdown },
+    { name: "project_brief.json", data: JSON.stringify(brief, null, 2) },
+    { name: "review_response_template.json", data: JSON.stringify(responseTemplate, null, 2) }
+  ]);
+  const fileName = safeFileName(`${projectName}.core-final-review-${target}-${safeStamp()}.zip`);
+  const packPath = path.join(outputDirectory, fileName);
+  progress("writing", 0, 1, "Writing the final-review ZIP file");
+  await fsp.writeFile(packPath, zip);
+  progress("complete", 1, 1, "Final-review ZIP ready");
+  return { ok: true, path: packPath, fileName, bytes: zip.length, sha256: crypto.createHash("sha256").update(zip).digest("hex"), reviewerTarget: target, projectId: brief.project?.id || brief.projectId };
 }
 
 function externalReviewChunkReferences(value = {}) {
