@@ -2,6 +2,7 @@ const fs = require("node:fs");
 const fsp = require("node:fs/promises");
 const os = require("node:os");
 const path = require("node:path");
+const zlib = require("node:zlib");
 const { DatabaseSync } = require("node:sqlite");
 const { createProjectStateDesktopBridge, DATABASE_FILE } = require("../desktop/project-state-desktop-bridge.cjs");
 
@@ -12,9 +13,9 @@ function coreCounts(dbPath) { const db = new DatabaseSync(dbPath); try { return 
 function storedZipEntries(bytes) {
   const entries = new Map(); let offset = 0;
   while (offset + 30 <= bytes.length && bytes.readUInt32LE(offset) === 0x04034b50) {
-    const size = bytes.readUInt32LE(offset + 18); const nameLength = bytes.readUInt16LE(offset + 26); const extraLength = bytes.readUInt16LE(offset + 28);
+    const method = bytes.readUInt16LE(offset + 8); const size = bytes.readUInt32LE(offset + 18); const nameLength = bytes.readUInt16LE(offset + 26); const extraLength = bytes.readUInt16LE(offset + 28);
     const name = bytes.slice(offset + 30, offset + 30 + nameLength).toString("utf8"); const start = offset + 30 + nameLength + extraLength;
-    entries.set(name, bytes.slice(start, start + size)); offset = start + size;
+    const compressed = bytes.slice(start, start + size); entries.set(name, method === 8 ? zlib.inflateRawSync(compressed) : compressed); offset = start + size;
   }
   return entries;
 }

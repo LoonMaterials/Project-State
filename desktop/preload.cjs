@@ -17,6 +17,14 @@ desktopBridge.armTransport = {
   revoke: (payload) => ipcRenderer.invoke("api-arm-transport:revoke", payload)
 };
 
+desktopBridge.reviewExchange.exportUniversalPack = (payload = {}) => ipcRenderer.invoke("review-exchange:export-pack", { requestId: payload.requestId, operation: "universal", payload });
+desktopBridge.reviewExchange.exportProjectFinalReviewPack = (payload = {}) => ipcRenderer.invoke("review-exchange:export-pack", { requestId: payload.requestId, operation: "project_final", payload });
+desktopBridge.reviewExchange.onExportProgress = (callback) => {
+  const listener = (_event, message) => callback(message);
+  ipcRenderer.on("review-exchange:export-progress", listener);
+  return () => ipcRenderer.removeListener("review-exchange:export-progress", listener);
+};
+
 desktopBridge.dialogs = {
   pickFile: (payload) => ipcRenderer.invoke("native-dialog:pick-file", payload),
   pickFiles: (payload) => ipcRenderer.invoke("native-dialog:pick-files", payload),

@@ -2553,6 +2553,7 @@ async function saveStore({ storageRoot, dbPath, payload }) {
   splitMeta.intakeBatches = store.intakeBatches || [];
   splitMeta.intakeItems = store.intakeItems || [];
   splitMeta.aiWorkOrders = store.aiWorkOrders || [];
+  splitMeta.projectReviewReports = store.projectReviewReports || [];
   const snapshot = JSON.stringify(store);
   let committed = false;
 
@@ -3835,6 +3836,7 @@ async function rebuildStoreFromSplitRecords(storageRoot, split = {}) {
     intakeBatches: Array.isArray(split.intakeBatches) ? split.intakeBatches : (Array.isArray(meta.intakeBatches) ? meta.intakeBatches : []),
     intakeItems: Array.isArray(split.intakeItems) ? split.intakeItems : (Array.isArray(meta.intakeItems) ? meta.intakeItems : []),
     aiWorkOrders: Array.isArray(meta.aiWorkOrders) ? meta.aiWorkOrders : [],
+    projectReviewReports: Array.isArray(meta.projectReviewReports) ? meta.projectReviewReports : [],
     projects: split.projects || []
   };
 
@@ -3957,7 +3959,8 @@ function splitStoreRecordsForBridge(store, manifest = {}) {
       actors: store.actors || [],
       intakeBatches: store.intakeBatches || [],
       intakeItems: store.intakeItems || [],
-      aiWorkOrders: store.aiWorkOrders || []
+      aiWorkOrders: store.aiWorkOrders || [],
+      projectReviewReports: store.projectReviewReports || []
     },
     projects: (store.projects || []).map((project) => ({
       ...project,

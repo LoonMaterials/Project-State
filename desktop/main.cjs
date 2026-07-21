@@ -1,4 +1,6 @@
 const path = require("node:path");
+const crypto = require("node:crypto");
+const { Worker } = require("node:worker_threads");
 const { app, BrowserWindow, dialog, ipcMain, safeStorage } = require("electron");
 const { createProjectStateDesktopBridge } = require("./project-state-desktop-bridge.cjs");
 const { createApiArmTransportManager } = require("./api-arm-transport-manager.cjs");
@@ -92,6 +94,26 @@ async function showNativeOpenDialog(options) {
   return result;
 }
 
+function registerReviewExportIpc() {
+  ipcMain.handle("review-exchange:export-pack", async (event, request = {}) => {
+    if (!trustedRenderer(event)) throw new Error("Untrusted renderer request.");
+    const requestId = String(request.requestId || crypto.randomUUID());
+    const operation = request.operation === "project_final" ? "project_final" : "universal";
+    return new Promise((resolve, reject) => {
+      const worker = new Worker(path.join(__dirname, "review-pack-worker.cjs"), { workerData: { storageRoot: STORAGE_ROOT, requestId, operation, payload: request.payload || {} } });
+      let settled = false;
+      const finish = (callback, value) => { if (settled) return; settled = true; callback(value); worker.terminate().catch(() => {}); };
+      worker.on("message", (message = {}) => {
+        if (message.type === "progress") event.sender.send("review-exchange:export-progress", message);
+        if (message.type === "result") finish(resolve, message.result);
+        if (message.type === "error") { const error = new Error(message.error?.message || "Review ZIP export failed."); error.stack = message.error?.stack || error.stack; finish(reject, error); }
+      });
+      worker.on("error", (error) => finish(reject, error));
+      worker.on("exit", (code) => { if (!settled) finish(reject, new Error(code === 0 ? "Review ZIP worker stopped without a result." : "Review ZIP worker stopped with code " + code + ".")); });
+    });
+  });
+}
+
 function registerNativeDialogIpc() {
   const defaultPathFromPayload = (payload = {}) => {
     const value = String(payload.defaultPath || "").trim();
@@ -146,6 +168,7 @@ app.whenReady().then(async () => {
   apiArmTransportManager = createApiArmTransportManager({ storageRoot: STORAGE_ROOT, safeStorage, intakeArms: desktopBridge.intakeArms, fileIntake });
   registerApiArmTransportIpc(apiArmTransportManager);
   registerNativeDialogIpc();
+  registerReviewExportIpc();
   await apiArmTransportManager.initialize();
   createMainWindow();
   app.on("activate", () => {

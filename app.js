@@ -3328,6 +3328,7 @@ const emptyStore = () => ({
   intakeBatches: [],
   intakeItems: [],
   aiWorkOrders: [],
+  projectReviewReports: [],
   projects: []
 });
 
@@ -3577,11 +3578,14 @@ function createDesktopPlatformAdapter(bridge) {
       cancelAnalysis: (requestId) => analysisArms.cancelAnalysis(requestId),
       getReceipt: (requestId) => analysisArms.getReceipt(requestId),
       recordReviewDecision: (payload) => analysisArms.recordReviewDecision(payload),
-      readState: (payload) => analysisArms.readState(payload)
+      readState: (payload) => analysisArms.readState(payload),
+      reviewCoreProject: (payload) => analysisArms.reviewCoreProject(payload)
     },
     reviewExchange: {
       available: typeof reviewExchange.exportUniversalPack === "function" && typeof reviewExchange.importExternalReview === "function" && typeof reviewExchange.importPastedExternalReview === "function" && typeof reviewExchange.savePastedExternalReview === "function",
       exportUniversalPack: (payload) => reviewExchange.exportUniversalPack(payload),
+      exportProjectFinalReviewPack: (payload) => reviewExchange.exportProjectFinalReviewPack(payload),
+      onExportProgress: (callback) => typeof reviewExchange.onExportProgress === "function" ? reviewExchange.onExportProgress(callback) : () => {},
       importExternalReview: (payload) => reviewExchange.importExternalReview(payload),
       importPastedExternalReview: (payload) => reviewExchange.importPastedExternalReview(payload),
       savePastedExternalReview: (payload) => reviewExchange.savePastedExternalReview(payload),
@@ -4546,6 +4550,7 @@ function normalizeStore(parsed) {
     intakeBatches: Array.isArray(parsed.intakeBatches) ? parsed.intakeBatches : [],
     intakeItems: Array.isArray(parsed.intakeItems) ? parsed.intakeItems.map((item) => normalizeIntakeItem(item, context)) : [],
     aiWorkOrders: Array.isArray(parsed.aiWorkOrders) ? parsed.aiWorkOrders.map((workOrder) => normalizeAiWorkOrder(workOrder, context)) : [],
+    projectReviewReports: Array.isArray(parsed.projectReviewReports) ? parsed.projectReviewReports : [],
     projects: projects.map((project) => normalizeProject(project, context))
   };
 }
@@ -5819,7 +5824,7 @@ function actionPermission(action = "") {
   if (["create-project", "add-decision", "add-fact", "add-conflict", "add-source", "add-relationship", "add-question", "add-action", "add-extract", "read-file-extract", "suggest-extract", "create-draft-project", "import-files", "import-folder", "import-project-files", "import-project-folder"].includes(action)) return "create";
   if (["edit-status", "edit-object", "rename-project", "assign-object", "mark-complete", "attach-source", "attach-image", "archive-object", "unarchive-project", "manage-project-roles", "review-source-freshness", "verify-source-file", "verify-all-source-files", "archive-ai-work-order", "bulk-archive-ai-work-orders", "start-local-ai-work-order", "import-reviewed-evidence", "review-external-ai-decision", "edit-file-source", "archive-file-source"].includes(action)) return "edit";
   if (["approve-intake", "approve-extract", "approve-draft-project"].includes(action)) return "approve";
-  if (["export-project", "export-handoff", "context-pack", "view-object-history", "show-history", "view-history", "show-changes-since", "history-file-source", "view-ai-work-order-results", "export-universal-review-pack", "view-external-ai-reviews", "refresh-storage", "refresh-local-ai-setup"].includes(action)) return "audit";
+  if (["export-project", "export-handoff", "context-pack", "project-final-review", "view-object-history", "show-history", "view-history", "show-changes-since", "history-file-source", "view-ai-work-order-results", "export-universal-review-pack", "view-external-ai-reviews", "refresh-storage", "refresh-local-ai-setup"].includes(action)) return "audit";
   if (["show-settings", "backup-storage", "restore-storage", "reset-local-data", "export-current-raw-data", "enable-arm-transport", "disable-arm-transport", "rotate-arm-transport-token", "revoke-arm-transport"].includes(action)) return "admin";
   return "";
 }
@@ -9560,6 +9565,49 @@ function buildProjectReadableMaterial(project) {
   })).sort((a, b) => (b.sourceLabels.length + b.workOrderIds.length) - (a.sourceLabels.length + a.workOrderIds.length));
 }
 
+function projectReviewItemLines(items = [], empty = "None found") {
+  return items.length ? items.map((item) => `<li>${escapeDisplay(typeof item === "string" ? item : JSON.stringify(item), 1800)}</li>`).join("") : `<li>${escapeHtml(empty)}</li>`;
+}
+
+function renderProjectFinalReviewReports(project) {
+  const reports = (store.projectReviewReports || []).filter((item) => item.projectId === project.id).sort((a, b) => dateSortValue(b.reviewedAt) - dateSortValue(a.reviewedAt));
+  if (!reports.length) return "";
+  return `<article class="panel"><div class="panel-head"><div><h2 class="panel-title">Advisory final-review history</h2><p class="item-meta">AI findings never change Core automatically. A human must decide what to apply.</p></div></div><div class="list">${reports.map((report) => { const result = report.result || {}; return `<details class="item technical-details"><summary>${escapeDisplay(result.executiveSummary || "Core final review", DISPLAY_META_LIMIT)} · ${escapeHtml(formatDate(report.reviewedAt))}</summary><p class="item-body">${escapeDisplay(result.executiveSummary || "No summary returned.", 6000)}</p><p class="item-meta">Completeness: ${escapeHtml(result.completenessAssessment || "not assessed")} · ${escapeHtml(report.providerId || "reviewer")} · advisory · human review required</p><h3>Duplicates</h3><ul>${projectReviewItemLines(result.duplicateFindings)}</ul><h3>Missing questions</h3><ul>${projectReviewItemLines(result.missingQuestions)}</ul><h3>Gaps</h3><ul>${projectReviewItemLines(result.gaps)}</ul><h3>Contradictions</h3><ul>${projectReviewItemLines(result.contradictions)}</ul><h3>Provenance gaps</h3><ul>${projectReviewItemLines(result.provenanceGaps)}</ul><h3>Stale or uncertain</h3><ul>${projectReviewItemLines(result.staleOrUncertain)}</ul><h3>Recommendations</h3><ul>${projectReviewItemLines(result.recommendations)}</ul></details>`; }).join("")}</div></article>`;
+}
+
+function buildProjectFinalReviewBrief(project) {
+  const active = (list, predicate = () => true) => (list || []).filter(predicate).map((item) => cloneRecord(item));
+  return {
+    format: "project-state-core-final-review-brief", formatVersion: "1.0", generatedAt: nowIso(), advisoryOnly: true, humanReviewRequired: true,
+    project: { id: project.id, name: project.name, status: project.status || "active", healthFlag: project.healthFlag || "", currentStatus: project.currentStatus || "", currentSummary: project.currentSummary || project.summary || "", updatedAt: project.updatedAt || "", updatedBy: actorDisplay(project.updatedBy), aliases: project.aliases || [], formerNames: project.formerNames || [], parentProjectId: project.parentProjectId || "", projectFamily: project.projectFamily || "" },
+    readableMaterial: buildProjectReadableMaterial(project),
+    decisions: active(project.decisions, (item) => !item.archived), facts: active(project.facts, (item) => item.status !== "archived"), conflicts: active(project.conflicts, (item) => item.status !== "archived"), sources: active(project.sources, (item) => item.status !== "archived"), relationships: active(project.relationships, (item) => item.status !== "archived"), openQuestions: active(project.openQuestions, (item) => item.status === "open"), nextActions: active(project.nextActions, (item) => getActionStatus(item) === "open"), recentChanges: sortNewest(project.changes || [], "timestamp").slice(0, 100)
+  };
+}
+
+function projectFinalReviewMarkdown(brief) {
+  const lines = [`# ${brief.project.name}`, "", "> Detailed advisory Core final-review brief. Human review remains authoritative.", "", "## Current state", "", `- Project ID: ${brief.project.id}`, `- Status: ${brief.project.currentStatus || "Not recorded"}`, `- Health: ${brief.project.healthFlag || "Not recorded"}`, `- Updated: ${brief.project.updatedAt || "Not recorded"}`, "", brief.project.currentSummary || "No current summary recorded.", ""];
+  const section = (title, items) => { lines.push(`## ${title}`, ""); if (!items.length) lines.push("_None recorded._", ""); else for (const item of items) lines.push(`- [${item.id || "no-id"}] ${item.title || item.decision || item.fact || item.question || item.action || item.target || item.summary || item.text || JSON.stringify(item)}`); lines.push(""); };
+  section("Readable material", brief.readableMaterial); section("Decisions", brief.decisions); section("Facts", brief.facts); section("Conflicts", brief.conflicts); section("Sources and provenance", brief.sources); section("Relationships", brief.relationships); section("Open questions", brief.openQuestions); section("Next actions", brief.nextActions); section("Recent changes", brief.recentChanges);
+  return lines.join("\n");
+}
+
+async function openProjectFinalReviewModal() {
+  const project = getProject(); if (!project) return;
+  const localAvailable = platformAdapter.analysis?.available && typeof platformAdapter.analysis.reviewCoreProject === "function";
+  showModal({ title: "Core project final review", submitText: "Start final review", body: `<p class="notice">Creates a detailed project summary and checks duplicates, contradictions, missing questions, evidence gaps, stale material, ownership, and next actions. All results are advisory until a human applies them.</p><div class="field"><label for="reviewRoute">Send to</label><select id="reviewRoute" name="reviewRoute"><option value="local_ai" ${localAvailable ? "" : "disabled"}>Local Qwen AI final pass${localAvailable ? "" : " (unavailable)"}</option><option value="external_ai">External AI review ZIP</option><option value="human">Human review ZIP</option></select></div><p class="item-meta" data-final-review-status>Ready to prepare ${escapeDisplay(project.name, DISPLAY_META_LIMIT)}.</p>`, async onSubmit(data, form) {
+    const brief = buildProjectFinalReviewBrief(project); const briefMarkdown = projectFinalReviewMarkdown(brief); const status = form.querySelector("[data-final-review-status]");
+    if (data.reviewRoute === "local_ai") {
+      if (status) status.textContent = "Running the local final pass…";
+      try { const result = await platformAdapter.analysis.reviewCoreProject({ brief, briefMarkdown }); store.projectReviewReports.unshift({ id: uid("project_review"), projectId: project.id, authority: "advisory", humanReviewRequired: true, providerId: result.providerId, modelId: result.modelId, reviewedAt: result.reviewedAt || nowIso(), result }); await saveStore({ allowWithoutCoreApproval: true, reason: "advisory-core-project-final-review" }); queuePostModalAction(() => { render(); window.alert("Advisory final review saved. Open the Final-review history panel to read the detailed findings. Core was not changed."); }); return true; } catch (error) { if (status) status.textContent = error.message || "Local review failed."; return false; }
+    }
+    const folder = await platformAdapter.dialogs.pickFolder({ title: "Choose Core Final Review ZIP Folder", defaultPath: configuredReviewExchangeFolder("outgoing") }); if (!folder?.localPath) return false;
+    const requestId = uid("project_review_export");
+    const stop = platformAdapter.reviewExchange.onExportProgress((message) => { if (message.requestId !== requestId || !status) return; const p = message.progress || {}; status.textContent = (p.detail || p.phase || "Preparing review ZIP") + (Number.isFinite(p.percent) ? " · " + p.percent + "%" : ""); });
+    try { const result = await platformAdapter.reviewExchange.exportProjectFinalReviewPack({ requestId, brief, briefMarkdown, reviewerTarget: data.reviewRoute === "external_ai" ? "ai" : "human", outputDirectory: folder.localPath }); queuePostModalAction(() => window.alert(`Core final-review ZIP created.\n\n${result.path}\n\n${formatBytes(result.bytes)} · SHA-256: ${result.sha256}\n\nThe package contains a detailed Markdown brief, structured JSON, review instructions, and a response template.`)); return true; } catch (error) { if (status) status.textContent = error.message || "Review ZIP creation failed."; return false; } finally { stop?.(); }
+  }});
+}
+
 function renderProjectReadableMaterial(project) {
   const material = buildProjectReadableMaterial(project);
   return `<article class="panel strong">
@@ -9610,6 +9658,7 @@ function renderProject(project) {
         <button class="btn" data-action="${escapeHtml(nextStep.action)}">${escapeHtml(nextStep.buttonLabel || nextStep.label)}</button>
         ${(nextStep.secondaryActions || []).map((secondary) => `<button class="btn secondary" data-action="${escapeHtml(secondary.action)}">${escapeHtml(secondary.label)}</button>`).join("")}
         <button class="btn secondary" data-action="rename-project" data-project-id="${escapeHtml(project.id)}">Rename project</button>
+        <button class="btn secondary" data-action="project-final-review">Send for final review</button>
       </div>
     </article>
     <section class="meta-grid">
@@ -9639,6 +9688,7 @@ function renderProject(project) {
     </article>
 
     ${renderProjectReadableMaterial(project)}
+    ${renderProjectFinalReviewReports(project)}
 
     <section class="dashboard-grid">
       <div class="stack">
@@ -14188,7 +14238,11 @@ async function exportUniversalReviewPack(workOrderId, { silent = false } = {}) {
       if (automatic) store.settings.reviewExchangeOutgoingFolder = outputDirectory;
       await saveStore({ allowWithoutCoreApproval: true, reason: "remember-review-exchange-outgoing-folder" });
     }
-    const result = await platformAdapter.reviewExchange.exportUniversalPack({ workOrder, knownProjects: universalReviewKnownProjects(), outputDirectory });
+    const requestId = uid("review_export");
+    const stopProgress = platformAdapter.reviewExchange.onExportProgress((message) => { if (message.requestId !== requestId) return; const progress = message.progress || {}; setSaveStatus("saving", `${progress.detail || progress.phase || "Creating Review ZIP"}${Number.isFinite(progress.percent) ? ` · ${progress.percent}%` : ""}`); });
+    let result;
+    try { result = await platformAdapter.reviewExchange.exportUniversalPack({ requestId, workOrder, knownProjects: universalReviewKnownProjects(), outputDirectory }); }
+    finally { stopProgress?.(); }
     if (!silent) window.alert(`Universal Review Pack created.\n\n${result.path}\n\nPackage ${result.packageId} · revision ${result.packRevision}\nEvidence SHA-256: ${result.evidenceSha256}\n\n${Number(result.chunkCount || 0).toLocaleString()} complete stored evidence chunks are included.${result.sourceComplete ? " The Work Order reports full source coverage." : " Warning: the Work Order reports that more source remains, so this pack is a partial-source review pack."} The external model's response remains a proposal until you import and approve it.`);
     return result;
   } catch (error) {
@@ -18620,6 +18674,7 @@ app.addEventListener("click", async (event) => {
   if (action === "delete-all-archived-ai-work-orders") openDeleteAllArchivedAiWorkOrdersModal();
   if (action === "export-project") exportProjectJson();
   if (action === "project-overview") openProjectOverviewModal();
+  if (action === "project-final-review") openProjectFinalReviewModal();
   if (action === "export-handoff") exportProjectHandoff();
   if (action === "context-pack") openContextPackModal();
   if (action === "open-project") {
